@@ -1,0 +1,13 @@
+laravel: '@testbench'
+
+providers:
+  - Kirschbaum\Redactor\RedactorServiceProvider
+
+workbench:
+  install: true
+  start: '/'
+  discovers:
+    web: false
+    api: false
+    commands: true
+    views: false

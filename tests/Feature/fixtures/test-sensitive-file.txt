@@ -1,0 +1,5 @@
+Configuration file with secrets:
+
+password: supersecret
+API key: sk_test_ABC123XYZ1234567890abcdef
+email: admin@example.com

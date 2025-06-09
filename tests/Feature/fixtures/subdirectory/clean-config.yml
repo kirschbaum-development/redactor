@@ -1,0 +1,27 @@
+application:
+  name: TestApplication
+  version: "1.2.3"
+  environment: development
+  debug: true
+
+features:
+  feature_a: enabled
+  feature_b: disabled
+  max_connections: 100
+  timeout: 30
+
+cache:
+  driver: memory
+  ttl: 3600
+  prefix: app_
+
+logging:
+  level: debug
+  output: stdout
+  format: json
+  max_size: 100MB
+
+ui:
+  theme: light
+  language: en
+  timezone: UTC 
