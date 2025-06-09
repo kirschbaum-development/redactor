@@ -1,5 +1,5 @@
 {
-    "name": "kirschbaum/redactor",
+    "name": "kirschbaum-development/redactor",
     "description": "Sensitive data redactor for Laravel with entropy detection, key policies, and pipeline support.",
     "type": "library",
     "license": "MIT",
