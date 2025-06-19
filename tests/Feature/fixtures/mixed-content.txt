@@ -1,0 +1,22 @@
+Application Log File
+==================
+
+[2023-12-01 10:00:00] INFO: Application started successfully
+[2023-12-01 10:00:01] INFO: Database connection established
+[2023-12-01 10:00:02] INFO: User logged in: user_id=12345
+
+[2023-12-01 10:15:30] DEBUG: Processing payment for order #98765
+[2023-12-01 10:15:31] DEBUG: Credit card: 4111-1111-1111-1111
+[2023-12-01 10:15:32] DEBUG: CVV: 123
+[2023-12-01 10:15:33] INFO: Payment processed successfully
+
+[2023-12-01 10:30:00] INFO: Email notification sent to: user@example.com
+[2023-12-01 10:30:01] INFO: Request completed in 150ms
+
+[2023-12-01 11:00:00] DEBUG: API request to external service
+[2023-12-01 11:00:01] DEBUG: Using API key: sk_test_1234567890abcdef1234567890abcdef
+[2023-12-01 11:00:02] INFO: External API response received
+
+[2023-12-01 12:00:00] INFO: Daily backup completed
+[2023-12-01 12:00:01] INFO: Application running normally
+[2023-12-01 12:00:02] INFO: Memory usage: 256MB 

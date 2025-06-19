@@ -1,0 +1,26 @@
+{
+    "app_name": "TestApp",
+    "version": "1.0.0",
+    "database": {
+        "host": "localhost",
+        "port": 5432,
+        "username": "admin",
+        "password": "supersecretdbpassword123",
+        "database": "production_db"
+    },
+    "redis": {
+        "url": "redis://user:redispassword456@localhost:6379"
+    },
+    "api_keys": {
+        "stripe": "sk_live_1234567890abcdef1234567890abcdef12345678",
+        "sendgrid": "SG.1234567890abcdef.1234567890abcdef1234567890abcdef123456",
+        "oauth_secret": "oauth_secret_abc123def456ghi789jkl012"
+    },
+    "user_data": {
+        "admin_email": "admin@example.com",
+        "support_email": "support@company.com"
+    },
+    "encryption": {
+        "secret_key": "base64:abcdefghijklmnopqrstuvwxyz123456789ABCDEFG="
+    }
+} 

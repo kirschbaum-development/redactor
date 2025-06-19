@@ -1,0 +1,28 @@
+{
+    "app_name": "TestApp",
+    "version": "2.1.0",
+    "debug": false,
+    "environment": "production",
+    "timezone": "UTC",
+    "locale": "en",
+    "features": {
+        "feature_a": true,
+        "feature_b": false,
+        "max_users": 1000
+    },
+    "cache": {
+        "driver": "redis",
+        "ttl": 3600,
+        "prefix": "app_cache"
+    },
+    "logging": {
+        "level": "info",
+        "channels": ["file", "stderr"],
+        "max_files": 30
+    },
+    "ui": {
+        "theme": "dark",
+        "items_per_page": 25,
+        "date_format": "Y-m-d H:i:s"
+    }
+} 

@@ -1,0 +1,9 @@
+This is a clean text file with no sensitive information.
+
+It contains normal text, documentation, and regular content
+that should not trigger any redaction patterns.
+
+User ID: 12345
+Status: active
+Created: 2023-12-01
+Environment: production 

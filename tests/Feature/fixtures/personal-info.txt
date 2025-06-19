@@ -1,0 +1,16 @@
+User registration data:
+
+Full Name: John Smith
+Email: john.smith@example.com
+Phone: 555-123-4567
+Social Security Number: 123-45-6789
+
+Credit Card Information:
+Card Number: 4111-1111-1111-1111
+Expiry: 12/25
+CVV: 123
+
+Contact Information:
+Home Phone: (555) 987-6543
+Work Email: jsmith@company.com
+Personal Email: j.smith.personal@gmail.com 

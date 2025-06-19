@@ -1,0 +1,100 @@
+{
+    "name": "kirschbaum-development/redactor",
+    "description": "Sensitive data redactor for Laravel with entropy detection, key policies, and pipeline support.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "laravel",
+        "redactor",
+        "data redaction",
+        "log redaction",
+        "log sanitizer",
+        "sensitive data",
+        "gdpr",
+        "privacy",
+        "security",
+        "shannon entropy",
+        "pipeline",
+        "middleware",
+        "observability",
+        "compliance"
+    ],
+    "autoload": {
+        "psr-4": {
+            "Kirschbaum\\Redactor\\": "src/",
+            "Tests\\": "tests/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/",
+            "Workbench\\Redactor\\": "workbench/app/",
+            "Workbench\\Database\\Factories\\": "workbench/database/factories/",
+            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Erand Laci",
+            "email": "erandlaci@gmail.com"
+        }
+    ],
+    "require-dev": {
+        "pestphp/pest": "^3.8",
+        "laravel/pint": "^1.22",
+        "larastan/larastan": "^3.4",
+        "orchestra/testbench": "^10.3",
+        "pestphp/pest-plugin-laravel": "^3.1",
+        "timacdonald/log-fake": "^2.4"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "require": {
+        "illuminate/support": "^11.9|^12.0",
+        "spatie/laravel-package-tools": "^1.16",
+        "php": "^8.3|^8.4"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Kirschbaum\\Redactor\\RedactorServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "setup-hooks": [
+            "git config core.hooksPath .githooks"
+        ],
+        "post-install-cmd": [
+            "@setup-hooks"
+        ],
+        "post-autoload-dump": [
+            "@clear",
+            "@prepare"
+        ],
+        "clear": "@php vendor/bin/testbench package:purge-skeleton --ansi",
+        "prepare": "@php vendor/bin/testbench package:discover --ansi",
+        "build": "@php vendor/bin/testbench workbench:build --ansi",
+        "serve": [
+            "Composer\\Config::disableProcessTimeout",
+            "@build",
+            "@php vendor/bin/testbench serve --ansi"
+        ],
+        "lint": [
+            "@php vendor/bin/pint --ansi",
+            "@php vendor/bin/phpstan analyse --verbose --ansi"
+        ],
+        "test": [
+            "@clear",
+            "@php vendor/bin/pest --parallel"
+        ],
+        "preflight": [
+            "@php vendor/bin/pint --test --ansi",
+            "@php vendor/bin/phpstan analyse --no-progress --ansi",
+            "@php vendor/bin/pest --parallel"
+        ]
+    }
+}

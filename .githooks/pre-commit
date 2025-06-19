@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Grab the commit message in-progress
+COMMIT_MSG_FILE="$(git rev-parse --git-path COMMIT_EDITMSG)"
+
+# Check for a NO_VERIFY tag in the message (case-insensitive)
+if grep -qi '\[no-verify\]' "$COMMIT_MSG_FILE"; then
+    echo "⚠️  Detected [no-verify] tag in commit message. Skipping preflight."
+    exit 0
+fi
+
+scripts/preflight.sh
+status=$?
+
+if [[ $status -ne 0 ]]; then
+    echo ""
+    echo "🚫 Commit aborted due to preflight check failures."
+    echo "   To bypass, add '[no-verify]' to your commit message."
+    echo "   Example: git commit -m 'Fix X [no-verify]'"
+    exit $status
+fi
+
+echo ""
+echo "✅ Preflight passed. Proceeding with commit."
+exit 0
