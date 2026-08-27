@@ -98,10 +98,10 @@
         ],
         "test-coverage": [
             "@clear",
-            "@php vendor/bin/pest --coverage --min=80"
+            "@php vendor/bin/pest --coverage --min=90"
         ],
         "mutate": [
-            "@php vendor/bin/pest --mutate --parallel --covered-only --min=75"
+            "@php vendor/bin/pest --mutate --parallel --everything --covered-only --min=75"
         ]
     }
 }

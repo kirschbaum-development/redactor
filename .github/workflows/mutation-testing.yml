@@ -34,4 +34,4 @@ jobs:
       # have noticed if it were wrong, which is the question that matters
       # for a redactor.
       - name: Run mutation testing
-        run: vendor/bin/pest --mutate --parallel --covered-only --min=75 --ignore-min-score-on-zero-mutations
+        run: vendor/bin/pest --mutate --parallel --everything --covered-only --min=75 --ignore-min-score-on-zero-mutations

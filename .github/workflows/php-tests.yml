@@ -65,7 +65,7 @@ jobs:
         run: composer show -D
 
       - name: Execute tests
-        run: vendor/bin/pest --ci --compact --memory --coverage --min=80
+        run: vendor/bin/pest --ci --compact --memory --coverage --min=90
 
   performance:
     name: performance guards

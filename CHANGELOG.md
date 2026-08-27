@@ -88,8 +88,9 @@ item below is one commit, with tests.
   development files out of the dist archive. (R-18)
 - Dropped the unused `spatie/laravel-package-tools` requirement and declared
   `symfony/finder` and `monolog/monolog`, which the package uses directly. (R-19)
-- Coverage floor, mutation testing (Pest's built-in mutator), a performance
-  regression suite, and `failOnWarning`/`failOnRisky`/`failOnDeprecation` in
+- Coverage floor of 90% (CI reports 95.3%), mutation testing (Pest's built-in
+  mutator), a performance regression suite run without coverage
+  instrumentation, and `failOnWarning`/`failOnRisky`/`failOnDeprecation` in
   phpunit.xml. (R-24)
 - The test matrix no longer uses `fail-fast`, and the Laravel 11 legs install
   with `--no-security-blocking`: every 11.x release is now flagged by a
