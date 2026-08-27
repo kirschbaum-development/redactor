@@ -52,7 +52,7 @@
         }
     },
     "require": {
-        "php": "^8.3|^8.4",
+        "php": "^8.3|^8.4|^8.5",
         "illuminate/support": "^11.9|^12.0",
         "monolog/monolog": "^3.0",
         "symfony/finder": "^7.0"
@@ -85,7 +85,7 @@
         ],
         "lint": [
             "@php vendor/bin/pint --ansi",
-            "@php vendor/bin/phpstan analyse --verbose --ansi"
+            "@php vendor/bin/phpstan analyse --verbose --ansi --memory-limit=1G"
         ],
         "test": [
             "@clear",
@@ -93,7 +93,7 @@
         ],
         "preflight": [
             "@php vendor/bin/pint --test --ansi",
-            "@php vendor/bin/phpstan analyse --no-progress --ansi",
+            "@php vendor/bin/phpstan analyse --no-progress --ansi --memory-limit=1G",
             "@php vendor/bin/pest --parallel"
         ]
     }
