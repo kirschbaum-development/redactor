@@ -60,6 +60,36 @@ return [
         'overlap_lines' => env('REDACTOR_SCAN_OVERLAP_LINES', 4),
 
         /*
+        |----------------------------------------------------------------------
+        | Credential verification
+        |----------------------------------------------------------------------
+        |
+        | Asks each provider whether a detected credential is still live, which
+        | turns a wall of maybes into a short list of keys to rotate today.
+        |
+        | It also sends real secrets to third parties. Nothing here happens
+        | unless all three of these agree:
+        |
+        |   1. enabled is true                (this file, reviewable in a diff)
+        |   2. the run passes --verify        (a human, per run)
+        |   3. the provider is listed below   (who you are willing to tell)
+        |
+        | An empty list means none. Enabling the feature and choosing who to
+        | trust with the secrets are deliberately separate decisions, and
+        | redaction itself can never trigger this - only the scan command can.
+        |
+        */
+        'verification' => [
+            'enabled' => env('REDACTOR_SCAN_VERIFY', false),
+
+            'verifiers' => [
+                // 'github_token',
+                // 'stripe_key',
+                // 'slack_token',
+            ],
+        ],
+
+        /*
         | Accepted findings, so CI fails on new secrets rather than on known
         | ones. Generate with:
         |
@@ -505,7 +535,7 @@ return [
                     'keep' => 4,
                 ],
 
-                'api_key_stripe' => '/sk_(?:test_|live_)[a-zA-Z0-9]{24,}/',
+                'api_key_stripe' => ['pattern' => '/sk_(?:test_|live_)[a-zA-Z0-9]{24,}/', 'entity' => 'stripe_key', 'confidence' => 0.95],
                 'jwt_token' => '/eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]+/',
                 'aws_access_key' => '/\bAKIA[0-9A-Z]{16}\b/',
                 'github_token' => '/\bgh[pousr]_[A-Za-z0-9_]{36}\b/',

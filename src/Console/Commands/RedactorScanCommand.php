@@ -14,6 +14,7 @@ use Kirschbaum\Redactor\Scanner\SarifReport;
 use Kirschbaum\Redactor\Scanner\ScanFinding;
 use Kirschbaum\Redactor\Scanner\Scanner;
 use Kirschbaum\Redactor\Scanner\ScanResult;
+use Kirschbaum\Redactor\Verification\SecretVerifier;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 #[AsCommand(name: 'redactor:scan', description: 'Scan files for sensitive content using Redactor')]
@@ -26,6 +27,7 @@ class RedactorScanCommand extends Command
                             {--summary-only : Do not display per-file results}
                             {--output=table : Output format (table|json|sarif)}
                             {--min-confidence= : Ignore findings scoring below this (0-1)}
+                            {--verify : Check detected credentials against their providers (sends them off this machine)}
                             {--baseline= : Path to a baseline file of accepted findings}
                             {--update-baseline : Write the current findings to the baseline file and exit 0}';
 
@@ -104,6 +106,34 @@ class RedactorScanCommand extends Command
         $files = $this->collectFiles($paths, $ignorePatterns, $maxFileSize, $skipBinary, $respectGitignore, $quiet);
 
         $scanner = resolve(Scanner::class);
+
+        if ((bool) $this->option('verify')) {
+            $verifier = SecretVerifier::fromConfig(
+                ConfigValue::map(Config::get('redactor.scan.verification', []), 'scan.verification')
+            );
+
+            if ($verifier === null) {
+                $this->components->error(
+                    'Verification is not enabled. Set redactor.scan.verification.enabled to true '
+                    .'and list the providers you permit under redactor.scan.verification.verifiers.'
+                );
+
+                return Command::FAILURE;
+            }
+
+            // Say what is about to happen before it happens. Verification sends
+            // real credentials to third parties, and an operator who cannot
+            // allow that traffic should find out here, not in an egress log.
+            if (! $quiet) {
+                $this->components->warn(sprintf(
+                    'Verification is on: detected credentials will be sent to %s.',
+                    implode(', ', $verifier->hosts())
+                ));
+            }
+
+            $scanner = $scanner->withVerifier($verifier);
+        }
+
         $relativeTo = base_path();
 
         /** @var Collection<int, ScanResult> $results */
@@ -286,12 +316,18 @@ class RedactorScanCommand extends Command
         // tells you nothing you can act on.
         // Sorted by severity so the certain findings are read first, which is
         // the order anyone triaging actually wants.
-        usort($findings, fn (ScanFinding $a, ScanFinding $b) => ($b->confidence ?? 1.0) <=> ($a->confidence ?? 1.0));
+        $rank = fn (ScanFinding $f) => match ($f->severity()) {
+            'critical' => 4, 'high' => 3, 'medium' => 2, 'low' => 1, default => 0,
+        };
+
+        usort($findings, fn (ScanFinding $a, ScanFinding $b) => [$rank($b), $b->confidence ?? 1.0]
+            <=> [$rank($a), $a->confidence ?? 1.0]);
 
         $this->table(
             ['Severity', 'Rule', 'Location', 'Excerpt'],
             array_map(fn (ScanFinding $f) => [
                 match ($f->severity()) {
+                    'critical' => '<fg=white;bg=red>LIVE</>',
                     'high' => '<fg=red>HIGH</>',
                     'medium' => '<fg=yellow>MEDIUM</>',
                     'low' => '<fg=blue>LOW</>',

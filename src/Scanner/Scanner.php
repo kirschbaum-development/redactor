@@ -6,6 +6,8 @@ namespace Kirschbaum\Redactor\Scanner;
 
 use Kirschbaum\Redactor\Findings\MatchFinding;
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\Verification\SecretVerifier;
+use Kirschbaum\Redactor\Verification\VerificationResult;
 
 class Scanner
 {
@@ -18,7 +20,19 @@ class Scanner
         protected Redactor $redactor,
         protected int $windowLines = LineWindowReader::DEFAULT_WINDOW_LINES,
         protected int $overlapLines = LineWindowReader::DEFAULT_OVERLAP_LINES,
+        /**
+         * Verification happens here, while the raw value is still in hand, and
+         * only the verdict is attached to the finding. The secret itself never
+         * reaches a ScanFinding, so it cannot escape through JSON, SARIF or a
+         * baseline file.
+         */
+        protected ?SecretVerifier $verifier = null,
     ) {}
+
+    public function withVerifier(?SecretVerifier $verifier): self
+    {
+        return new self($this->redactor, $this->windowLines, $this->overlapLines, $verifier);
+    }
 
     /**
      * Scan a file, a window of lines at a time.
@@ -55,7 +69,9 @@ class Scanner
                 continue;
             }
 
-            foreach ($this->locate($window, $result->value, $result->findings, $reportedPath, $profileName) as $finding) {
+            $verdicts = $this->verifyAll($result->findings);
+
+            foreach ($this->locate($window, $result->value, $result->findings, $reportedPath, $profileName) as $index => $finding) {
                 $absolute = new ScanFinding(
                     path: $finding->path,
                     rule: $finding->rule,
@@ -68,6 +84,10 @@ class Scanner
                     confidence: $finding->confidence,
                     signals: $finding->signals,
                 );
+
+                if (isset($verdicts[$index])) {
+                    $absolute = $absolute->withVerification($verdicts[$index]);
+                }
 
                 // Overlapping windows see the same span twice; identity is the
                 // rule and the place, not the order it was found in.
@@ -84,6 +104,34 @@ class Scanner
             findings: $ordered,
             profile: $profileName
         );
+    }
+
+    /**
+     * Verify each detection, if anything is permitted to.
+     *
+     * Keyed by position so the verdict lands on the right finding without the
+     * secret having to travel alongside it.
+     *
+     * @param  array<int, MatchFinding>  $matches
+     * @return array<int, VerificationResult>
+     */
+    protected function verifyAll(array $matches): array
+    {
+        if ($this->verifier === null) {
+            return [];
+        }
+
+        $verdicts = [];
+
+        foreach ($matches as $index => $match) {
+            if ($match->matched === '' || ! $this->verifier->canVerify($match->entity(), $match->rule)) {
+                continue;
+            }
+
+            $verdicts[$index] = $this->verifier->verify($match->entity(), $match->rule, $match->matched);
+        }
+
+        return $verdicts;
     }
 
     /**

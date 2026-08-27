@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Scanner;
 
+use Kirschbaum\Redactor\Verification\VerificationResult;
+
 /**
  * One located finding: which rule fired, where, and what the line looks like
  * once redacted.
@@ -27,13 +29,38 @@ final readonly class ScanFinding
         public ?float $confidence = null,
         /** @var array<int, string> */
         public array $signals = [],
+        /** Set only when verification ran; never carries the secret itself. */
+        public ?VerificationResult $verification = null,
     ) {}
+
+    public function withVerification(VerificationResult $result): self
+    {
+        return new self(
+            path: $this->path,
+            rule: $this->rule,
+            line: $this->line,
+            column: $this->column,
+            excerpt: $this->excerpt,
+            profile: $this->profile,
+            fingerprint: $this->fingerprint,
+            entity: $this->entity,
+            confidence: $this->confidence,
+            signals: $this->signals,
+            verification: $result,
+        );
+    }
 
     /**
      * A severity a human can sort by.
      */
     public function severity(): string
     {
+        // A confirmed-live credential outranks anything confidence can say:
+        // certainty that it works beats an estimate that it exists.
+        if ($this->verification !== null && $this->verification->status->isActive()) {
+            return 'critical';
+        }
+
         return match (true) {
             $this->confidence === null => 'high',
             $this->confidence >= 0.9 => 'high',
@@ -59,6 +86,7 @@ final readonly class ScanFinding
             // Why the score is what it is, so a threshold can be chosen on
             // evidence rather than by trial and error.
             'signals' => $this->signals,
+            'verification' => $this->verification?->toArray(),
             'profile' => $this->profile,
             'fingerprint' => $this->fingerprint,
         ];
