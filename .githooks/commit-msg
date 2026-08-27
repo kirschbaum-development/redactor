@@ -1,0 +1,64 @@
+#!/bin/bash
+#
+# Enforce single-line commit messages with no attribution trailers.
+#
+# Repository reporting and per-developer exposure coverage are derived from git
+# history. Co-author trailers split authorship across two identities and skew
+# those reports; multi-line bodies are noise the parser has to strip. The "why"
+# belongs in the PR description, the CHANGELOG, or a comment at the code site,
+# where it stays readable.
+#
+# Installed by `composer setup-hooks`, which points core.hooksPath at .githooks.
+
+MSG_FILE="$1"
+SOURCE="$2"
+
+# Merges, squashes and reverts generate bodies git wrote itself.
+case "$SOURCE" in
+    merge|squash) exit 0 ;;
+esac
+
+# Strip comments and trailing blank lines; that is what git will actually store.
+BODY="$(grep -v '^#' "$MSG_FILE" | sed -e :a -e '/^\s*$/{$d;N;ba' -e '}')"
+
+if [[ -z "${BODY//[[:space:]]/}" ]]; then
+    # An empty message aborts the commit anyway; let git say so.
+    exit 0
+fi
+
+FIRST_LINE="$(printf '%s\n' "$BODY" | head -n 1)"
+
+case "$FIRST_LINE" in
+    Revert\ \"*) exit 0 ;;
+esac
+
+fail() {
+    echo ""
+    echo "🚫 Commit rejected: $1"
+    echo ""
+    echo "   Commit messages must be a single line, with no body and no trailers."
+    echo "   Put the reasoning in the PR description, the CHANGELOG, or a code comment."
+    echo ""
+    echo "   Got:"
+    printf '%s\n' "$BODY" | sed 's/^/     | /'
+    echo ""
+    exit 1
+}
+
+if printf '%s\n' "$BODY" | grep -qiE '^[[:space:]]*(co-authored-by|claude-session|signed-off-by[[:space:]]*:[[:space:]]*claude)'; then
+    fail "attribution trailers break authorship reporting."
+fi
+
+if printf '%s\n' "$BODY" | grep -qiE 'claude\.ai/code/session'; then
+    fail "session links do not belong in git history."
+fi
+
+if [[ "$(printf '%s\n' "$BODY" | wc -l | tr -d ' ')" -gt 1 ]]; then
+    fail "the message has more than one line."
+fi
+
+if [[ ${#FIRST_LINE} -gt 72 ]]; then
+    fail "the subject is ${#FIRST_LINE} characters; keep it to 72."
+fi
+
+exit 0
