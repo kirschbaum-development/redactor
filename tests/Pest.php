@@ -44,6 +44,18 @@ expect()->extend('toBeOne', function () {
 */
 
 /**
+ * A fixed pseudonymization key for tests.
+ *
+ * Surrogates are only stable for a given key, so assertions about them need a
+ * known one. Defined here rather than as a per-file constant so every suite
+ * agrees, including when a single file is run in isolation.
+ */
+function testPseudonymizationKey(): string
+{
+    return 'a-test-pseudonymization-key-of-sufficient-length';
+}
+
+/**
  * Whether a coverage driver is actively instrumenting this run.
  *
  * Instrumentation dominates the clock and flattens the difference between a

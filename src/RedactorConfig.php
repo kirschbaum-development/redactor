@@ -6,9 +6,11 @@ namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
 use Kirschbaum\Redactor\Config\ConfigValue;
+use Kirschbaum\Redactor\Config\ProfileCache;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\Operators\OperatorSpec;
 use Kirschbaum\Redactor\Operators\RedactionPolicy;
+use Kirschbaum\Redactor\Path\PathTrie;
 use Kirschbaum\Redactor\Patterns\PatternRule;
 
 readonly class RedactorConfig
@@ -55,6 +57,14 @@ readonly class RedactorConfig
         public RedactionPolicy $policy = new RedactionPolicy,
         /** @var array<string, mixed> */
         public array $pseudonymization = [],
+        /**
+         * Path rules, compiled once per profile.
+         *
+         * Consulted before any strategy runs: a path says exactly where a value
+         * lives, which is both more precise than guessing from its key and far
+         * cheaper than scanning its contents.
+         */
+        public PathTrie $paths = new PathTrie,
     ) {}
 
     /**
@@ -77,6 +87,12 @@ readonly class RedactorConfig
             throw new \InvalidArgumentException("Invalid configuration for profile '".$profile."'.");
         }
 
+        $cached = ProfileCache::get($profile, $config);
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
         $shannonEntropy = ConfigValue::map($config['shannon_entropy'] ?? [], "profiles.{$profile}.shannon_entropy");
 
         // Coerce the entropy sub-keys here too: they are read on every string,
@@ -93,7 +109,7 @@ readonly class RedactorConfig
             $shannonEntropy['min_length'] = ConfigValue::positiveInt($shannonEntropy['min_length'], 25, "profiles.{$profile}.shannon_entropy.min_length");
         }
 
-        return new self(
+        $built = new self(
             enabled: ConfigValue::bool($config['enabled'] ?? true, true, "profiles.{$profile}.enabled"),
             safeKeys: array_map('strtolower', ConfigValue::stringList($config['safe_keys'] ?? [], "profiles.{$profile}.safe_keys")),
             blockedKeys: array_map('strtolower', ConfigValue::stringList($config['blocked_keys'] ?? [], "profiles.{$profile}.blocked_keys")),
@@ -117,7 +133,10 @@ readonly class RedactorConfig
             minConfidence: self::confidenceFloor($config['min_confidence'] ?? 0.0, "profiles.{$profile}.min_confidence"),
             policy: self::buildPolicy($config['operators'] ?? [], $profile),
             pseudonymization: self::pseudonymizationSettings($config['pseudonymization'] ?? [], $profile),
+            paths: self::buildPaths($config['paths'] ?? [], $profile),
         );
+
+        return ProfileCache::put($profile, $config, $built);
     }
 
     /**
@@ -135,6 +154,22 @@ readonly class RedactorConfig
         $local = ConfigValue::map($profileSettings, "profiles.{$profile}.pseudonymization");
 
         return [...$global, ...$local];
+    }
+
+    /**
+     * Compile the profile's path rules.
+     */
+    private static function buildPaths(mixed $paths, string $profile): PathTrie
+    {
+        $map = ConfigValue::map($paths, "profiles.{$profile}.paths");
+
+        $rules = [];
+
+        foreach ($map as $pattern => $definition) {
+            $rules[$pattern] = OperatorSpec::parse($definition, "profiles.{$profile}.paths.{$pattern}");
+        }
+
+        return PathTrie::compile($rules);
     }
 
     private static function confidenceFloor(mixed $value, string $path): float

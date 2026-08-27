@@ -18,8 +18,6 @@ use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Support\Pseudonymizer;
 
-const TEST_KEY = 'a-test-pseudonymization-key-of-sufficient-length';
-
 function detection(string $value, string $entity = 'generic'): Detection
 {
     return new Detection(
@@ -35,7 +33,7 @@ function operate(string $name, string $value, array $options = [], string $entit
 {
     return (new OperatorRegistry)->get($name)->apply(
         detection($value, $entity),
-        new OperatorContext('[REDACTED]', $options, Pseudonymizer::fromKey(TEST_KEY)),
+        new OperatorContext('[REDACTED]', $options, Pseudonymizer::fromKey(testPseudonymizationKey())),
     );
 }
 
@@ -58,7 +56,7 @@ function pseudoProfile(array $overrides = []): array
         'redact_large_objects' => false,
         'max_object_size' => 100,
         'shannon_entropy' => ['enabled' => false],
-        'pseudonymization' => ['enabled' => true, 'key' => TEST_KEY],
+        'pseudonymization' => ['enabled' => true, 'key' => testPseudonymizationKey()],
     ], $overrides);
 }
 
@@ -136,7 +134,7 @@ describe('Deterministic pseudonymization', function () {
     it('produces different surrogates under a different key', function () {
         $withKeyA = (new OperatorRegistry)->get('surrogate')->apply(
             detection('alice@customer.com', 'email'),
-            new OperatorContext('[R]', [], Pseudonymizer::fromKey(TEST_KEY)),
+            new OperatorContext('[R]', [], Pseudonymizer::fromKey(testPseudonymizationKey())),
         );
 
         $withKeyB = (new OperatorRegistry)->get('surrogate')->apply(
@@ -208,7 +206,7 @@ describe('Format-preserving surrogates', function () {
     it('preserves character classes and separators for anything else', function () {
         $result = (new CharacterClassSurrogate)->generate(
             'sk_live_4eC39HqLyj',
-            Pseudonymizer::fromKey(TEST_KEY)->random('generic', 'sk_live_4eC39HqLyj'),
+            Pseudonymizer::fromKey(testPseudonymizationKey())->random('generic', 'sk_live_4eC39HqLyj'),
             ['preserve_prefix' => 8],
         );
 
@@ -230,7 +228,7 @@ describe('Format-preserving surrogates', function () {
 
         $result = (new CharacterClassSurrogate)->generate(
             $original,
-            Pseudonymizer::fromKey(TEST_KEY)->random('generic', $original),
+            Pseudonymizer::fromKey(testPseudonymizationKey())->random('generic', $original),
         );
 
         // The contract is character classes, not semantics: it does not know
@@ -288,7 +286,7 @@ describe('Pseudonymization end to end', function () {
     });
 
     it('honours the shipped observability profile', function () {
-        config()->set('redactor.pseudonymization', ['enabled' => true, 'key' => TEST_KEY]);
+        config()->set('redactor.pseudonymization', ['enabled' => true, 'key' => testPseudonymizationKey()]);
 
         $result = app(Redactor::class)->redact([
             'message' => 'checkout by alice@customer.com from 203.0.113.9',

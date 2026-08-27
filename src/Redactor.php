@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
+use Kirschbaum\Redactor\Detection\Confidence;
+use Kirschbaum\Redactor\Detection\Detection;
+use Kirschbaum\Redactor\Operators\Operator;
+use Kirschbaum\Redactor\Operators\OperatorRegistry;
+use Kirschbaum\Redactor\Path\PathCursor;
+use Kirschbaum\Redactor\Path\PathMatch;
 use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
 use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
@@ -20,6 +26,26 @@ class Redactor
     private array $customStrategies = [];
 
     private bool $customStrategiesLoaded = false;
+
+    private OperatorRegistry $operators;
+
+    public function __construct()
+    {
+        $this->operators = new OperatorRegistry;
+    }
+
+    /**
+     * Register a custom operator, usable from config by name.
+     */
+    public function registerOperator(string $name, Operator $operator): void
+    {
+        $this->operators->register($name, $operator);
+    }
+
+    public function operators(): OperatorRegistry
+    {
+        return $this->operators;
+    }
 
     /**
      * Redact sensitive data from content using strategy pattern.
@@ -46,10 +72,10 @@ class Redactor
             return new RedactionResult($content, false);
         }
 
-        $context = new RedactionContext($config);
+        $context = new RedactionContext($config, $this->operators);
         $strategies = $this->getStrategiesForProfile($config);
 
-        $redactedContent = $this->redactRecursively($content, '', $context, $strategies);
+        $redactedContent = $this->redactRecursively($content, '', $context, $strategies, false, $config->paths->cursor());
 
         $redactedKeys = $context->getRedactedKeys();
 
@@ -290,7 +316,8 @@ class Redactor
         string $key,
         RedactionContext $context,
         array $strategies,
-        bool $alreadyDispatched = false
+        bool $alreadyDispatched = false,
+        ?PathCursor $cursor = null
     ): mixed {
         if (! is_array($data) && ! is_object($data)) {
             // Apply strategies to scalar values
@@ -309,13 +336,64 @@ class Redactor
                 /** @var array<string, mixed> $arrayData */
                 $arrayData = $data;
 
-                return $this->redactArray($arrayData, $context, $strategies, $alreadyDispatched);
+                return $this->redactArray($arrayData, $context, $strategies, $alreadyDispatched, $cursor);
             }
 
-            return $this->redactObject($data, $key, $context, $strategies);
+            return $this->redactObject($data, $key, $context, $strategies, $cursor);
         } finally {
             $context->leaveDepth();
         }
+    }
+
+    /**
+     * The marker meaning "drop this key entirely".
+     */
+    protected const REMOVE_MARKER = '__REDACTOR_REMOVE_OBJECT__';
+
+    /**
+     * Apply a path rule to whatever it landed on.
+     *
+     * Scalars get the full operator range. Containers only sensibly support
+     * preserve, remove and replace: masking or pseudonymising an array has no
+     * defensible meaning, so anything else collapses the whole subtree to the
+     * replacement string rather than inventing a behaviour.
+     */
+    protected function applyPathRule(mixed $value, string $key, PathMatch $match, RedactionContext $context): mixed
+    {
+        $spec = $match->spec;
+
+        if ($spec->name === OperatorRegistry::PRESERVE) {
+            return $value;
+        }
+
+        if ($spec->name === OperatorRegistry::REMOVE) {
+            $context->recordRedaction($key, 'path:'.$match->pattern);
+
+            return self::REMOVE_MARKER;
+        }
+
+        if (! is_scalar($value)) {
+            $context->recordRedaction($key, 'path:'.$match->pattern);
+
+            return $context->config->replacement;
+        }
+
+        $stringValue = (string) $value;
+
+        $detection = new Detection(
+            entity: $key,
+            rule: 'path:'.$match->pattern,
+            offset: 0,
+            value: $stringValue,
+            // A path names the location outright; there is nothing to infer and
+            // therefore nothing to be uncertain about.
+            confidence: Confidence::of(Confidence::CERTAIN, sprintf('path "%s" matched', $match->pattern)),
+            key: $key,
+        );
+
+        $context->recordRedaction($key, 'path:'.$match->pattern, 0, strlen($stringValue), $stringValue);
+
+        return $context->operate($detection, null, $spec);
     }
 
     /**
@@ -343,7 +421,8 @@ class Redactor
         array $array,
         RedactionContext $context,
         array $strategies,
-        bool $alreadyDispatched = false
+        bool $alreadyDispatched = false,
+        ?PathCursor $cursor = null
     ): array {
         // Evaluate the array as a whole (LargeObjectStrategy and friends),
         // unless the caller already ran the chain over this exact value with
@@ -371,12 +450,31 @@ class Redactor
         foreach ($array as $key => $value) {
             $keyString = (string) $key;
 
+            // Paths first. A rule that names this exact location is more
+            // certain than anything inferred from the key or the contents, and
+            // settling it here skips the strategy chain and the walk below it
+            // entirely - which is where most of the speed comes from.
+            $childCursor = $cursor?->descend($keyString);
+            $pathMatch = $childCursor?->match();
+
+            if ($pathMatch !== null) {
+                $decided = $this->applyPathRule($value, $keyString, $pathMatch, $context);
+
+                if ($decided === self::REMOVE_MARKER) {
+                    continue;
+                }
+
+                $result[$keyString] = $decided;
+
+                continue;
+            }
+
             // Apply strategies to the key-value pair
             $outcome = $this->applyStrategies($value, $keyString, $context, $strategies);
             $processedValue = $outcome !== null ? $outcome->value : $value;
 
             // Handle object removal case
-            if ($processedValue === '__REDACTOR_REMOVE_OBJECT__') {
+            if ($processedValue === self::REMOVE_MARKER) {
                 continue; // Skip adding this key to the result
             }
 
@@ -384,10 +482,17 @@ class Redactor
             // has already run over this value with its real key, so the walk
             // must not run it again.
             if ($outcome === null && (is_array($value) || is_object($value))) {
-                $processedValue = $this->redactRecursively($value, $keyString, $context, $strategies, alreadyDispatched: true);
+                $processedValue = $this->redactRecursively(
+                    $value,
+                    $keyString,
+                    $context,
+                    $strategies,
+                    alreadyDispatched: true,
+                    cursor: $childCursor,
+                );
 
                 // Handle object removal case after recursive processing
-                if ($processedValue === '__REDACTOR_REMOVE_OBJECT__') {
+                if ($processedValue === self::REMOVE_MARKER) {
                     continue; // Skip adding this key to the result
                 }
             }
@@ -403,7 +508,7 @@ class Redactor
      *
      * @param  array<RedactionStrategyInterface>  $strategies
      */
-    protected function redactObject(object $object, string $key, RedactionContext $context, array $strategies): mixed
+    protected function redactObject(object $object, string $key, RedactionContext $context, array $strategies, ?PathCursor $cursor = null): mixed
     {
         // First, check if the object itself should be redacted by strategies
         $outcome = $this->applyStrategies($object, $key, $context, $strategies);
@@ -425,7 +530,7 @@ class Redactor
         }
 
         try {
-            return $this->redactObjectContents($object, $context, $strategies);
+            return $this->redactObjectContents($object, $context, $strategies, $cursor);
         } finally {
             $context->leaveObject($object);
         }
@@ -436,7 +541,7 @@ class Redactor
      *
      * @param  array<RedactionStrategyInterface>  $strategies
      */
-    protected function redactObjectContents(object $object, RedactionContext $context, array $strategies): mixed
+    protected function redactObjectContents(object $object, RedactionContext $context, array $strategies, ?PathCursor $cursor = null): mixed
     {
         // Try to convert object to array using toArray() method if available
         if (method_exists($object, 'toArray')) {
@@ -444,7 +549,7 @@ class Redactor
                 /** @var array<string, mixed> $array */
                 $array = $object->toArray();
 
-                return $this->redactArray($array, $context, $strategies, alreadyDispatched: true);
+                return $this->redactArray($array, $context, $strategies, alreadyDispatched: true, cursor: $cursor);
             } catch (\Throwable) {
                 // Fall through to other methods
             }
@@ -469,7 +574,7 @@ class Redactor
             /** @var array<string, mixed> $arrayData */
             $arrayData = $array;
 
-            return $this->redactArray($arrayData, $context, $strategies, alreadyDispatched: true);
+            return $this->redactArray($arrayData, $context, $strategies, alreadyDispatched: true, cursor: $cursor);
 
         } catch (\Throwable $e) {
             InternalLog::warning('Exception while trying to redact object', [
@@ -552,7 +657,7 @@ class Redactor
     {
         $context->markRedacted();
 
-        return '__REDACTOR_REMOVE_OBJECT__';
+        return self::REMOVE_MARKER;
     }
 
     /** @return array<string, mixed> */

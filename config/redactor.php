@@ -240,6 +240,29 @@ return [
             ],
 
             /*
+            | Rules that name a location outright.
+            |
+            |   request.headers.authorization   exactly there
+            |   user.*.email                    any single level between
+            |   **.password                     at any depth
+            |   users[*].token                  through a list
+            |
+            | Checked before anything else and, when one matches, instead of
+            | everything else - no key guessing, no scanning of the contents,
+            | no walk below the matched node. A path says where; every other
+            | rule in this file is inferring it.
+            |
+            | The more specific pattern wins, so declaration order never
+            | matters, and `preserve` carves an exception out of a broader rule
+            | without disabling it.
+            */
+            'paths' => [
+                // 'request.headers.authorization' => 'redact',
+                // 'user.email'                    => 'surrogate',
+                // 'debug'                         => 'preserve',
+            ],
+
+            /*
             | What happens to what the detectors find, by entity.
             |
             |   redact     replace with the replacement string  (default)
@@ -612,6 +635,12 @@ return [
             | Luhn-valid. IPs become a different-but-stable address, so rate
             | analysis by source survives.
             */
+            'paths' => [
+                'request.headers.authorization' => 'redact',
+                'request.headers.cookie' => 'redact',
+                '**.password' => 'redact',
+            ],
+
             'operators' => [
                 'default' => 'redact',
                 'email' => ['surrogate' => ['preserve_domain' => true]],
