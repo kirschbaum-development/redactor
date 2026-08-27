@@ -29,10 +29,21 @@ class Redactor
      */
     public function redact(mixed $content, ?string $profile = null): mixed
     {
+        return $this->redactWithMetadata($content, $profile)->value;
+    }
+
+    /**
+     * Redact content and return the redaction metadata alongside it.
+     *
+     * Preferred over redact() when you need to know whether anything matched:
+     * the metadata is kept out of the payload rather than written into it.
+     */
+    public function redactWithMetadata(mixed $content, ?string $profile = null): RedactionResult
+    {
         $config = RedactorConfig::fromConfig($profile);
 
         if (! $config->enabled) {
-            return $content;
+            return new RedactionResult($content, false);
         }
 
         $context = new RedactionContext($config);
@@ -40,16 +51,50 @@ class Redactor
 
         $redactedContent = $this->redactRecursively($content, '', $context, $strategies);
 
-        // Only add metadata to array results
-        if (is_array($redactedContent) && $context->hasRedactions() && $config->markRedacted) {
-            $redactedContent['_redacted'] = true;
+        $redactedKeys = $context->getRedactedKeys();
 
-            if ($config->trackRedactedKeys && ! empty($context->getRedactedKeys())) {
-                $redactedContent['_redacted_keys'] = $context->getRedactedKeys();
-            }
+        if (is_array($redactedContent) && $context->hasRedactions() && $config->markRedacted) {
+            $redactedContent = $this->markResultArray($redactedContent, $redactedKeys, $config);
         }
 
-        return $redactedContent;
+        return new RedactionResult(
+            value: $redactedContent,
+            wasRedacted: $context->hasRedactions(),
+            redactedKeys: $redactedKeys,
+        );
+    }
+
+    /**
+     * Write the legacy `_redacted` markers into the payload, where it is safe.
+     *
+     * @param  array<array-key, mixed>  $array
+     * @param  array<int, string>  $redactedKeys
+     * @return array<array-key, mixed>
+     */
+    private function markResultArray(array $array, array $redactedKeys, RedactorConfig $config): array
+    {
+        // Adding a string key to a list turns it into an object once encoded,
+        // breaking any consumer expecting a JSON array.
+        if (array_is_list($array) && $array !== []) {
+            return $array;
+        }
+
+        // Never clobber a key the caller is actually using.
+        if (array_key_exists('_redacted', $array)) {
+            InternalLog::warning('Payload already contains a "_redacted" key; redaction markers were not added', [
+                'profile' => $config->profile,
+            ]);
+
+            return $array;
+        }
+
+        $array['_redacted'] = true;
+
+        if ($config->trackRedactedKeys && $redactedKeys !== [] && ! array_key_exists('_redacted_keys', $array)) {
+            $array['_redacted_keys'] = $redactedKeys;
+        }
+
+        return $array;
     }
 
     /**

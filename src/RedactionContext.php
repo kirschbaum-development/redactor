@@ -6,7 +6,7 @@ namespace Kirschbaum\Redactor;
 
 class RedactionContext
 {
-    /** @var array<string> */
+    /** @var array<int, string> */
     private array $redactedKeys = [];
 
     /**
@@ -90,11 +90,11 @@ class RedactionContext
     /**
      * Get all redacted keys.
      *
-     * @return array<string>
+     * @return array<int, string>
      */
     public function getRedactedKeys(): array
     {
-        return array_unique($this->redactedKeys);
+        return array_values(array_unique($this->redactedKeys));
     }
 
     /**
