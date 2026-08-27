@@ -15,14 +15,21 @@ class Scanner
     private const EXCERPT_LIMIT = 200;
 
     public function __construct(
-        protected Redactor $redactor
+        protected Redactor $redactor,
+        protected int $windowLines = LineWindowReader::DEFAULT_WINDOW_LINES,
+        protected int $overlapLines = LineWindowReader::DEFAULT_OVERLAP_LINES,
     ) {}
 
+    /**
+     * Scan a file, a window of lines at a time.
+     *
+     * Streaming unconditionally rather than only for large files: a second code
+     * path that runs on most inputs and a first that runs on the rare large one
+     * guarantees the rarely-exercised path is the buggy one.
+     */
     public function scanFile(string $filePath, ?string $profile = null, ?string $relativeTo = null): ScanResult
     {
-        $content = @file_get_contents($filePath);
-
-        if ($content === false) {
+        if (! is_readable($filePath) || ! is_file($filePath)) {
             return new ScanResult(
                 path: $filePath,
                 findings: [],
@@ -32,16 +39,50 @@ class Scanner
             );
         }
 
-        $result = $this->redactor->redactWithMetadata($content, $profile);
+        $profileName = $profile ?? 'default';
 
         $reportedPath = $relativeTo !== null
             ? self::relativePath($filePath, $relativeTo)
             : $filePath;
 
+        /** @var array<string, ScanFinding> $findings */
+        $findings = [];
+
+        foreach (new LineWindowReader($filePath, $this->windowLines, $this->overlapLines) as [$startLine, $window]) {
+            $result = $this->redactor->redactWithMetadata($window, $profile);
+
+            if ($result->findings === []) {
+                continue;
+            }
+
+            foreach ($this->locate($window, $result->value, $result->findings, $reportedPath, $profileName) as $finding) {
+                $absolute = new ScanFinding(
+                    path: $finding->path,
+                    rule: $finding->rule,
+                    line: $startLine + $finding->line - 1,
+                    column: $finding->column,
+                    excerpt: $finding->excerpt,
+                    profile: $finding->profile,
+                    fingerprint: $finding->fingerprint,
+                    entity: $finding->entity,
+                    confidence: $finding->confidence,
+                    signals: $finding->signals,
+                );
+
+                // Overlapping windows see the same span twice; identity is the
+                // rule and the place, not the order it was found in.
+                $findings[$absolute->rule.'|'.$absolute->line.'|'.$absolute->column] = $absolute;
+            }
+        }
+
+        $ordered = array_values($findings);
+
+        usort($ordered, fn (ScanFinding $a, ScanFinding $b) => [$a->line, $a->column] <=> [$b->line, $b->column]);
+
         return new ScanResult(
             path: $filePath,
-            findings: $this->locate($content, $result->value, $result->findings, $reportedPath, $profile ?? 'default'),
-            profile: $profile ?? 'default'
+            findings: $ordered,
+            profile: $profileName
         );
     }
 

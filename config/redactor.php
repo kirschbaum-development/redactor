@@ -50,6 +50,16 @@ return [
         'respect_gitignore' => env('REDACTOR_SCAN_RESPECT_GITIGNORE', true),
 
         /*
+        | Files are scanned a window of lines at a time, so memory stays flat
+        | whatever the file size - the files most worth scanning are the large
+        | ones. Windows overlap so a secret spanning a boundary (a PEM block, a
+        | wrapped connection string) is still found; duplicates from the overlap
+        | are dropped by fingerprint.
+        */
+        'window_lines' => env('REDACTOR_SCAN_WINDOW_LINES', 512),
+        'overlap_lines' => env('REDACTOR_SCAN_OVERLAP_LINES', 4),
+
+        /*
         | Accepted findings, so CI fails on new secrets rather than on known
         | ones. Generate with:
         |
