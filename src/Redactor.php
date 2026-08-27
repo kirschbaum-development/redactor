@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Log;
 use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
+use Kirschbaum\Redactor\Support\InternalLog;
 
 class Redactor
 {
@@ -46,7 +46,88 @@ class Redactor
             }
         }
 
-        return $redactedContent ?? $content;
+        return $redactedContent;
+    }
+
+    /**
+     * Redact content without ever throwing.
+     *
+     * Intended for the logging pipeline, where an exception - a profile name
+     * typo, an unreadable config value, a strategy that blows up on unexpected
+     * input - would take down logging for the whole channel, including the
+     * error that would have explained why.
+     *
+     * On failure the content is replaced wholesale rather than passed through:
+     * if redaction could not be verified, the data is not safe to emit.
+     */
+    public function redactSafely(mixed $content, ?string $profile = null): mixed
+    {
+        try {
+            return $this->redact($content, $profile);
+        } catch (\Throwable $e) {
+            InternalLog::warning('Redaction failed; content replaced as a precaution', [
+                'profile' => $profile,
+                'exception_type' => get_class($e),
+                'exception_message' => $e->getMessage(),
+            ]);
+
+            return $this->failClosed($profile);
+        }
+    }
+
+    /**
+     * The value emitted when redaction could not be completed.
+     */
+    protected function failClosed(?string $profile): string
+    {
+        $replacement = '[REDACTED]';
+
+        try {
+            $replacement = RedactorConfig::fromConfig($profile)->replacement;
+        } catch (\Throwable) {
+            // The config is what failed; fall back to the documented default.
+        }
+
+        return $replacement.' (redaction failed)';
+    }
+
+    /**
+     * Resolve every configured profile, collecting the problems found.
+     *
+     * Run this at deploy time (see the redactor:validate command) so a bad
+     * profile fails the deploy rather than the first log line that uses it.
+     *
+     * @return array<string, string> profile name => error message
+     */
+    public function validateProfiles(): array
+    {
+        $errors = [];
+
+        foreach (RedactorConfig::getAvailableProfiles() as $profile) {
+            try {
+                $config = RedactorConfig::fromConfig($profile);
+
+                $strategies = $this->buildStrategiesForProfile($config);
+
+                $configured = array_values(array_filter($config->strategies, 'is_string'));
+
+                if (count($strategies) !== count($configured)) {
+                    $resolved = array_map(fn ($s) => get_class($s), $strategies);
+
+                    $unresolved = array_values(array_filter(
+                        $configured,
+                        fn (string $name) => ! in_array($name, $resolved, true)
+                            && ! isset($this->customStrategies[$name])
+                    ));
+
+                    $errors[$profile] = 'Unresolvable strategies: '.implode(', ', $unresolved);
+                }
+            } catch (\Throwable $e) {
+                $errors[$profile] = $e->getMessage();
+            }
+        }
+
+        return $errors;
     }
 
     /**
@@ -297,7 +378,7 @@ class Redactor
             $array = json_decode($jsonString, true, 512, JSON_THROW_ON_ERROR);
 
             if (! is_array($array)) {
-                Log::warning('Unable to redact object - JSON decode did not return array', [
+                InternalLog::warning('Unable to redact object - JSON decode did not return array', [
                     'object_class' => get_class($object),
                     'reason' => 'json_decode_not_array',
                     'decoded_type' => gettype($array),
@@ -313,7 +394,7 @@ class Redactor
             return $this->redactArray($arrayData, $context, $strategies);
 
         } catch (\Throwable $e) {
-            Log::warning('Exception while trying to redact object', [
+            InternalLog::warning('Exception while trying to redact object', [
                 'object_class' => get_class($object),
                 'reason' => 'exception_during_processing',
                 'exception_type' => get_class($e),

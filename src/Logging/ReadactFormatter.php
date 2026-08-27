@@ -10,8 +10,9 @@ class ReadactFormatter implements FormatterInterface
 {
     public function format(LogRecord $record): string
     {
-        // Sanitize the message
-        $message = Redactor::redact($record->message);
+        // redactSafely(), never redact(): this runs inside the logging
+        // pipeline, where a thrown exception takes the channel down with it.
+        $message = Redactor::redactSafely($record->message);
 
         // Format the main log line
         $output = sprintf(
@@ -24,7 +25,7 @@ class ReadactFormatter implements FormatterInterface
 
         // Add sanitized context data if present
         if (! empty($record->context)) {
-            $sanitizedContext = Redactor::redact($record->context);
+            $sanitizedContext = Redactor::redactSafely($record->context);
             $output .= ' '.json_encode($sanitizedContext, JSON_UNESCAPED_SLASHES);
         }
 

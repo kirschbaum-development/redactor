@@ -6,6 +6,7 @@ namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\ServiceProvider;
 use Kirschbaum\Redactor\Console\Commands\RedactorScanCommand;
+use Kirschbaum\Redactor\Console\Commands\RedactorValidateCommand;
 use Kirschbaum\Redactor\Scanner\Scanner;
 
 class RedactorServiceProvider extends ServiceProvider
@@ -25,6 +26,7 @@ class RedactorServiceProvider extends ServiceProvider
 
         $this->commands([
             RedactorScanCommand::class,
+            RedactorValidateCommand::class,
         ]);
     }
 
