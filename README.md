@@ -1,6 +1,6 @@
 # Kirschbaum Redactor
 
-![Laravel Supported Versions](https://img.shields.io/badge/laravel-11.x%20%7C%2012.x-green.svg)
+![Laravel Supported Versions](https://img.shields.io/badge/laravel-12.x%20%7C%2013.x-green.svg)
 [![MIT Licensed](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE.md)
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/kirschbaum-development/redactor.svg?style=flat-square)](https://packagist.org/packages/kirschbaum-development/redactor)
 ![Application Testing](https://github.com/kirschbaum-development/redactor/actions/workflows/php-tests.yml/badge.svg)
@@ -693,7 +693,7 @@ around it moves.
 ## Requirements
 
 - PHP 8.3, 8.4 or 8.5
-- Laravel 11.x or 12.x
+- Laravel 12.x or 13.x
 
 ## Installation
 
@@ -708,7 +708,7 @@ php artisan vendor:publish --tag=redactor-config
 composer test           # full suite, in parallel
 composer test-coverage  # with the coverage floor enforced
 composer lint           # Pint + PHPStan (level 10, no baseline)
-composer mutate         # mutation testing (Pest); reported, not yet gated
+composer mutate         # mutation testing (Pest); local only, not run in CI
 composer preflight      # everything CI runs
 ```
 
