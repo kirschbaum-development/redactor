@@ -53,8 +53,17 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
             return false;
         }
 
+        // Deliberately the cheapest question that can be asked: does any rule
+        // match at all. This runs against every string in every payload, so
+        // building detections and scoring them here - only to build them again
+        // in handle() - doubled the cost of the hot path for no benefit.
+        //
+        // A rule with a validator can say yes here and find nothing in handle(),
+        // which is correct: handle() returns the value untouched and reports no
+        // redaction. Being occasionally too eager is cheap; being expensive on
+        // every value is not.
         foreach ($context->config->patterns as $rule) {
-            if ($this->detect($rule, $value, $key, $context) !== []) {
+            if (Pcre::matches($rule->pattern, $value, onError: true, rule: $rule->name)) {
                 return true;
             }
         }
