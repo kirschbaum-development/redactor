@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 
 describe('Redactor Configuration Tests', function () {
     beforeEach(function () {
@@ -16,7 +18,7 @@ describe('Redactor Configuration Tests', function () {
     it('can be disabled via configuration', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => false,
-            'strategies' => [\Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class],
+            'strategies' => [BlockedKeysStrategy::class],
             'safe_keys' => [],
             'blocked_keys' => ['password'],
             'patterns' => [],
@@ -45,7 +47,7 @@ describe('Redactor Configuration Tests', function () {
     it('does not add redacted flag when mark_redacted is false', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
-            'strategies' => [\Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class],
+            'strategies' => [BlockedKeysStrategy::class],
             'safe_keys' => [],
             'blocked_keys' => ['password'],
             'patterns' => [],
@@ -78,8 +80,8 @@ describe('RedactorConfig DTO Tests', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -121,8 +123,8 @@ describe('RedactorConfig DTO Tests', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => ['ID', 'User_ID'],
             'blocked_keys' => ['PASSWORD', 'Secret'],
@@ -155,7 +157,7 @@ describe('RedactorConfig DTO Tests', function () {
     it('handles non-integer max_value_length config', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
-            'strategies' => [\Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class],
+            'strategies' => [SafeKeysStrategy::class],
             'safe_keys' => [],
             'blocked_keys' => [],
             'patterns' => [],

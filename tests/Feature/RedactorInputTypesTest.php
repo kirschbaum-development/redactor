@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
+use Kirschbaum\Redactor\Strategies\LargeStringStrategy;
+use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
+use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
 describe('Redactor Mixed Input Types Tests', function () {
     beforeEach(function () {
@@ -13,12 +19,12 @@ describe('Redactor Mixed Input Types Tests', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => ['id', 'user_id'],
             'blocked_keys' => ['password', 'secret'],
@@ -284,12 +290,12 @@ describe('Redactor Nested Structure Tests', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => ['id', 'name'],
             'blocked_keys' => ['password', 'secret'],

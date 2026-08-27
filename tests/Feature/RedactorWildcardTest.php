@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
 
 describe('Redactor Wildcard Blocked Keys Tests', function () {
     it('matches wildcard patterns for blocked keys', function () {
@@ -13,7 +14,7 @@ describe('Redactor Wildcard Blocked Keys Tests', function () {
         config()->set('redactor.profiles.wildcard_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => ['*token*', '*key*', 'password'],
@@ -67,7 +68,7 @@ describe('Redactor Wildcard Blocked Keys Tests', function () {
         config()->set('redactor.profiles.wildcard_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => ['exact_match', '*partial*'],
@@ -108,7 +109,7 @@ describe('Redactor Wildcard Blocked Keys Tests', function () {
         config()->set('redactor.profiles.wildcard_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => ['*TOKEN*'],
@@ -147,7 +148,7 @@ describe('Redactor Wildcard Blocked Keys Tests', function () {
         config()->set('redactor.profiles.wildcard_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => ['user_*_token', '*_key_*'],

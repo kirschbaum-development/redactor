@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use DateTimeImmutable;
 use Kirschbaum\Redactor\Logging\ReadactFormatter;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Monolog\Level;
 use Monolog\LogRecord;
 
@@ -16,8 +18,8 @@ describe('ReadactFormatter Tests', function () {
         config()->set('redactor.profiles.logging_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
+                BlockedKeysStrategy::class,
+                RegexPatternsStrategy::class,
             ],
             'safe_keys' => ['id'],
             'blocked_keys' => ['password', 'token', 'secret'],

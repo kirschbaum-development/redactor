@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
 describe('Shannon Entropy Strategy Tests', function () {
@@ -15,7 +17,7 @@ describe('Shannon Entropy Strategy Tests', function () {
         config()->set('redactor.profiles.entropy_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -57,7 +59,7 @@ describe('Shannon Entropy Strategy Tests', function () {
         config()->set('redactor.profiles.entropy_disabled_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -95,7 +97,7 @@ describe('Shannon Entropy Strategy Tests', function () {
         config()->set('redactor.profiles.min_length_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -135,7 +137,7 @@ describe('Shannon Entropy Strategy Tests', function () {
         config()->set('redactor.profiles.high_threshold_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -174,7 +176,7 @@ describe('Shannon Entropy Strategy Tests', function () {
         config()->set('redactor.profiles.hex_pattern_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -221,7 +223,7 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
         config()->set('redactor.profiles.common_patterns_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -275,7 +277,7 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
         config()->set('redactor.profiles.hex_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -323,7 +325,7 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
         config()->set('redactor.profiles.whitespace_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -372,7 +374,7 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
         config()->set('redactor.profiles.ip_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -421,7 +423,7 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
         config()->set('redactor.profiles.mac_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -468,7 +470,7 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
         config()->set('redactor.profiles.direct_method_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -510,7 +512,7 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
         config()->set('redactor.profiles.custom_patterns_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -552,10 +554,10 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
 
     it('covers specific lines 103 and 108 in ShannonEntropyStrategy', function () {
         // Create strategy instance directly to test specific method calls
-        $strategy = new \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
+        $strategy = new ShannonEntropyStrategy;
 
         // Test line 103: return false when exclusion_patterns is not an array
-        $config1 = new \Kirschbaum\Redactor\RedactorConfig(
+        $config1 = new RedactorConfig(
             enabled: true,
             safeKeys: [],
             blockedKeys: [],
@@ -576,7 +578,7 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
             strategies: [],
             profile: 'test'
         );
-        $context1 = new \Kirschbaum\Redactor\RedactionContext($config1);
+        $context1 = new RedactionContext($config1);
 
         // Use reflection to call isCommonPattern directly
         $reflection = new \ReflectionClass($strategy);
@@ -588,7 +590,7 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
         expect($result1)->toBeFalse();
 
         // Test line 108: continue when pattern is not a string
-        $config2 = new \Kirschbaum\Redactor\RedactorConfig(
+        $config2 = new RedactorConfig(
             enabled: true,
             safeKeys: [],
             blockedKeys: [],
@@ -613,7 +615,7 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
             strategies: [],
             profile: 'test'
         );
-        $context2 = new \Kirschbaum\Redactor\RedactionContext($config2);
+        $context2 = new RedactionContext($config2);
 
         // This should hit line 108: continue (non-string patterns skipped)
         $result2 = $method->invoke($strategy, 'valid_pattern', $context2);
@@ -628,7 +630,7 @@ describe('Shannon Entropy Algorithm Tests', function () {
         config()->set('redactor.profiles.entropy_calc_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -664,7 +666,7 @@ describe('Shannon Entropy Algorithm Tests', function () {
         config()->set('redactor.profiles.entropy_edge_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -705,7 +707,7 @@ describe('Shannon Entropy Algorithm Tests', function () {
         config()->set('redactor.profiles.no_entropy_strategy_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
+                SafeKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -737,7 +739,7 @@ describe('Shannon Entropy Algorithm Tests', function () {
         config()->set('redactor.profiles.no_pattern_strategy_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
+                SafeKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -770,7 +772,7 @@ describe('Shannon Entropy Algorithm Tests', function () {
         config()->set('redactor.profiles.caching_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -807,8 +809,8 @@ describe('Shannon Entropy Algorithm Tests', function () {
 
     it('handles cached entropy return path using direct strategy method calls', function () {
         // Test the cached entropy return path directly
-        $strategy = new \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
-        $config = new \Kirschbaum\Redactor\RedactorConfig(
+        $strategy = new ShannonEntropyStrategy;
+        $config = new RedactorConfig(
             enabled: true,
             safeKeys: [],
             blockedKeys: [],
@@ -829,7 +831,7 @@ describe('Shannon Entropy Algorithm Tests', function () {
             strategies: [],
             profile: 'test'
         );
-        $context = new \Kirschbaum\Redactor\RedactionContext($config);
+        $context = new RedactionContext($config);
 
         // Use reflection to directly call calculateShannonEntropy
         $reflection = new \ReflectionClass($strategy);
@@ -850,8 +852,8 @@ describe('Shannon Entropy Algorithm Tests', function () {
 
     it('handles non-array exclusion patterns gracefully', function () {
         // Test when exclusion_patterns is not an array - this should hit line 103
-        $strategy = new \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
-        $config = new \Kirschbaum\Redactor\RedactorConfig(
+        $strategy = new ShannonEntropyStrategy;
+        $config = new RedactorConfig(
             enabled: true,
             safeKeys: [],
             blockedKeys: [],
@@ -872,7 +874,7 @@ describe('Shannon Entropy Algorithm Tests', function () {
             strategies: [],
             profile: 'test'
         );
-        $context = new \Kirschbaum\Redactor\RedactionContext($config);
+        $context = new RedactionContext($config);
 
         // Use reflection to directly call isCommonPattern to hit line 103
         $reflection = new \ReflectionClass($strategy);
@@ -890,7 +892,7 @@ describe('Shannon Entropy Algorithm Tests', function () {
         config()->set('redactor.profiles.mixed_exclusion_patterns', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -927,7 +929,7 @@ describe('Shannon Entropy Algorithm Tests', function () {
         config()->set('redactor.profiles.hex_special_case', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],

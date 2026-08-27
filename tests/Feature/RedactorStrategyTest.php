@@ -6,7 +6,13 @@ namespace Tests\Feature;
 
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\RedactorConfig;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\LargeStringStrategy;
 use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
+use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
+use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
 describe('Redactor Strategy Priority Tests', function () {
     it('prioritizes safe_keys over blocked_keys', function () {
@@ -15,8 +21,8 @@ describe('Redactor Strategy Priority Tests', function () {
         config()->set('redactor.profiles.priority_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => ['id', 'email'],
             'blocked_keys' => ['email'],
@@ -57,8 +63,8 @@ describe('Redactor Strategy Priority Tests', function () {
         config()->set('redactor.profiles.blocked_vs_regex_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
+                BlockedKeysStrategy::class,
+                RegexPatternsStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => ['user_email'],
@@ -102,8 +108,8 @@ describe('Redactor Strategy Priority Tests', function () {
         config()->set('redactor.profiles.regex_vs_entropy_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -147,8 +153,8 @@ describe('Redactor Safe Keys Strategy Tests', function () {
         config()->set('redactor.profiles.safe_keys_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => ['id', 'uuid', 'created_at', 'updated_at'],
             'blocked_keys' => ['password', 'secret'],
@@ -194,7 +200,7 @@ describe('Redactor Safe Keys Strategy Tests', function () {
         config()->set('redactor.profiles.safe_keys_case_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
+                SafeKeysStrategy::class,
             ],
             'safe_keys' => ['id', 'uuid', 'created_at', 'updated_at'],
             'blocked_keys' => [],
@@ -240,7 +246,7 @@ describe('Redactor Blocked Keys Strategy Tests', function () {
         config()->set('redactor.profiles.blocked_keys_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => ['email', 'ssn', 'ein'],
@@ -284,7 +290,7 @@ describe('Redactor Blocked Keys Strategy Tests', function () {
         config()->set('redactor.profiles.blocked_keys_case_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => ['email', 'ssn', 'ein'],
@@ -328,7 +334,7 @@ describe('Redactor Regex Patterns Strategy Tests', function () {
         config()->set('redactor.profiles.regex_patterns_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
+                RegexPatternsStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -376,7 +382,7 @@ describe('Redactor Regex Patterns Strategy Tests', function () {
         config()->set('redactor.profiles.multiple_patterns_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
+                RegexPatternsStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -421,10 +427,10 @@ describe('Strategy Management Tests', function () {
         config()->set('redactor.profiles.strategy_management_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => ['id'],
             'blocked_keys' => ['password'],
@@ -453,10 +459,10 @@ describe('Strategy Management Tests', function () {
             ->and(count($strategies))->toBe(4);
 
         // Verify strategies are in priority order
-        expect($strategies[0])->toBeInstanceOf(\Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class)
-            ->and($strategies[1])->toBeInstanceOf(\Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class)
-            ->and($strategies[2])->toBeInstanceOf(\Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class)
-            ->and($strategies[3])->toBeInstanceOf(\Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class);
+        expect($strategies[0])->toBeInstanceOf(SafeKeysStrategy::class)
+            ->and($strategies[1])->toBeInstanceOf(BlockedKeysStrategy::class)
+            ->and($strategies[2])->toBeInstanceOf(RegexPatternsStrategy::class)
+            ->and($strategies[3])->toBeInstanceOf(ShannonEntropyStrategy::class);
     });
 
     it('demonstrates strategy separation by removing a strategy', function () {
@@ -465,9 +471,9 @@ describe('Strategy Management Tests', function () {
         config()->set('redactor.profiles.strategy_removal_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                RegexPatternsStrategy::class,
                 // Note: shannon_entropy strategy is not included
             ],
             'safe_keys' => ['id'],
@@ -514,8 +520,8 @@ describe('Strategy Management Tests', function () {
         config()->set('redactor.profiles.edge_case_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => ['id'],
             'blocked_keys' => ['password'],
@@ -559,8 +565,8 @@ describe('Strategy Management Tests', function () {
         // Update profile to include the custom strategy first
         config()->set('redactor.profiles.edge_case_test.strategies', [
             'custom_test', // Custom strategy by name
-            \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-            \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+            SafeKeysStrategy::class,
+            BlockedKeysStrategy::class,
         ]);
 
         $context = [
@@ -586,8 +592,8 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -606,10 +612,10 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
     it('handles non-string strategy classes in profile configuration', function () {
         // Test when strategy class is not a string
         config()->set('redactor.profiles.default.strategies', [
-            \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
+            SafeKeysStrategy::class,
             123, // Non-string strategy - should be skipped
             null, // Non-string strategy - should be skipped
-            \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+            BlockedKeysStrategy::class,
         ]);
 
         $redactor = new Redactor;
@@ -675,14 +681,14 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
     it('handles LargeStringStrategy with non-string input', function () {
         // Test guard clause for non-string values in LargeStringStrategy
         config()->set('redactor.profiles.default.strategies', [
-            \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
+            LargeStringStrategy::class,
         ]);
         config()->set('redactor.profiles.default.max_value_length', 10);
 
         // Use reflection to manually test the strategy with non-string input
-        $strategy = new \Kirschbaum\Redactor\Strategies\LargeStringStrategy;
-        $config = \Kirschbaum\Redactor\RedactorConfig::fromConfig('default');
-        $context = new \Kirschbaum\Redactor\RedactionContext($config);
+        $strategy = new LargeStringStrategy;
+        $config = RedactorConfig::fromConfig('default');
+        $context = new RedactionContext($config);
 
         // This should trigger the guard clause
         $result = $strategy->handle(123, 'test_key', $context);
@@ -714,14 +720,14 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
 });
 
 // Test helper class for strategy tests
-class TestValidCustomStrategy implements \Kirschbaum\Redactor\Strategies\RedactionStrategyInterface
+class TestValidCustomStrategy implements RedactionStrategyInterface
 {
-    public function shouldHandle(mixed $value, string $key, \Kirschbaum\Redactor\RedactionContext $context): bool
+    public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
         return false;
     }
 
-    public function handle(mixed $value, string $key, \Kirschbaum\Redactor\RedactionContext $context): mixed
+    public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
         return $value;
     }

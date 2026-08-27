@@ -3,6 +3,8 @@
 
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
+use Kirschbaum\Redactor\Scanner\Scanner;
+use Kirschbaum\Redactor\Scanner\ScanResult;
 use Mockery;
 
 describe('RedactorScanCommand', function () {
@@ -396,10 +398,10 @@ describe('RedactorScanCommand', function () {
 
     it('displays skipped status when scanner returns skipped result', function () {
         // Mock Scanner to return a skipped result to test the display logic
-        $mockScanner = Mockery::mock(\Kirschbaum\Redactor\Scanner\Scanner::class);
+        $mockScanner = Mockery::mock(Scanner::class);
         $mockScanner->shouldReceive('scanFile')
             ->once()
-            ->andReturn(new \Kirschbaum\Redactor\Scanner\ScanResult(
+            ->andReturn(new ScanResult(
                 path: 'test-file.txt',
                 findings: [],
                 profile: 'test',
@@ -407,7 +409,7 @@ describe('RedactorScanCommand', function () {
                 error: 'Test error'
             ));
 
-        $this->app->instance(\Kirschbaum\Redactor\Scanner\Scanner::class, $mockScanner);
+        $this->app->instance(Scanner::class, $mockScanner);
 
         $exitCode = Artisan::call('redactor:scan', [
             'paths' => [__DIR__.'/fixtures/clean-text-file.txt'],
