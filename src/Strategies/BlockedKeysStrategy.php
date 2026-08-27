@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\RedactionContext;
+use Kirschbaum\Redactor\Support\Pcre;
 
 class BlockedKeysStrategy implements RedactionStrategyInterface
 {
@@ -44,6 +45,7 @@ class BlockedKeysStrategy implements RedactionStrategyInterface
         // Escape the pattern first, then replace escaped wildcards
         $regexPattern = '/^'.str_replace('\\*', '.*', preg_quote($pattern, '/')).'$/i';
 
-        return preg_match($regexPattern, $key) === 1;
+        // onError: true. An unevaluatable blocked-key pattern blocks the key.
+        return Pcre::matches($regexPattern, $key, onError: true, rule: 'blocked_key:'.$pattern);
     }
 }

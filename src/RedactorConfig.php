@@ -6,6 +6,7 @@ namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
 use Kirschbaum\Redactor\Config\ConfigValue;
+use Kirschbaum\Redactor\Support\Pcre;
 
 readonly class RedactorConfig
 {
@@ -119,7 +120,7 @@ readonly class RedactorConfig
             }
 
             // Test if the regex pattern is valid
-            if (@preg_match($pattern, '') !== false) {
+            if (Pcre::isValidPattern($pattern)) {
                 $validPatterns[(string) $name] = $pattern;
             }
         }

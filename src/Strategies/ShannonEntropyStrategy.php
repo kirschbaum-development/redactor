@@ -6,6 +6,7 @@ namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\RedactorConfig;
+use Kirschbaum\Redactor\Support\Pcre;
 
 class ShannonEntropyStrategy implements RedactionStrategyInterface
 {
@@ -112,7 +113,9 @@ class ShannonEntropyStrategy implements RedactionStrategyInterface
                 continue;
             }
 
-            if (preg_match($pattern, $string)) {
+            // onError: false. An exclusion pattern that cannot be evaluated
+            // must not excuse the value from the entropy check.
+            if (Pcre::matches($pattern, $string, onError: false, rule: 'exclusion_pattern')) {
                 // Special case: hex strings need additional length check
                 if ($pattern === '/^[0-9a-f]+$/i' && strlen($string) >= 32) {
                     continue; // Long hex strings might be sensitive (like SHA256)
