@@ -42,12 +42,16 @@ final readonly class RedactionPolicy
             return $this->byEntity[$detection->entity];
         }
 
-        if ($rule !== null && $rule->operator !== null) {
-            return $rule->operator;
+        // Only a rule that actually chose an operator outranks the profile
+        // default. A rule that simply left `mode` alone has expressed no
+        // preference, and treating its default as a choice would make
+        // `operators.default` unreachable for anything found by a pattern.
+        if ($rule !== null && $rule->hasExplicitOperator()) {
+            return $rule->operatorSpec();
         }
 
         if (isset($this->byEntity['default'])) {
-            return $rule?->operatorSpec() ?? $this->byEntity['default'];
+            return $this->byEntity['default'];
         }
 
         return $rule?->operatorSpec() ?? $this->default;

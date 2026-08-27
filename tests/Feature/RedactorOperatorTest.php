@@ -111,6 +111,59 @@ describe('Operator configuration shapes', function () {
     });
 });
 
+describe('Operator precedence', function () {
+    function precedenceProfile(array $patterns, array $operators): array
+    {
+        return pseudoProfile(['patterns' => $patterns, 'operators' => $operators]);
+    }
+
+    it('applies operators.default to a rule that asked for nothing', function () {
+        // `mode` defaults to replace, so a rule can always produce an operator
+        // spec - which is not the same as having chosen one. Treating the
+        // default as a choice made operators.default unreachable for anything
+        // found by a pattern, silently.
+        config()->set('redactor.profiles.prec', precedenceProfile(
+            ['digits' => '/\d+/'],
+            ['default' => 'mask'],
+        ));
+
+        expect(app(Redactor::class)->redact('a1b22c', 'prec'))->toBe('a*b**c');
+    });
+
+    it('lets a rule that did choose a mode outrank the default', function () {
+        config()->set('redactor.profiles.prec', precedenceProfile(
+            ['digits' => ['pattern' => '/\d+/', 'mode' => 'remove']],
+            ['default' => 'mask'],
+        ));
+
+        expect(app(Redactor::class)->redact('a1b22c', 'prec'))->toBe('abc');
+    });
+
+    it('lets a rule with an explicit operator outrank the default', function () {
+        config()->set('redactor.profiles.prec', precedenceProfile(
+            ['digits' => ['pattern' => '/\d+/', 'operator' => 'remove']],
+            ['default' => 'mask'],
+        ));
+
+        expect(app(Redactor::class)->redact('a1b22c', 'prec'))->toBe('abc');
+    });
+
+    it('lets the entity outrank both the rule and the default', function () {
+        config()->set('redactor.profiles.prec', precedenceProfile(
+            ['digits' => ['pattern' => '/\d+/', 'entity' => 'num', 'mode' => 'remove']],
+            ['default' => 'mask', 'num' => 'redact'],
+        ));
+
+        expect(app(Redactor::class)->redact('a1b22c', 'prec'))->toBe('a[REDACTED]b[REDACTED]c');
+    });
+
+    it('falls back to redaction when no operator is configured anywhere', function () {
+        config()->set('redactor.profiles.prec', precedenceProfile(['digits' => '/\d+/'], []));
+
+        expect(app(Redactor::class)->redact('a1b22c', 'prec'))->toBe('a[REDACTED]b[REDACTED]c');
+    });
+});
+
 describe('Deterministic pseudonymization', function () {
     it('maps the same value to the same surrogate every time', function () {
         $a = operate('surrogate', 'alice@customer.com', [], 'email');

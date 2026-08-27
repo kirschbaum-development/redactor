@@ -101,6 +101,20 @@ final readonly class PatternRule
     }
 
     /**
+     * Whether this rule actually asked for a particular operator.
+     *
+     * `mode` defaults to replace, so operatorSpec() can always produce
+     * something - which is not the same as the rule having chosen it. Without
+     * this distinction a rule that expressed no preference would still outrank
+     * the profile's `operators.default`, making that setting unreachable for
+     * every pattern-detected value.
+     */
+    public function hasExplicitOperator(): bool
+    {
+        return $this->operator !== null || $this->mode !== self::MODE_REPLACE;
+    }
+
+    /**
      * The operator this rule asks for, translating the legacy `mode` when no
      * explicit operator is set.
      */
