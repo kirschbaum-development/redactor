@@ -77,7 +77,7 @@ describe('Redaction throughput', function () {
     it('keeps the default profile faster than strict', function () {
         expect(timeRedaction('default'))->toBeLessThan(timeRedaction('strict'));
     });
-});
+})->skip(runningWithCoverage(), 'Timings are meaningless under coverage instrumentation.');
 
 describe('Redaction scaling', function () {
     it('scales linearly with payload size, not quadratically', function () {
@@ -109,7 +109,7 @@ describe('Redaction scaling', function () {
         // 10x the input should cost roughly 10x. Quadratic behaviour would be
         // 100x; the ceiling of 30x absorbs GC and cache noise.
         expect($largeTime / max($smallTime, 1))->toBeLessThan(30.0);
-    });
+    })->skip(runningWithCoverage(), 'Timings are meaningless under coverage instrumentation.');
 
     it('holds memory flat for a large payload', function () {
         config()->set('redactor.profiles.scaling', array_merge(

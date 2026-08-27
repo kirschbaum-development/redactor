@@ -44,6 +44,24 @@ expect()->extend('toBeOne', function () {
 */
 
 /**
+ * Whether a coverage driver is actively instrumenting this run.
+ *
+ * Instrumentation dominates the clock and flattens the difference between a
+ * fast and a slow implementation, so timing assertions made under it are
+ * meaningless - a benchmark that shows 8x uninstrumented showed 1.4x under
+ * pcov in CI. Timing-sensitive tests skip themselves rather than flake.
+ */
+function runningWithCoverage(): bool
+{
+    if (extension_loaded('pcov') && (bool) ini_get('pcov.enabled')) {
+        return true;
+    }
+
+    return extension_loaded('xdebug')
+        && str_contains((string) ini_get('xdebug.mode'), 'coverage');
+}
+
+/**
  * Clean up directory recursively
  */
 function cleanupDirectory(string $dir): void

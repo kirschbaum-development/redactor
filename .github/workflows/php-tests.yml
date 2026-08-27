@@ -66,3 +66,27 @@ jobs:
 
       - name: Execute tests
         run: vendor/bin/pest --ci --compact --memory --coverage --min=80
+
+  performance:
+    name: performance guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, intl, fileinfo
+          # Explicitly no coverage: instrumentation dominates the clock and
+          # flattens the difference between a fast and a slow implementation,
+          # so these assertions skip themselves when a driver is active.
+          coverage: none
+
+      - name: Install composer dependencies
+        uses: ramsey/composer-install@v3
+
+      - name: Run performance guards
+        run: vendor/bin/pest --testsuite=Performance --ci
