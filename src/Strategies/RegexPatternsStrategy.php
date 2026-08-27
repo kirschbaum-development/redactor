@@ -4,19 +4,49 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Strategies;
 
+use Kirschbaum\Redactor\Detection\Confidence;
+use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Patterns\PatternRule;
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
 use Kirschbaum\Redactor\Support\Pcre;
 
 /**
- * Redacts the sensitive spans inside a string rather than the whole string.
+ * Finds sensitive spans by pattern and hands each one to an operator.
  *
- * "Order 123 for bob@example.com failed" becomes
- * "Order 123 for [REDACTED] failed", not "[REDACTED]".
+ * The strategy no longer decides what replacement looks like. It detects, scores
+ * and locates; the operator configured for that entity decides whether the span
+ * is redacted, masked, pseudonymised or left alone. That separation is what lets
+ * one profile emit "[REDACTED]" and another emit a stable surrogate from exactly
+ * the same detection.
  */
 class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInterface
 {
+    /**
+     * How much a passing checksum is worth.
+     *
+     * A Luhn-valid 16-digit run is a card with ~90% certainty; the same digits
+     * failing Luhn are almost never one. This is the single strongest context
+     * signal available, so it moves the score furthest.
+     */
+    private const VALIDATOR_BOOST = 0.75;
+
+    /**
+     * How much a nearby keyword is worth.
+     *
+     * "token=" beside a high-entropy string is corroboration, not proof - the
+     * word appears in plenty of prose too - so it nudges rather than decides.
+     */
+    private const KEYWORD_BOOST = 0.25;
+
+    private const KEYWORD_WINDOW = 40;
+
+    /** @var array<int, string> */
+    private const KEYWORDS = [
+        'secret', 'token', 'password', 'passwd', 'apikey', 'api_key', 'api-key',
+        'credential', 'private', 'auth', 'bearer', 'key', 'card', 'cvv', 'ssn',
+    ];
+
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
         if (! is_string($value) || $context->config->patterns === []) {
@@ -24,38 +54,7 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
         }
 
         foreach ($context->config->patterns as $rule) {
-            if ($this->matchesWithValidation($rule, $value)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Whether the rule finds anything in the subject that also passes its
-     * structural check.
-     */
-    private function matchesWithValidation(PatternRule $rule, string $subject): bool
-    {
-        // onError: true. If the engine could not evaluate the pattern we do
-        // not know the value is clean, so it is treated as sensitive.
-        if ($rule->validator === null) {
-            return Pcre::matches($rule->pattern, $subject, onError: true, rule: $rule->name);
-        }
-
-        $found = @preg_match_all($rule->pattern, $subject, $all, PREG_SET_ORDER);
-
-        if ($found === false) {
-            return true;
-        }
-
-        foreach ($all as $set) {
-            $candidate = $rule->capture > 0 && isset($set[$rule->capture]) && $set[$rule->capture] !== ''
-                ? $set[$rule->capture]
-                : $set[0];
-
-            if ($rule->accepts((string) $candidate)) {
+            if ($this->detect($rule, $value, $key, $context) !== []) {
                 return true;
             }
         }
@@ -69,18 +68,17 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
             return $value;
         }
 
-        $replacement = $context->config->replacement;
         $result = $value;
 
         foreach ($context->config->patterns as $rule) {
-            $applied = $this->applyRule($rule, $result, $replacement, $context, $key);
+            $applied = $this->applyRule($rule, $result, $key, $context);
 
             if ($applied === null) {
                 // The engine failed partway through. Emitting a partially
                 // substituted string would leak whatever it did not reach.
                 $context->recordRedaction($key, $rule->name, 0, strlen($result));
 
-                return $replacement;
+                return $context->config->replacement;
             }
 
             $result = $applied;
@@ -90,67 +88,162 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
     }
 
     /**
-     * Apply one rule to the whole subject, or null if PCRE gave up.
+     * Rewrite every accepted detection for one rule, right to left.
+     *
+     * Right to left because operators change length: splicing from the end
+     * means earlier offsets stay valid without tracking a running delta.
+     *
+     * Returns null when PCRE gave up, so the caller can fail closed.
      */
-    private function applyRule(
-        PatternRule $rule,
-        string $subject,
-        string $replacement,
-        RedactionContext $context,
-        string $key
-    ): ?string {
-        if ($rule->replacesWholeValue()) {
-            if (! $this->matchesWithValidation($rule, $subject)) {
-                return $subject;
-            }
+    private function applyRule(PatternRule $rule, string $subject, string $key, RedactionContext $context): ?string
+    {
+        $detections = $this->detect($rule, $subject, $key, $context);
 
-            $context->recordRedaction($key, $rule->name, 0, strlen($subject), $subject);
-
-            return $replacement;
-        }
-
-        /** @var array<int, array{offset: int, length: int, matched: string}> $hits */
-        $hits = [];
-
-        $result = Pcre::replaceCallback(
-            $rule->pattern,
-            function (array $matches) use ($rule, $replacement, &$hits): string {
-                /** @var array<int|string, array{0: string, 1: int}> $matches */
-                $rewritten = $rule->rewriteMatch($matches, $replacement);
-
-                // A match the rule's validator rejected is left as it was, and
-                // must not count as a redaction.
-                if ($rewritten === $matches[0][0]) {
-                    return $rewritten;
-                }
-
-                // Report the position of the secret itself, which is the
-                // capture group when the rule names one.
-                $target = $rule->capture > 0 && isset($matches[$rule->capture]) && $matches[$rule->capture][1] >= 0
-                    ? $matches[$rule->capture]
-                    : $matches[0];
-
-                $hits[] = [
-                    'offset' => $target[1],
-                    'length' => strlen($target[0]),
-                    'matched' => $target[0],
-                ];
-
-                return $rewritten;
-            },
-            $subject,
-            $rule->name,
-            PREG_OFFSET_CAPTURE
-        );
-
-        if ($result === null) {
+        if ($detections === null) {
             return null;
         }
 
-        foreach ($hits as $hit) {
-            $context->recordRedaction($key, $rule->name, $hit['offset'], $hit['length'], $hit['matched']);
+        if ($detections === []) {
+            return $subject;
+        }
+
+        if ($rule->replacesWholeValue()) {
+            $first = $detections[0];
+            $context->recordRedaction($key, $rule->name, $first->offset, $first->length(), $first->value);
+
+            return $context->operate($first, $rule);
+        }
+
+        $result = $subject;
+
+        foreach (array_reverse($detections) as $detection) {
+            $replacement = $context->operate($detection, $rule);
+
+            if ($replacement === $detection->value) {
+                // A preserving operator: detected, deliberately left alone.
+                continue;
+            }
+
+            $result = substr_replace($result, $replacement, $detection->offset, $detection->length());
+
+            $context->recordRedaction($key, $rule->name, $detection->offset, $detection->length(), $detection->value);
         }
 
         return $result;
+    }
+
+    /**
+     * Every span in the subject this rule accepts, in order.
+     *
+     * Returns null if the engine failed; an empty array means a clean subject.
+     *
+     * @return array<int, Detection>|null
+     */
+    private function detect(PatternRule $rule, string $subject, string $key, RedactionContext $context): ?array
+    {
+        $found = @preg_match_all($rule->pattern, $subject, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+
+        if ($found === false || preg_last_error() !== PREG_NO_ERROR) {
+            Pcre::matches($rule->pattern, $subject, onError: true, rule: $rule->name);
+
+            return null;
+        }
+
+        $detections = [];
+
+        foreach ($matches as $set) {
+            $target = $rule->capture > 0 && isset($set[$rule->capture]) && $set[$rule->capture][1] >= 0
+                ? $set[$rule->capture]
+                : $set[0];
+
+            [$text, $offset] = [(string) $target[0], (int) $target[1]];
+
+            if ($text === '' || ! $rule->accepts($text)) {
+                continue;
+            }
+
+            $detection = new Detection(
+                entity: $rule->entity(),
+                rule: $rule->name,
+                offset: $offset,
+                value: $text,
+                confidence: $this->score($rule, $text, $subject, $offset, $key),
+                key: $key,
+            );
+
+            if ($context->accepts($detection)) {
+                $detections[] = $detection;
+            }
+        }
+
+        return $detections;
+    }
+
+    /**
+     * Score a match from the rule's base confidence plus what surrounds it.
+     */
+    private function score(PatternRule $rule, string $text, string $subject, int $offset, string $key): Confidence
+    {
+        $confidence = Confidence::of($rule->confidence, sprintf('pattern "%s" matched', $rule->name));
+
+        if ($rule->validator !== null) {
+            $confidence = $confidence->with(
+                'validator',
+                self::VALIDATOR_BOOST,
+                sprintf('%s checksum passed', $rule->validator)
+            );
+        }
+
+        if ($this->hasNearbyKeyword($subject, $offset) || $this->keyLooksSensitive($key)) {
+            $confidence = $confidence->with(
+                'context',
+                self::KEYWORD_BOOST,
+                'a credential keyword appears alongside the match'
+            );
+        }
+
+        return $confidence;
+    }
+
+    /**
+     * Whether a credential keyword sits just before the match.
+     *
+     * Only the text ahead of the match is considered: "token=<value>" is a
+     * label for what follows, whereas a keyword after the match usually belongs
+     * to the next field.
+     */
+    private function hasNearbyKeyword(string $subject, int $offset): bool
+    {
+        $start = max(0, $offset - self::KEYWORD_WINDOW);
+        $window = strtolower(substr($subject, $start, $offset - $start));
+
+        if ($window === '') {
+            return false;
+        }
+
+        foreach (self::KEYWORDS as $keyword) {
+            if (str_contains($window, $keyword)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function keyLooksSensitive(string $key): bool
+    {
+        if ($key === '') {
+            return false;
+        }
+
+        $lower = strtolower($key);
+
+        foreach (self::KEYWORDS as $keyword) {
+            if (str_contains($lower, $keyword)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

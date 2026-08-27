@@ -6,6 +6,9 @@ namespace Kirschbaum\Redactor\Patterns;
 
 use InvalidArgumentException;
 use Kirschbaum\Redactor\Config\ConfigValue;
+use Kirschbaum\Redactor\Detection\Confidence;
+use Kirschbaum\Redactor\Operators\OperatorRegistry;
+use Kirschbaum\Redactor\Operators\OperatorSpec;
 use Kirschbaum\Redactor\Support\Pcre;
 
 /**
@@ -71,7 +74,52 @@ final readonly class PatternRule
          * actually be what the pattern claims. Null means shape is enough.
          */
         public ?string $validator = null,
+        /**
+         * What kind of thing this rule finds.
+         *
+         * Drives surrogate selection and per-entity policy; defaults to the
+         * rule name, which is right most of the time ('email' finds an email).
+         */
+        public ?string $entity = null,
+        /**
+         * How much to trust a bare match from this pattern, before validators
+         * and context adjust it.
+         */
+        public float $confidence = Confidence::MEDIUM,
+        /**
+         * What to do with what it finds. Null means the profile decides.
+         */
+        public ?OperatorSpec $operator = null,
     ) {}
+
+    /**
+     * The entity this rule detects.
+     */
+    public function entity(): string
+    {
+        return $this->entity ?? $this->name;
+    }
+
+    /**
+     * The operator this rule asks for, translating the legacy `mode` when no
+     * explicit operator is set.
+     */
+    public function operatorSpec(): OperatorSpec
+    {
+        if ($this->operator !== null) {
+            return $this->operator;
+        }
+
+        return new OperatorSpec(
+            match ($this->mode) {
+                self::MODE_MASK => OperatorRegistry::MASK,
+                self::MODE_PARTIAL => OperatorRegistry::PARTIAL,
+                self::MODE_REMOVE => OperatorRegistry::REMOVE,
+                default => OperatorRegistry::REDACT,
+            },
+            ['keep' => $this->keep, 'mask_character' => $this->maskCharacter],
+        );
+    }
 
     /**
      * Build a rule from its configured form, or return null if unusable.
@@ -113,6 +161,18 @@ final readonly class PatternRule
             ? null
             : ConfigValue::enum($validator, Validator::NAMES, Validator::LUHN, $path.'.validator');
 
+        $entity = $definition['entity'] ?? null;
+        $entity = is_string($entity) && $entity !== '' ? $entity : null;
+
+        $confidence = $definition['confidence'] ?? Confidence::MEDIUM;
+        $confidence = is_numeric($confidence)
+            ? max(0.0, min(1.0, (float) $confidence))
+            : Confidence::MEDIUM;
+
+        $operator = isset($definition['operator'])
+            ? OperatorSpec::parse($definition['operator'], $path.'.operator')
+            : null;
+
         $capture = $definition['capture'] ?? 0;
         $capture = $capture === 0 || $capture === '0'
             ? 0
@@ -130,6 +190,9 @@ final readonly class PatternRule
             maskCharacter: mb_substr($maskCharacter, 0, 1),
             capture: $capture,
             validator: $validator,
+            entity: $entity,
+            confidence: $confidence,
+            operator: $operator,
         );
     }
 

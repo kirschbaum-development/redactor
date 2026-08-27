@@ -4,7 +4,14 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor;
 
+use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Findings\MatchFinding;
+use Kirschbaum\Redactor\Operators\OperatorContext;
+use Kirschbaum\Redactor\Operators\OperatorRegistry;
+use Kirschbaum\Redactor\Operators\OperatorSpec;
+use Kirschbaum\Redactor\Patterns\PatternRule;
+use Kirschbaum\Redactor\Support\InternalLog;
+use Kirschbaum\Redactor\Support\Pseudonymizer;
 
 class RedactionContext
 {
@@ -28,8 +35,13 @@ class RedactionContext
 
     public bool $wasRedacted = false;
 
+    private ?Pseudonymizer $pseudonymizer = null;
+
+    private bool $pseudonymizerResolved = false;
+
     public function __construct(
-        public readonly RedactorConfig $config
+        public readonly RedactorConfig $config,
+        public readonly OperatorRegistry $operators = new OperatorRegistry,
     ) {
         /** @var \SplObjectStorage<object, null> $storage */
         $storage = new \SplObjectStorage;
@@ -100,6 +112,58 @@ class RedactionContext
     public function getRedactedKeys(): array
     {
         return array_values(array_unique($this->redactedKeys));
+    }
+
+    /**
+     * Apply the configured operator to a detection.
+     *
+     * The single place detection turns into a decision, so every strategy gets
+     * the same precedence rules and the same never-throw behaviour.
+     */
+    public function operate(Detection $detection, ?PatternRule $rule = null, ?OperatorSpec $atLocation = null): string
+    {
+        $spec = $this->config->policy->operatorFor($detection, $rule, $atLocation);
+
+        if (! $this->operators->has($spec->name)) {
+            InternalLog::warning('Unknown redaction operator; falling back to the replacement string', [
+                'operator' => $spec->name,
+                'profile' => $this->config->profile,
+                'rule' => $detection->rule,
+            ]);
+
+            return $this->config->replacement;
+        }
+
+        return $this->operators->get($spec->name)->apply(
+            $detection,
+            new OperatorContext($this->config->replacement, $spec->options, $this->pseudonymizer()),
+        );
+    }
+
+    /**
+     * Whether a detection clears the profile's confidence floor.
+     */
+    public function accepts(Detection $detection): bool
+    {
+        return $detection->confidence->meets($this->config->minConfidence);
+    }
+
+    /**
+     * The pseudonymizer for this profile, or null when none is configured.
+     *
+     * Resolved once and cached: deriving a key is cheap but not free, and a
+     * misconfigured key must not raise on every value in a payload.
+     */
+    public function pseudonymizer(): ?Pseudonymizer
+    {
+        if ($this->pseudonymizerResolved) {
+            return $this->pseudonymizer;
+        }
+
+        $this->pseudonymizerResolved = true;
+        $this->pseudonymizer = PseudonymizerFactory::forProfile($this->config);
+
+        return $this->pseudonymizer;
     }
 
     /**

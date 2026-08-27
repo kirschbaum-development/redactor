@@ -62,6 +62,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Pseudonymization
+    |--------------------------------------------------------------------------
+    |
+    | The `hash` and `surrogate` operators replace a value with a stable
+    | stand-in, so redacted logs stay joinable: the same email always produces
+    | the same surrogate, and you can still count distinct users or follow one
+    | account through a trace.
+    |
+    | The mapping is one-way (HMAC, not encryption). Anyone holding the key can
+    | confirm a guess, so the key must not travel with the logs. Leave it null
+    | to derive one from APP_KEY, which is never used directly.
+    |
+    | Rotating the key changes every surrogate. That is the intended way to
+    | break correlation with previously exported logs - and the reason not to
+    | rotate it casually.
+    |
+    */
+
+    'pseudonymization' => [
+        'enabled' => env('REDACTOR_PSEUDONYMIZATION', true),
+        'key' => env('REDACTOR_PSEUDONYMIZATION_KEY'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Redaction Profiles
     |--------------------------------------------------------------------------
     |
@@ -213,6 +238,31 @@ return [
                     'validator' => 'iban',
                 ],
             ],
+
+            /*
+            | What happens to what the detectors find, by entity.
+            |
+            |   redact     replace with the replacement string  (default)
+            |   mask       same length, all mask characters
+            |   partial    keep the last N characters
+            |   remove     delete it
+            |   hash       stable keyed token: [email:k4m9rp2xzq]
+            |   surrogate  stable fake of the same shape
+            |   preserve   detect and report, change nothing
+            |
+            | Entity beats the rule that found it, so a policy decision about
+            | data is not overridden by which regex happened to spot it.
+            */
+            'operators' => [
+                'default' => 'redact',
+                'credit_card' => ['partial' => ['keep' => 4]],
+            ],
+
+            /*
+            | Detections scoring below this are ignored. Raise it to quieten a
+            | noisy profile without weakening any pattern.
+            */
+            'min_confidence' => env('REDACTOR_MIN_CONFIDENCE', 0.0),
 
             'replacement' => env('REDACTOR_REPLACEMENT', '[REDACTED]'),
             'mark_redacted' => env('REDACTOR_MARK_REDACTED', true),
@@ -489,6 +539,111 @@ return [
                     '/^\d+$/', // Exclude pure numbers
                     '/^[A-Z]{2,}$/', // Exclude acronyms
                     '/^[a-z]{2,}$/', // Exclude lowercase words
+                ],
+            ],
+        ],
+
+        /*
+        |----------------------------------------------------------------------
+        | Observability Profile
+        |----------------------------------------------------------------------
+        |
+        | For logs and traces you still need to be able to reason about.
+        |
+        | Replacing every value with "[REDACTED]" collapses distinct values into
+        | one, which destroys exactly the questions logs exist to answer: how
+        | many users hit this, is it always the same account, did this session
+        | span both services. This profile pseudonymises instead - the same
+        | input always yields the same stand-in - so counts, joins and traces
+        | survive while the original values do not.
+        |
+        | Requires a pseudonymization key (see above). Without one it degrades
+        | to plain redaction rather than emitting an unkeyed surrogate.
+        |
+        */
+        'observability' => [
+            'enabled' => true,
+
+            'strategies' => [
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
+            ],
+
+            'safe_keys' => [
+                'id', 'uuid', 'user_id', 'order_id', 'request_id', 'trace_id',
+                'created_at', 'updated_at', 'timestamp', 'level', 'event',
+                'channel', 'duration_ms', 'memory_mb', 'status', 'method',
+                'type', 'action', 'operation', 'version', 'environment',
+            ],
+
+            'blocked_keys' => [
+                'password', '*token*', '*secret*', 'authorization', 'private_key',
+                'client_secret', 'cvv', 'pin',
+            ],
+
+            'patterns' => [
+                'email' => [
+                    'pattern' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+/',
+                    'entity' => 'email',
+                    'confidence' => 0.95,
+                ],
+                'credit_card' => [
+                    'pattern' => '/\\b(?:\\d[ -]*?){13,16}\\b/',
+                    'entity' => 'credit_card',
+                    'validator' => 'luhn',
+                ],
+                'phone_simple' => [
+                    'pattern' => '/\\b\\d{3}[.-]?\\d{3}[.-]?\\d{4}\\b/',
+                    'entity' => 'phone',
+                    'confidence' => 0.5,
+                ],
+                'ipv4' => [
+                    'pattern' => '/\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b/',
+                    'entity' => 'ip',
+                    'confidence' => 0.8,
+                ],
+            ],
+
+            /*
+            | Emails keep their domain, so "how many distinct users at this
+            | tenant" still answers correctly. Cards keep their BIN and stay
+            | Luhn-valid. IPs become a different-but-stable address, so rate
+            | analysis by source survives.
+            */
+            'operators' => [
+                'default' => 'redact',
+                'email' => ['surrogate' => ['preserve_domain' => true]],
+                'phone' => 'surrogate',
+                'ip' => 'surrogate',
+                'credit_card' => ['surrogate' => ['preserve_bin' => 6]],
+            ],
+
+            'min_confidence' => 0.4,
+
+            'replacement' => '[REDACTED]',
+            'mark_redacted' => false,
+            'track_redacted_keys' => false,
+            'non_redactable_object_behavior' => 'preserve',
+            'max_value_length' => 5000,
+            'redact_large_objects' => true,
+            'max_object_size' => 100,
+            'max_depth' => 32,
+
+            'shannon_entropy' => [
+                'enabled' => true,
+                'threshold' => 4.8,
+                'min_length' => 25,
+                'charset_thresholds' => [
+                    'hex' => 3.0,
+                    'base64' => 4.5,
+                    'base64url' => 4.5,
+                ],
+                'exclusion_patterns' => [
+                    '/^https?:\\/\\//',
+                    '/^\\d{4}-\\d{2}-\\d{2}/',
+                    '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
                 ],
             ],
         ],

@@ -6,6 +6,9 @@ namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
 use Kirschbaum\Redactor\Config\ConfigValue;
+use Kirschbaum\Redactor\Operators\OperatorRegistry;
+use Kirschbaum\Redactor\Operators\OperatorSpec;
+use Kirschbaum\Redactor\Operators\RedactionPolicy;
 use Kirschbaum\Redactor\Patterns\PatternRule;
 
 readonly class RedactorConfig
@@ -42,6 +45,16 @@ readonly class RedactorConfig
         public array $strategies,
         public string $profile,
         public int $maxDepth = self::DEFAULT_MAX_DEPTH,
+        /**
+         * Detections scoring below this are not acted on.
+         *
+         * Lets a profile be tuned with one number instead of by weakening
+         * patterns, which is the only lever a binary matcher offers.
+         */
+        public float $minConfidence = 0.0,
+        public RedactionPolicy $policy = new RedactionPolicy,
+        /** @var array<string, mixed> */
+        public array $pseudonymization = [],
     ) {}
 
     /**
@@ -101,6 +114,62 @@ readonly class RedactorConfig
             strategies: ConfigValue::map($config['strategies'] ?? [], "profiles.{$profile}.strategies"),
             profile: $profile,
             maxDepth: ConfigValue::positiveInt($config['max_depth'] ?? self::DEFAULT_MAX_DEPTH, self::DEFAULT_MAX_DEPTH, "profiles.{$profile}.max_depth"),
+            minConfidence: self::confidenceFloor($config['min_confidence'] ?? 0.0, "profiles.{$profile}.min_confidence"),
+            policy: self::buildPolicy($config['operators'] ?? [], $profile),
+            pseudonymization: self::pseudonymizationSettings($config['pseudonymization'] ?? [], $profile),
+        );
+    }
+
+    /**
+     * Merge the global pseudonymization settings with any profile override.
+     *
+     * The key is almost always global - one key per application, so surrogates
+     * correlate across every profile - while a profile may still want its own
+     * salt to break correlation deliberately, or to switch the feature off.
+     *
+     * @return array<string, mixed>
+     */
+    private static function pseudonymizationSettings(mixed $profileSettings, string $profile): array
+    {
+        $global = ConfigValue::map(Config::get('redactor.pseudonymization', []), 'pseudonymization');
+        $local = ConfigValue::map($profileSettings, "profiles.{$profile}.pseudonymization");
+
+        return [...$global, ...$local];
+    }
+
+    private static function confidenceFloor(mixed $value, string $path): float
+    {
+        $floor = ConfigValue::float($value, 0.0, $path);
+
+        if ($floor < 0.0 || $floor > 1.0) {
+            throw new \InvalidArgumentException(sprintf(
+                'Redactor config [%s] must be between 0 and 1, got %s.',
+                $path,
+                (string) $floor
+            ));
+        }
+
+        return $floor;
+    }
+
+    /**
+     * Build the per-entity operator policy for a profile.
+     *
+     * @param  mixed  $operators
+     */
+    private static function buildPolicy($operators, string $profile): RedactionPolicy
+    {
+        $map = ConfigValue::map($operators, "profiles.{$profile}.operators");
+
+        $specs = [];
+
+        foreach ($map as $entity => $definition) {
+            $specs[$entity] = OperatorSpec::parse($definition, "profiles.{$profile}.operators.{$entity}");
+        }
+
+        return new RedactionPolicy(
+            $specs,
+            $specs['default'] ?? new OperatorSpec(OperatorRegistry::REDACT),
         );
     }
 
