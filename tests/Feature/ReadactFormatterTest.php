@@ -207,7 +207,7 @@ describe('ReadactFormatter Tests', function () {
         }
     });
 
-    test('formatBatch returns formatted first record', function () {
+    test('formatBatch formats every record, not just the first', function () {
         $formatter = new ReadactFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
@@ -230,8 +230,12 @@ describe('ReadactFormatter Tests', function () {
 
         $result = $formatter->formatBatch($records);
 
-        expect($result)->toBe("[2023-12-25 14:30:45.123456] app.INFO: First message\n")
-            ->and($result)->not->toContain('Second message');
+        // Previously this returned format($records[0]), so every record but
+        // the first was silently dropped by any batching handler.
+        expect($result)->toBe(
+            "[2023-12-25 14:30:45.123456] app.INFO: First message\n"
+            ."[2023-12-25 14:30:45.123456] app.ERROR: Second message\n"
+        );
     });
 
     test('handles null context values', function () {
