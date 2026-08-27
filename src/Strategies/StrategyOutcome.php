@@ -15,5 +15,7 @@ final readonly class StrategyOutcome
 {
     public function __construct(
         public mixed $value,
+        /** Declared safe by a PreservingStrategy rather than redacted. */
+        public bool $preserved = false,
     ) {}
 }

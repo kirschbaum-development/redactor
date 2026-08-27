@@ -69,25 +69,29 @@ return [
                 ShannonEntropyStrategy::class,
             ],
 
+            /*
+            | Keys whose contents are safe by construction: identifiers,
+            | timestamps and enumerations. Everything under a safe key is
+            | preserved as-is, nested structures included, so a free-text
+            | field must never be listed here however harmless its name.
+            */
             'safe_keys' => [
                 // Core identifiers (high frequency)
                 'id',
                 'uuid',
                 'user_id',
                 'order_id',
-                'session_id',
                 'request_id',
+                'trace_id',
 
                 // Timestamps & metadata (high frequency)
                 'created_at',
                 'updated_at',
                 'timestamp',
 
-                // Redactor framework keys (highest frequency)
+                // Log framework keys (highest frequency)
                 'level',
                 'event',
-                'message',
-                'trace_id',
                 'channel',
                 'duration_ms',
                 'memory_mb',
@@ -100,20 +104,26 @@ return [
                 'breaker_tripped',
                 'uncaught',
 
-                'title',
+                // Enumerations and fixed vocabularies
                 'type',
                 'method',
-                'path',
-                'url',
-                'ip',
-                'user_agent',
                 'operation',
                 'action',
-                'source',
-                'target',
                 'version',
                 'platform',
                 'environment',
+
+                /*
+                | Deliberately NOT safe, though earlier versions listed them:
+                |
+                |   message, title    free text, the commonest PII carrier
+                |   url, path         query strings carry tokens and emails
+                |   ip, user_agent    personal data under GDPR
+                |   source, target    free-form, frequently addresses or paths
+                |   session_id        was simultaneously listed under
+                |                     blocked_keys; safe_keys won, so it was
+                |                     never redacted
+                */
             ],
 
             'blocked_keys' => [
@@ -207,7 +217,9 @@ return [
                 ShannonEntropyStrategy::class,
             ],
 
-            // Minimal safe keys for strict environments
+            // Minimal safe keys for strict environments. 'message' is
+            // excluded: it is free text, which is exactly what strict mode
+            // exists to inspect.
             'safe_keys' => [
                 'id',
                 'uuid',
@@ -216,7 +228,6 @@ return [
                 'timestamp',
                 'level',
                 'event',
-                'message',
             ],
 
             // Extended blocked keys
@@ -380,20 +391,20 @@ return [
                 // Disable shannon entropy for performance
             ],
 
+            // Same rule as the default profile: identifiers and enumerations
+            // only, never free text.
             'safe_keys' => [
                 'id',
                 'uuid',
                 'user_id',
                 'order_id',
-                'session_id',
                 'request_id',
+                'trace_id',
                 'created_at',
                 'updated_at',
                 'timestamp',
                 'level',
                 'event',
-                'message',
-                'trace_id',
                 'channel',
                 'duration_ms',
                 'memory_mb',
@@ -403,17 +414,10 @@ return [
                 'status',
                 'breaker_tripped',
                 'uncaught',
-                'title',
                 'type',
                 'method',
-                'path',
-                'url',
-                'ip',
-                'user_agent',
                 'operation',
                 'action',
-                'source',
-                'target',
                 'version',
                 'platform',
                 'environment',

@@ -6,6 +6,7 @@ namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
 use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
 use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
 use Kirschbaum\Redactor\Strategies\StrategyOutcome;
 use Kirschbaum\Redactor\Support\InternalLog;
@@ -112,6 +113,17 @@ class Redactor
                 $strategies = $this->buildStrategiesForProfile($config);
 
                 $configured = array_values(array_filter($config->strategies, 'is_string'));
+
+                $conflicts = array_values(array_intersect($config->safeKeys, $config->blockedKeys));
+
+                if ($conflicts !== []) {
+                    // SafeKeysStrategy runs first in every shipped profile, so
+                    // a key in both lists is silently never redacted.
+                    $errors[$profile] = 'Keys listed in both safe_keys and blocked_keys (safe_keys wins, so these are never redacted): '
+                        .implode(', ', $conflicts);
+
+                    continue;
+                }
 
                 if (count($strategies) !== count($configured)) {
                     $resolved = array_map(fn ($s) => get_class($s), $strategies);
@@ -425,6 +437,14 @@ class Redactor
 
             $value = $strategy->handle($value, $key, $context);
             $handled = true;
+
+            // A preserving strategy declares the value safe. Nothing after it
+            // runs, and the walk does not descend into it: "this key is safe"
+            // has to mean the same thing for a scalar and for the array under
+            // it, or it means nothing predictable at all.
+            if ($strategy instanceof PreservingStrategy) {
+                return new StrategyOutcome($value, preserved: true);
+            }
 
             // A strategy that replaces the value wholesale ends the chain.
             // A chainable one only rewrote part of a string, so the remaining
