@@ -12,6 +12,7 @@ use Kirschbaum\Redactor\Operators\OperatorSpec;
 use Kirschbaum\Redactor\Operators\RedactionPolicy;
 use Kirschbaum\Redactor\Path\PathTrie;
 use Kirschbaum\Redactor\Patterns\PatternRule;
+use Kirschbaum\Redactor\Support\KeyMatcher;
 
 readonly class RedactorConfig
 {
@@ -25,6 +26,20 @@ readonly class RedactorConfig
      * or pathologically nested payload cannot exhaust memory.
      */
     public const DEFAULT_MAX_DEPTH = 32;
+
+    /**
+     * The safe-key list, compiled.
+     *
+     * Held here rather than looked up per call. KeyMatcher memoises on the
+     * pattern list, which means building an implode() of every key to find the
+     * cached matcher - measured at 0.203us against 0.050us for the match it was
+     * avoiding, so the cache cost four times what it saved. Resolving it once
+     * with the profile makes it what it was always meant to be.
+     */
+    public KeyMatcher $safeKeyMatcher;
+
+    /** The blocked-key list, compiled. See $safeKeyMatcher. */
+    public KeyMatcher $blockedKeyMatcher;
 
     public function __construct(
         public bool $enabled,
@@ -65,7 +80,10 @@ readonly class RedactorConfig
          * cheaper than scanning its contents.
          */
         public PathTrie $paths = new PathTrie,
-    ) {}
+    ) {
+        $this->safeKeyMatcher = KeyMatcher::for($this->safeKeys);
+        $this->blockedKeyMatcher = KeyMatcher::for($this->blockedKeys);
+    }
 
     /**
      * Create a RedactorConfig instance from Laravel configuration.

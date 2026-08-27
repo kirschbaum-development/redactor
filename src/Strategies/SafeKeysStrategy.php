@@ -6,7 +6,6 @@ namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
-use Kirschbaum\Redactor\Support\KeyMatcher;
 
 /**
  * Declares a value safe by the name of the key holding it.
@@ -25,7 +24,7 @@ class SafeKeysStrategy implements PreservingStrategy, RedactionStrategyInterface
     {
         // onError: false. A safe-key pattern that cannot be evaluated must not
         // declare the value safe - the failure mode here is a leak, not noise.
-        return KeyMatcher::for($context->config->safeKeys)->matches($key, onError: false);
+        return $context->config->safeKeyMatcher->matches($key, onError: false);
     }
 
     public function handle(mixed $value, string $key, RedactionContext $context): mixed

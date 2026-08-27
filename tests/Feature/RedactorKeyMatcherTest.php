@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
 use Kirschbaum\Redactor\Support\KeyMatcher;
 
@@ -156,5 +157,55 @@ describe('Blocked keys behaviour is unchanged by compilation', function () {
 
         expect(app(Redactor::class)->redact(['secret' => 'v'], 'blocked'))
             ->toBe(['secret' => '[REDACTED]']);
+    });
+});
+
+describe('Compiled key matchers live on the profile', function () {
+    afterEach(fn () => KeyMatcher::flush());
+
+    it('resolves both matchers once with the profile', function () {
+        config()->set('redactor.profiles.held', blockedProfile(['password', '*token*']));
+
+        $config = RedactorConfig::fromConfig('held');
+
+        expect($config->safeKeyMatcher)->toBeInstanceOf(KeyMatcher::class)
+            ->and($config->blockedKeyMatcher)->toBeInstanceOf(KeyMatcher::class)
+            ->and($config->blockedKeyMatcher->matches('api_token'))->toBeTrue()
+            ->and($config->blockedKeyMatcher->matches('harmless'))->toBeFalse();
+    });
+
+    it('still reflects a changed key list', function () {
+        // The matcher is resolved with the profile, so a config change has to
+        // produce a new profile and a new matcher - otherwise a security
+        // setting would silently stop taking effect.
+        config()->set('redactor.profiles.held', blockedProfile(['password']));
+
+        expect(app(Redactor::class)->redact(['secret' => 'v'], 'held'))->toBe(['secret' => 'v']);
+
+        config()->set('redactor.profiles.held', blockedProfile(['password', 'secret']));
+
+        expect(app(Redactor::class)->redact(['secret' => 'v'], 'held'))->toBe(['secret' => '[REDACTED]']);
+    });
+
+    it('builds matchers for a directly constructed config too', function () {
+        $config = new RedactorConfig(
+            enabled: true,
+            safeKeys: ['keep'],
+            blockedKeys: ['drop'],
+            patterns: [],
+            replacement: '[REDACTED]',
+            markRedacted: false,
+            trackRedactedKeys: false,
+            nonRedactableObjectBehavior: 'preserve',
+            maxValueLength: null,
+            redactLargeObjects: false,
+            maxObjectSize: 100,
+            shannonEntropy: ['enabled' => false],
+            strategies: [],
+            profile: 'manual',
+        );
+
+        expect($config->safeKeyMatcher->matches('keep'))->toBeTrue()
+            ->and($config->blockedKeyMatcher->matches('drop'))->toBeTrue();
     });
 });
