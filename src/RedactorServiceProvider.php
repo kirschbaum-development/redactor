@@ -11,6 +11,14 @@ class RedactorServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // Must run in register(), not boot(): a provider that resolves Redactor
+        // or reads redactor.* during its own register() would otherwise see no
+        // configuration at all.
+        $this->mergeConfigFrom(
+            __DIR__.'/../config/redactor.php',
+            'redactor'
+        );
+
         $this->app->bind(Redactor::class);
 
         $this->commands([
@@ -23,10 +31,5 @@ class RedactorServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../config/redactor.php' => config_path('redactor.php'),
         ], 'redactor-config');
-
-        $this->mergeConfigFrom(
-            __DIR__.'/../config/redactor.php',
-            'redactor'
-        );
     }
 }
