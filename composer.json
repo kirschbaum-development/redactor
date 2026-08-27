@@ -52,9 +52,10 @@
         }
     },
     "require": {
+        "php": "^8.3|^8.4",
         "illuminate/support": "^11.9|^12.0",
-        "spatie/laravel-package-tools": "^1.16",
-        "php": "^8.3|^8.4"
+        "monolog/monolog": "^3.0",
+        "symfony/finder": "^7.0"
     },
     "extra": {
         "laravel": {
