@@ -1,6 +1,6 @@
 # Kirschbaum Redactor
 
-![Laravel Supported Versions](https://img.shields.io/badge/laravel-10.x/11.x/12.x-green.svg)
+![Laravel Supported Versions](https://img.shields.io/badge/laravel-11.x%20%7C%2012.x-green.svg)
 [![MIT Licensed](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE.md)
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/kirschbaum-development/redactor.svg?style=flat-square)](https://packagist.org/packages/kirschbaum-development/redactor)
 ![Application Testing](https://github.com/kirschbaum-development/redactor/actions/workflows/php-tests.yml/badge.svg)
@@ -523,7 +523,7 @@ php artisan vendor:publish --tag=redactor-config
 
 ## Roadmap
 - Add Laravel custom log formatter to tap logs and automatically redact sensitive data
-- Add supoprt for partial replacement of sensitive data (low priority)
+- Add support for partial replacement of sensitive data (low priority)
 
 ## License
 
