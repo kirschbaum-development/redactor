@@ -21,8 +21,7 @@
     ],
     "autoload": {
         "psr-4": {
-            "Kirschbaum\\Redactor\\": "src/",
-            "Tests\\": "tests/"
+            "Kirschbaum\\Redactor\\": "src/"
         }
     },
     "autoload-dev": {
