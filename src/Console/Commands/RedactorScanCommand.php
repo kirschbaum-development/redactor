@@ -57,7 +57,10 @@ class RedactorScanCommand extends Command
             'scan.max_file_size'
         );
 
-        $files = $this->collectFiles($paths, $ignorePatterns, $maxFileSize);
+        $skipBinary = ConfigValue::bool(Config::get('redactor.scan.skip_binary'), true, 'scan.skip_binary');
+        $respectGitignore = ConfigValue::bool(Config::get('redactor.scan.respect_gitignore'), true, 'scan.respect_gitignore');
+
+        $files = $this->collectFiles($paths, $ignorePatterns, $maxFileSize, $skipBinary, $respectGitignore);
 
         $scanner = resolve(Scanner::class);
 
@@ -87,8 +90,13 @@ class RedactorScanCommand extends Command
      * @param  array<int, string>  $ignorePatterns
      * @return array<int, string>
      */
-    protected function collectFiles(array $paths, array $ignorePatterns, int $maxFileSize): array
-    {
+    protected function collectFiles(
+        array $paths,
+        array $ignorePatterns,
+        int $maxFileSize,
+        bool $skipBinary = true,
+        bool $respectGitignore = true
+    ): array {
         // Check for non-existent paths and warn user
         $validPaths = [];
         foreach ($paths as $path) {
@@ -103,7 +111,9 @@ class RedactorScanCommand extends Command
         return FileCollector::collect(
             paths: $validPaths,
             excludePatterns: $ignorePatterns,
-            maxSizeBytes: $maxFileSize
+            maxSizeBytes: $maxFileSize,
+            skipBinary: $skipBinary,
+            respectGitignore: $respectGitignore
         );
     }
 

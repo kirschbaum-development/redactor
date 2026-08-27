@@ -23,13 +23,31 @@ return [
 
     'scan' => [
         'profile' => env('REDACTOR_SCAN_PROFILE', 'file_scan'),
+
+        /*
+        | Glob patterns, matched against both the file's basename and its path
+        | relative to each scanned directory. A pattern ending in '/*' also
+        | prunes that directory during the walk rather than filtering its
+        | files one at a time.
+        */
         'exclude_patterns' => [
             '*.lock',
             '*.min.js',
+            '*.map',
             'vendor/*',
             'node_modules/*',
+            'storage/framework/*',
+            'public/build/*',
         ],
+
         'max_file_size' => env('REDACTOR_SCAN_MAX_FILE_SIZE', 10_485_760),
+
+        // Skip images, archives and compiled artefacts: scanning them
+        // produces nothing but entropy false positives.
+        'skip_binary' => env('REDACTOR_SCAN_SKIP_BINARY', true),
+
+        // Skip anything git is already ignoring.
+        'respect_gitignore' => env('REDACTOR_SCAN_RESPECT_GITIGNORE', true),
     ],
 
     /*
