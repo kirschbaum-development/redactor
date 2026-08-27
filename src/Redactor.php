@@ -239,8 +239,13 @@ class Redactor
      *
      * @param  array<RedactionStrategyInterface>  $strategies
      */
-    protected function redactRecursively(mixed $data, string $key, RedactionContext $context, array $strategies): mixed
-    {
+    protected function redactRecursively(
+        mixed $data,
+        string $key,
+        RedactionContext $context,
+        array $strategies,
+        bool $alreadyDispatched = false
+    ): mixed {
         if (! is_array($data) && ! is_object($data)) {
             // Apply strategies to scalar values
             return $this->applyStrategiesToValue($data, $key, $context, $strategies);
@@ -258,7 +263,7 @@ class Redactor
                 /** @var array<string, mixed> $arrayData */
                 $arrayData = $data;
 
-                return $this->redactArray($arrayData, $context, $strategies);
+                return $this->redactArray($arrayData, $context, $strategies, $alreadyDispatched);
             }
 
             return $this->redactObject($data, $key, $context, $strategies);
@@ -288,10 +293,20 @@ class Redactor
      * @param  array<RedactionStrategyInterface>  $strategies
      * @return array<string, mixed>
      */
-    protected function redactArray(array $array, RedactionContext $context, array $strategies): array
-    {
-        // Check for large arrays first (applies to the whole array)
-        $outcome = $this->applyStrategies($array, '', $context, $strategies);
+    protected function redactArray(
+        array $array,
+        RedactionContext $context,
+        array $strategies,
+        bool $alreadyDispatched = false
+    ): array {
+        // Evaluate the array as a whole (LargeObjectStrategy and friends),
+        // unless the caller already ran the chain over this exact value with
+        // its real key - re-running it here would dispatch every nested node
+        // twice for no benefit.
+        $outcome = $alreadyDispatched
+            ? null
+            : $this->applyStrategies($array, '', $context, $strategies);
+
         if ($outcome !== null && $outcome->value !== $array) {
             // Array was redacted by a strategy (e.g., LargeObjectStrategy)
             if (is_array($outcome->value)) {
@@ -319,9 +334,11 @@ class Redactor
                 continue; // Skip adding this key to the result
             }
 
-            // No strategy claimed this container, so walk into it.
+            // No strategy claimed this container, so walk into it. The chain
+            // has already run over this value with its real key, so the walk
+            // must not run it again.
             if ($outcome === null && (is_array($value) || is_object($value))) {
-                $processedValue = $this->redactRecursively($value, $keyString, $context, $strategies);
+                $processedValue = $this->redactRecursively($value, $keyString, $context, $strategies, alreadyDispatched: true);
 
                 // Handle object removal case after recursive processing
                 if ($processedValue === '__REDACTOR_REMOVE_OBJECT__') {
@@ -381,7 +398,7 @@ class Redactor
                 /** @var array<string, mixed> $array */
                 $array = $object->toArray();
 
-                return $this->redactArray($array, $context, $strategies);
+                return $this->redactArray($array, $context, $strategies, alreadyDispatched: true);
             } catch (\Throwable) {
                 // Fall through to other methods
             }
@@ -406,7 +423,7 @@ class Redactor
             /** @var array<string, mixed> $arrayData */
             $arrayData = $array;
 
-            return $this->redactArray($arrayData, $context, $strategies);
+            return $this->redactArray($arrayData, $context, $strategies, alreadyDispatched: true);
 
         } catch (\Throwable $e) {
             InternalLog::warning('Exception while trying to redact object', [
