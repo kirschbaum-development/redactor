@@ -246,6 +246,139 @@ Redactor::redact('order 2024010112000001 shipped');  // untouched - fails Luhn
 Redactor::redact('paid with 4111111111111111');      // 'paid with ************1111'
 ```
 
+## Path Rules
+
+A path says exactly where a value lives. Every other rule in this package is
+inferring that from a key name or from the contents.
+
+```php
+'paths' => [
+    'request.headers.authorization' => 'redact',
+    'user.*.email'                  => 'surrogate',
+    '**.password'                   => 'redact',
+    'users[*].token'                => 'redact',
+    'debug'                         => 'preserve',
+],
+```
+
+| Segment | Matches |
+| --- | --- |
+| `literal` | that key exactly, case-insensitively |
+| `*` | any single level |
+| `**` | any depth, including none |
+| `[*]` | a list index; `users[*].x` and `users.*.x` are the same |
+
+Paths are checked first and, when one matches, *instead of* everything else — no
+key matching, no pattern scanning, no walk below the matched node. The more
+specific pattern always wins, so declaration order never matters, and `preserve`
+carves an exception out of a broader rule without disabling it.
+
+They compile once into a trie that is walked in lockstep with the payload, so
+the cost tracks the rules currently in play rather than the number configured.
+Two hundred path rules cost about the same as one.
+
+## Operators
+
+Detection asks "is this sensitive". An operator answers "so what". They are
+separate because the right answer differs by context for the very same value.
+
+```php
+'operators' => [
+    'default'     => 'redact',
+    'email'       => ['surrogate' => ['preserve_domain' => true]],
+    'credit_card' => ['partial' => ['keep' => 4]],
+],
+```
+
+| Operator | Result |
+| --- | --- |
+| `redact` | `[REDACTED]` |
+| `mask` | `****************` — length preserved |
+| `partial` | `************1111` — last N kept |
+| `remove` | deleted |
+| `hash` | `[email:k4m9rp2xzq]` — stable, obviously not real |
+| `surrogate` | `u_7f3ac9@customer.com` — stable, same shape |
+| `preserve` | detected and reported, unchanged |
+
+Precedence runs most specific first: the path it was found at, then the entity
+it is, then the rule that found it, then the profile default. Entity beats rule
+deliberately — "every email here becomes a surrogate" is a policy decision about
+data, and which regex spotted it is an implementation detail.
+
+Register your own with `Redactor::registerOperator('tokenize', $operator)` and
+use it from config by name.
+
+## Pseudonymisation
+
+Replacing every value with `[REDACTED]` collapses distinct values into one,
+which destroys the questions logs exist to answer: how many users hit this, is
+it always the same account, did this session span both services.
+
+`surrogate` and `hash` replace a value with a *stable* stand-in instead. The
+same input always produces the same output, so counts, joins and traces survive:
+
+```php
+Redactor::redact('login by alice@customer.com', 'observability');
+// 'login by u_7f3ac9@customer.com'
+
+Redactor::redact('logout for alice@customer.com', 'observability');
+// 'logout for u_7f3ac9@customer.com'   <- same surrogate, still joinable
+```
+
+Surrogates preserve shape, so anything downstream that parses the value keeps
+parsing it:
+
+| Original | Surrogate |
+| --- | --- |
+| `alice@customer.com` | `u_7f3ac9@customer.com` |
+| `4111 1111 1111 1111` | `4111 1193 7420 8846` — Luhn-valid, BIN kept |
+| `sk_live_4eC39HqLyj` | `sk_live_9mB71TzKnQ` |
+| `+1 (555) 867-5309` | `+7 (204) 331-8874` |
+
+The mapping is one-way — HMAC, not encryption. There is no route from a
+surrogate back to the original, and anyone holding the key can confirm a guess,
+so **the key must not travel with the logs**. Leave `redactor.pseudonymization.key`
+null to derive one from `APP_KEY` (never used directly). Rotating it changes
+every surrogate, which is how you deliberately break correlation with logs
+already exported.
+
+Without a usable key, `surrogate` and `hash` fall back to plain redaction rather
+than emitting an unkeyed stand-in that would look joinable and silently not be.
+
+The shipped `observability` profile is set up for this.
+
+## Confidence
+
+Binary matching forces a choice between noise and misses: the only way to quieten
+a rule is to weaken its regex everywhere. Detections carry a score instead.
+
+```php
+'patterns' => [
+    'card' => ['pattern' => '/\b\d{16}\b/', 'confidence' => 0.3, 'validator' => 'luhn'],
+],
+
+'min_confidence' => 0.5,
+```
+
+The base score comes from the rule; a passing checksum and a credential keyword
+beside the match raise it. So the same pattern is filtered out as noise on its
+own and reported when something corroborates it — without editing the pattern.
+
+Every finding explains itself:
+
+```json
+{
+  "rule": "card",
+  "confidence": 0.87,
+  "severity": "medium",
+  "signals": [
+    "base +0.30 (pattern \"card\" matched)",
+    "validator +0.75 (luhn checksum passed)",
+    "context +0.25 (a credential keyword appears alongside the match)"
+  ]
+}
+```
+
 ## Wildcard Patterns
 
 The `BlockedKeysStrategy` and `SafeKeysStrategy` support powerful wildcard patterns using the `*` character. This allows you to match multiple key variations without listing each one explicitly.
@@ -600,6 +733,7 @@ $exists = Redactor::profileExists('custom_profile');
 
 - **`default`**: Balanced redaction for general logging and debugging
 - **`strict`**: Aggressive redaction for sensitive contexts and audit trails
+- **`observability`**: Pseudonymises rather than redacts, so logs stay joinable
 - **`file_scan`**: Content patterns for `redactor:scan`; no key-based strategies
 - **`performance`**: Minimal redaction optimised for high-throughput scenarios
 
@@ -618,6 +752,9 @@ REDACTOR_MAX_VALUE_LENGTH=5000
 REDACTOR_LARGE_OBJECTS=true
 REDACTOR_MAX_OBJECT_SIZE=100
 REDACTOR_MAX_DEPTH=32
+REDACTOR_MIN_CONFIDENCE=0.0
+REDACTOR_PSEUDONYMIZATION=true
+REDACTOR_PSEUDONYMIZATION_KEY=
 REDACTOR_SHANNON_ENABLED=true
 REDACTOR_SHANNON_THRESHOLD=4.8
 REDACTOR_SHANNON_MIN_LENGTH=25
@@ -628,6 +765,9 @@ REDACTOR_SCAN_MAX_FILE_SIZE=10485760
 REDACTOR_SCAN_SKIP_BINARY=true
 REDACTOR_SCAN_RESPECT_GITIGNORE=true
 REDACTOR_SCAN_BASELINE=.redactor-baseline.json
+REDACTOR_SCAN_WINDOW_LINES=512
+REDACTOR_SCAN_OVERLAP_LINES=4
+REDACTOR_SCAN_VERIFY=false
 ```
 
 ## File Scanning Command
@@ -660,8 +800,56 @@ secrets they report:
   email            app/seed.php:12:24  'contact' => '[REDACTED]',
 ```
 
+Findings are ranked by severity, so the certain ones are read first.
+
 Files that are binary, larger than `max_file_size`, matched by an exclude
-pattern, or already ignored by git are skipped.
+pattern, or already ignored by git are skipped. Everything else is read as
+overlapping windows of lines, so memory stays flat whatever the file size — the
+files most worth scanning are the large ones. Windows overlap so a secret
+spanning a boundary (a PEM block, a wrapped connection string) is still found.
+
+### Confidence filtering
+
+```bash
+php artisan redactor:scan --min-confidence=0.8
+```
+
+Raises the bar without weakening any pattern. Each finding reports its score,
+its severity and the signals behind it, so the threshold can be chosen on
+evidence.
+
+### Verifying credentials
+
+A scan of a mature repository turns up hundreds of candidates — expired keys,
+examples in docs, fixtures, rotated credentials — and a list that cannot
+separate the live ones from the dead is a list nobody triages. Verification asks
+each provider directly.
+
+It also sends real secrets to third parties, so nothing happens unless all three
+of these agree:
+
+```php
+// config/redactor.php — reviewable in a diff
+'verification' => [
+    'enabled' => true,
+    'verifiers' => ['github_token', 'stripe_key', 'slack_token'],
+],
+```
+
+```bash
+php artisan redactor:scan --verify   # and a human, per run
+```
+
+An empty `verifiers` list means none: enabling the feature and choosing who to
+trust with the secrets are separate decisions. The command names every host it
+will contact before it contacts any of them. Redaction itself can never trigger
+this — only the scan command can, because nothing running unattended inside an
+application should be making outbound calls with secrets in them.
+
+A confirmed-live credential is ranked `LIVE` above everything else. A check that
+could not complete stays `high`, not `low`: failing to verify is not evidence of
+safety. The secret never reaches a finding, so it cannot escape through JSON,
+SARIF or a baseline file.
 
 ### CI
 
@@ -718,12 +906,15 @@ Done since the last release: partial (span-level) replacement, a Monolog
 processor integration, structured scan findings with SARIF output and baselines,
 checksum validators, and per-alphabet entropy thresholds.
 
+Since then: compiled path rules, deterministic pseudonymisation with
+format-preserving surrogates, confidence scoring, streaming file scanning, and
+opt-in credential verification.
+
 Still open:
 
-- Compiled path rules (`context.user.*.email`) as an alternative to key matching
-- Deterministic pseudonymisation, so redacted logs stay joinable
-- Streaming file scanning for very large files
-- Optional live verification of detected credentials
+- Reversible tokenisation against an external vault
+- More built-in verifiers (AWS, GCP, Azure, Twilio)
+- Entity recognition beyond regex and entropy
 
 ## License
 

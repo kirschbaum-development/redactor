@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added - capability
+
+- **Path rules.** `'request.headers.authorization' => 'redact'` names a location
+  outright, with `*` for one level, `**` for any depth and `users[*].token` for
+  lists. Checked first and, when one matches, instead of everything else - no key
+  matching, no pattern scanning, no walk below the node. Compiled once into a
+  trie walked in lockstep with the payload, so 200 rules cost about what one
+  does. The more specific pattern always wins, so declaration order never
+  matters.
+- **Operators, separated from detection.** `redact`, `mask`, `partial`,
+  `remove`, `hash`, `surrogate` and `preserve`, chosen per entity rather than
+  per pattern. Register your own with `Redactor::registerOperator()`. Detection
+  now says only what was found and where; what happens to it is a separate,
+  configurable decision.
+- **Deterministic pseudonymisation.** `surrogate` and `hash` replace a value
+  with a stable stand-in, so the same email always yields the same output and
+  redacted logs stay joinable - counts, joins and traces all survive. Surrogates
+  preserve shape: an email stays a valid email, a card stays Luhn-valid with its
+  BIN, and anything else keeps its character classes and separators. One-way
+  (HMAC, not encryption); falls back to plain redaction when no key is
+  available, rather than emitting an unkeyed stand-in that would look joinable
+  and silently not be.
+- **Confidence scoring.** Detections carry a score and the signals behind it, so
+  a profile is tuned with one `min_confidence` number instead of by weakening
+  patterns. A passing checksum or a nearby credential keyword raises the score,
+  which lets the same pattern be filtered as noise alone and reported when
+  corroborated. Surfaced in scan output, mapped onto SARIF levels, and filterable
+  with `--min-confidence`.
+- **Streaming file scanning.** Files are read as overlapping windows of lines,
+  so memory stays flat whatever the size. Windows overlap so a secret spanning a
+  boundary is still found; duplicates are dropped by fingerprint.
+- **Credential verification.** `--verify` asks each provider whether a detected
+  credential is live, ranking confirmed-live findings above everything else.
+  Off unless config enables it, the run passes `--verify`, and the provider is
+  on an explicit allowlist - and never reachable from the redaction path at all.
+  The command names every host before contacting any. The secret never reaches
+  a finding, so it cannot escape through JSON, SARIF or a baseline.
+- **`observability` profile**, set up to pseudonymise rather than redact.
+
+### Performance
+
+- Resolved profiles are cached and invalidated by comparing the raw config, so
+  `fromConfig()` no longer revalidates every pattern and recompiles the path
+  trie on every redaction: 0.2285ms -> 0.0011ms for a profile with 200 path
+  rules, and flat with rule count rather than linear.
+
 Hardening pass across correctness, security, performance and packaging. Each
 item below is one commit, with tests.
 
