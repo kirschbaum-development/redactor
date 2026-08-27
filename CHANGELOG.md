@@ -88,10 +88,14 @@ item below is one commit, with tests.
   development files out of the dist archive. (R-18)
 - Dropped the unused `spatie/laravel-package-tools` requirement and declared
   `symfony/finder` and `monolog/monolog`, which the package uses directly. (R-19)
-- Coverage floor of 90% (CI reports 95.3%), mutation testing (Pest's built-in
-  mutator, floor at the measured 70% as a ratchet), a performance regression
-  suite run without coverage instrumentation, and
+- Coverage floor of 90% (CI reports 95.3%), a performance regression suite run
+  without coverage instrumentation, and
   `failOnWarning`/`failOnRisky`/`failOnDeprecation` in phpunit.xml. (R-24)
+- Mutation testing (Pest's built-in mutator) runs on pull requests and reports
+  its score, but does not yet gate: two consecutive runs over an identical
+  1,557-mutant set scored 70.6% and 66.7%, with the only change between them
+  being 21 added passing tests. Until that variance is removed the number is
+  information, not a threshold. (R-24)
 - Boundary tests for every redaction threshold - max_object_size,
   max_value_length, the entropy threshold and min_length, max_depth, partial
   mode's `keep`, and the Luhn length window. Mutation testing surfaced these:
