@@ -282,6 +282,24 @@ describe('Path compilation', function () {
             ->and($single)->toBeGreaterThan($deep);
     });
 
+    it('accepts a purely numeric pattern, which PHP hands over as an int', function () {
+        // 'items.0' => 'redact' is a reasonable rule, and '0' => 'redact' more
+        // so for a list payload. PHP turns a numeric array key into an integer,
+        // which used to reach PathPattern::parse() and fail its string type.
+        $result = redactPath(['1' => 'redact'], ['zero', 'one', 'two']);
+
+        expect($result)->toBe(['zero', '[REDACTED]', 'two']);
+    });
+
+    it('targets a list index through a longer path', function () {
+        $result = redactPath(['items.0.token' => 'redact'], [
+            'items' => [['token' => 'first'], ['token' => 'second']],
+        ]);
+
+        expect($result['items'][0]['token'])->toBe('[REDACTED]')
+            ->and($result['items'][1]['token'])->toBe('second');
+    });
+
     it('rejects an empty pattern', function () {
         expect(fn () => PathPattern::parse('...'))
             ->toThrow(\InvalidArgumentException::class);

@@ -184,7 +184,7 @@ readonly class RedactorConfig
         $rules = [];
 
         foreach ($map as $pattern => $definition) {
-            $rules[$pattern] = OperatorSpec::parse($definition, "profiles.{$profile}.paths.{$pattern}");
+            $rules[(string) $pattern] = OperatorSpec::parse($definition, "profiles.{$profile}.paths.{$pattern}");
         }
 
         return PathTrie::compile($rules);

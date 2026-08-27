@@ -56,7 +56,7 @@ final class PathTrie
     private static array $memo = [];
 
     /**
-     * @param  array<string, OperatorSpec>  $rules  path pattern => operator
+     * @param  array<array-key, OperatorSpec>  $rules  path pattern => operator
      */
     public static function compile(array $rules): self
     {
@@ -73,7 +73,10 @@ final class PathTrie
         $trie = new self;
 
         foreach ($rules as $pattern => $spec) {
-            $trie->add(PathPattern::parse($pattern), $spec);
+            // PHP turns a purely numeric array key into an int, so a rule
+            // targeting a list index - 'items.0' or just '0' - arrives here as
+            // an integer and has to be put back.
+            $trie->add(PathPattern::parse((string) $pattern), $spec);
         }
 
         return self::$memo[$cacheKey] = $trie;
@@ -95,7 +98,7 @@ final class PathTrie
      * take effect - the way a cache that cannot be invalidated turns a security
      * setting into a no-op.
      *
-     * @param  array<string, OperatorSpec>  $rules
+     * @param  array<array-key, OperatorSpec>  $rules
      */
     private static function cacheKey(array $rules): string
     {
