@@ -444,8 +444,14 @@ class Redactor
             return ['_redacted_array' => $outcome->value];
         }
 
+        // Start from the input rather than an empty array. PHP's copy-on-write
+        // means no allocation happens until something is actually written, so a
+        // subtree that redacts to nothing - which is most of them - costs a
+        // walk and no copy at all. Returning the original array unchanged also
+        // lets the caller's own identity check short-circuit.
         /** @var array<string, mixed> $result */
-        $result = [];
+        $result = $array;
+        $changed = false;
 
         foreach ($array as $key => $value) {
             $keyString = (string) $key;
@@ -461,10 +467,16 @@ class Redactor
                 $decided = $this->applyPathRule($value, $keyString, $pathMatch, $context);
 
                 if ($decided === self::REMOVE_MARKER) {
+                    unset($result[$key]);
+                    $changed = true;
+
                     continue;
                 }
 
-                $result[$keyString] = $decided;
+                if ($decided !== $value) {
+                    $result[$key] = $decided;
+                    $changed = true;
+                }
 
                 continue;
             }
@@ -475,6 +487,9 @@ class Redactor
 
             // Handle object removal case
             if ($processedValue === self::REMOVE_MARKER) {
+                unset($result[$key]);
+                $changed = true;
+
                 continue; // Skip adding this key to the result
             }
 
@@ -493,14 +508,20 @@ class Redactor
 
                 // Handle object removal case after recursive processing
                 if ($processedValue === self::REMOVE_MARKER) {
+                    unset($result[$key]);
+                    $changed = true;
+
                     continue; // Skip adding this key to the result
                 }
             }
 
-            $result[(string) $key] = $processedValue;
+            if ($processedValue !== $value) {
+                $result[$key] = $processedValue;
+                $changed = true;
+            }
         }
 
-        return $result;
+        return $changed ? $result : $array;
     }
 
     /**
