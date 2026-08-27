@@ -18,10 +18,7 @@ class Redactor
     /** @var array<string, RedactionStrategyInterface> */
     private array $customStrategies = [];
 
-    public function __construct()
-    {
-        $this->loadCustomStrategies();
-    }
+    private bool $customStrategiesLoaded = false;
 
     /**
      * Redact sensitive data from content using strategy pattern.
@@ -61,13 +58,16 @@ class Redactor
      */
     private function getStrategiesForProfile(RedactorConfig $config): array
     {
-        $profileName = $config->profile;
+        // The redactor is a singleton, so the cache outlives any one call and
+        // must not go stale when a profile's strategy list changes underneath
+        // it. Keying on the resolved class list makes that impossible.
+        $cacheKey = $config->profile.'|'.implode(',', array_filter($config->strategies, 'is_string'));
 
-        if (! isset($this->profileStrategies[$profileName])) {
-            $this->profileStrategies[$profileName] = $this->buildStrategiesForProfile($config);
+        if (! isset($this->profileStrategies[$cacheKey])) {
+            $this->profileStrategies[$cacheKey] = $this->buildStrategiesForProfile($config);
         }
 
-        return $this->profileStrategies[$profileName];
+        return $this->profileStrategies[$cacheKey];
     }
 
     /**
@@ -100,6 +100,8 @@ class Redactor
      */
     private function createStrategyInstance(string $strategyClass, RedactorConfig $config): ?RedactionStrategyInterface
     {
+        $this->loadCustomStrategies();
+
         // Check for custom strategies first (backward compatibility with name => class mapping)
         if (isset($this->customStrategies[$strategyClass])) {
             return clone $this->customStrategies[$strategyClass];
@@ -118,6 +120,14 @@ class Redactor
      */
     private function loadCustomStrategies(): void
     {
+        // Loaded lazily rather than in the constructor: as a singleton the
+        // redactor is often built before the config it depends on is final.
+        if ($this->customStrategiesLoaded) {
+            return;
+        }
+
+        $this->customStrategiesLoaded = true;
+
         $customStrategyClasses = Config::get('redactor.custom_strategies', []);
 
         if (! is_array($customStrategyClasses)) {
@@ -327,6 +337,8 @@ class Redactor
      */
     public function registerCustomStrategy(string $name, RedactionStrategyInterface $strategy): void
     {
+        $this->loadCustomStrategies();
+
         $this->customStrategies[$name] = $strategy;
 
         // Clear cached profile strategies since we've added a new strategy

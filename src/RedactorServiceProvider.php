@@ -6,6 +6,7 @@ namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\ServiceProvider;
 use Kirschbaum\Redactor\Console\Commands\RedactorScanCommand;
+use Kirschbaum\Redactor\Scanner\Scanner;
 
 class RedactorServiceProvider extends ServiceProvider
 {
@@ -19,7 +20,8 @@ class RedactorServiceProvider extends ServiceProvider
             'redactor'
         );
 
-        $this->app->bind(Redactor::class);
+        $this->app->singleton(Redactor::class);
+        $this->app->singleton(Scanner::class);
 
         $this->commands([
             RedactorScanCommand::class,
