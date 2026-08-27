@@ -5,25 +5,20 @@ on:
     paths:
       - 'src/**.php'
       - 'tests/**.php'
-      - 'infection.json5'
       - '.github/workflows/mutation-testing.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
-  infection:
-    name: infection
+  mutation:
+    name: mutation score
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Infection reports only on mutants in the diff, which needs history.
-          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -35,14 +30,8 @@ jobs:
       - name: Install composer dependencies
         uses: ramsey/composer-install@v3
 
-      - name: Run Infection
-        run: |
-          vendor/bin/infection \
-            --threads=max \
-            --git-diff-lines \
-            --git-diff-base=origin/${{ github.base_ref }} \
-            --logger-github \
-            --no-progress \
-            --ignore-msi-with-no-mutations
-        env:
-          INFECTION_BADGE_API_KEY: ""
+      # Coverage says a line ran. Mutation testing says an assertion would
+      # have noticed if it were wrong, which is the question that matters
+      # for a redactor.
+      - name: Run mutation testing
+        run: vendor/bin/pest --mutate --parallel --covered-only --min=75 --ignore-min-score-on-zero-mutations

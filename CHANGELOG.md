@@ -88,8 +88,14 @@ item below is one commit, with tests.
   development files out of the dist archive. (R-18)
 - Dropped the unused `spatie/laravel-package-tools` requirement and declared
   `symfony/finder` and `monolog/monolog`, which the package uses directly. (R-19)
-- Coverage floor, Infection mutation testing, a performance regression suite,
-  and `failOnWarning`/`failOnRisky`/`failOnDeprecation` in phpunit.xml. (R-24)
+- Coverage floor, mutation testing (Pest's built-in mutator), a performance
+  regression suite, and `failOnWarning`/`failOnRisky`/`failOnDeprecation` in
+  phpunit.xml. (R-24)
+- The test matrix no longer uses `fail-fast`, and the Laravel 11 legs install
+  with `--no-security-blocking`: every 11.x release is now flagged by a
+  Packagist advisory, so Composer's default policy refuses to install any of
+  them. Whether to keep supporting Laravel 11 is a release decision this PR
+  deliberately leaves open.
 - Pint passes. `LICENCE.md` renamed to `LICENSE.md` so the README links and the
   Packagist licence detection work. (R-22, R-23)
 

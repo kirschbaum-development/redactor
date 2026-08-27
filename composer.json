@@ -44,13 +44,11 @@
         "larastan/larastan": "^3.4",
         "orchestra/testbench": "^10.3",
         "pestphp/pest-plugin-laravel": "^3.1",
-        "timacdonald/log-fake": "^2.4",
-        "infection/infection": "^0.35.2"
+        "timacdonald/log-fake": "^2.4"
     },
     "config": {
         "allow-plugins": {
-            "pestphp/pest-plugin": true,
-            "infection/extension-installer": true
+            "pestphp/pest-plugin": true
         }
     },
     "require": {
@@ -103,7 +101,7 @@
             "@php vendor/bin/pest --coverage --min=80"
         ],
         "mutate": [
-            "@php vendor/bin/infection --threads=max --show-mutations --no-progress"
+            "@php vendor/bin/pest --mutate --parallel --covered-only --min=75"
         ]
     }
 }

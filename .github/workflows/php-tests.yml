@@ -10,7 +10,8 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      # One unusable matrix leg should not cancel the other nine.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest]
         php: ['8.3', '8.4', '8.5']
@@ -46,10 +47,19 @@ jobs:
           echo "::add-matcher::${{ runner.tool_cache }}/php.json"
           echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
 
+      # Every Laravel 11.x release is now flagged by a Packagist security
+      # advisory, so Composer's default policy refuses to install any of
+      # them. The advisory blocking is disabled for that leg only, so the
+      # package's declared Laravel 11 support stays under test. Nothing
+      # vulnerable is shipped - this is a CI install of a framework the
+      # library only ever runs against here.
+      #
+      # The real decision this defers is whether to keep supporting
+      # Laravel 11 at all, which is a release call rather than a CI one.
       - name: Install dependencies
         run: |
           composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" "nesbot/carbon:${{ matrix.carbon }}" --no-interaction --no-update
-          composer update --${{ matrix.stability }} --prefer-dist --no-interaction
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction ${{ startsWith(matrix.laravel, '11') && '--no-security-blocking' || '' }}
 
       - name: List Installed Dependencies
         run: composer show -D

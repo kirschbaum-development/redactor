@@ -708,7 +708,7 @@ php artisan vendor:publish --tag=redactor-config
 composer test           # full suite, in parallel
 composer test-coverage  # with the coverage floor enforced
 composer lint           # Pint + PHPStan (level 10, no baseline)
-composer mutate         # Infection mutation testing
+composer mutate         # mutation testing (Pest)
 composer preflight      # everything CI runs
 ```
 
