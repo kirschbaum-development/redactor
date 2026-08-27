@@ -258,3 +258,64 @@ describe('Shipped file_scan patterns', function () {
         }
     });
 });
+
+describe('The ASCII tokenise path matches the Unicode one', function () {
+    function tokenProfile(): array
+    {
+        return accuracyProfile([
+            'strategies' => [ShannonEntropyStrategy::class],
+            'shannon_entropy' => [
+                'enabled' => true,
+                'threshold' => 3.5,
+                'min_length' => 12,
+                'exclusion_patterns' => [],
+            ],
+        ]);
+    }
+
+    it('finds the same token in an ASCII value', function () {
+        config()->set('redactor.profiles.tok', tokenProfile());
+
+        expect(app(Redactor::class)->redact(['t' => 'key Zx7Qm4Kd9Rb2Vn6Tp end'], 'tok'))
+            ->toBe(['t' => 'key [REDACTED] end']);
+    });
+
+    it('finds the same token when the value contains non-ASCII text', function () {
+        config()->set('redactor.profiles.tok', tokenProfile());
+
+        // Same secret, same neighbours, but the value is no longer ASCII - so
+        // the /u pattern is used and must reach the same answer.
+        expect(app(Redactor::class)->redact(['t' => 'клавиша Zx7Qm4Kd9Rb2Vn6Tp конец'], 'tok'))
+            ->toBe(['t' => 'клавиша [REDACTED] конец']);
+    });
+
+    it('splits on a Unicode space, which the ASCII pattern would not', function () {
+        config()->set('redactor.profiles.tok', tokenProfile());
+
+        // U+00A0 between the words: with /u these are two tokens and only the
+        // secret is replaced. Choosing the pattern per subject is what keeps
+        // this correct.
+        $value = "prefix\u{00A0}Zx7Qm4Kd9Rb2Vn6Tp";
+
+        $result = app(Redactor::class)->redact(['t' => $value], 'tok');
+
+        expect($result['t'])->toContain('prefix')
+            ->and($result['t'])->toContain('[REDACTED]')
+            ->and($result['t'])->not->toContain('Zx7Qm4Kd9Rb2Vn6Tp');
+    });
+
+    it('recognises ASCII and non-ASCII subjects correctly', function () {
+        $strategy = new class extends ShannonEntropyStrategy
+        {
+            public function ascii(string $v): bool
+            {
+                return $this->isAscii($v);
+            }
+        };
+
+        expect($strategy->ascii('plain ascii text'))->toBeTrue()
+            ->and($strategy->ascii(''))->toBeTrue()
+            ->and($strategy->ascii('café'))->toBeFalse()
+            ->and($strategy->ascii("binary\xff\xfe"))->toBeFalse();
+    });
+});
