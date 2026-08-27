@@ -89,9 +89,15 @@ item below is one commit, with tests.
 - Dropped the unused `spatie/laravel-package-tools` requirement and declared
   `symfony/finder` and `monolog/monolog`, which the package uses directly. (R-19)
 - Coverage floor of 90% (CI reports 95.3%), mutation testing (Pest's built-in
-  mutator), a performance regression suite run without coverage
-  instrumentation, and `failOnWarning`/`failOnRisky`/`failOnDeprecation` in
-  phpunit.xml. (R-24)
+  mutator, floor at the measured 70% as a ratchet), a performance regression
+  suite run without coverage instrumentation, and
+  `failOnWarning`/`failOnRisky`/`failOnDeprecation` in phpunit.xml. (R-24)
+- Boundary tests for every redaction threshold - max_object_size,
+  max_value_length, the entropy threshold and min_length, max_depth, partial
+  mode's `keep`, and the Luhn length window. Mutation testing surfaced these:
+  the thresholds were covered but never their edges, so `>` could become `>=`
+  without a test noticing. On a redactor an off-by-one there is the difference
+  between catching a secret and emitting it.
 - The test matrix no longer uses `fail-fast`, and the Laravel 11 legs install
   with `--no-security-blocking`: every 11.x release is now flagged by a
   Packagist advisory, so Composer's default policy refuses to install any of
