@@ -24,9 +24,38 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
         }
 
         foreach ($context->config->patterns as $rule) {
-            // onError: true. If the engine could not evaluate the pattern we do
-            // not know the value is clean, so it is treated as sensitive.
-            if (Pcre::matches($rule->pattern, $value, onError: true, rule: $rule->name)) {
+            if ($this->matchesWithValidation($rule, $value)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether the rule finds anything in the subject that also passes its
+     * structural check.
+     */
+    private function matchesWithValidation(PatternRule $rule, string $subject): bool
+    {
+        // onError: true. If the engine could not evaluate the pattern we do
+        // not know the value is clean, so it is treated as sensitive.
+        if ($rule->validator === null) {
+            return Pcre::matches($rule->pattern, $subject, onError: true, rule: $rule->name);
+        }
+
+        $found = @preg_match_all($rule->pattern, $subject, $all, PREG_SET_ORDER);
+
+        if ($found === false) {
+            return true;
+        }
+
+        foreach ($all as $set) {
+            $candidate = $rule->capture > 0 && isset($set[$rule->capture]) && $set[$rule->capture] !== ''
+                ? $set[$rule->capture]
+                : $set[0];
+
+            if ($rule->accepts((string) $candidate)) {
                 return true;
             }
         }
@@ -71,7 +100,7 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
         string $key
     ): ?string {
         if ($rule->replacesWholeValue()) {
-            if (! Pcre::matches($rule->pattern, $subject, onError: true, rule: $rule->name)) {
+            if (! $this->matchesWithValidation($rule, $subject)) {
                 return $subject;
             }
 
@@ -85,10 +114,16 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
         $result = Pcre::replaceCallback(
             $rule->pattern,
             function (array $matches) use ($rule, $replacement, &$matched): string {
-                $matched = true;
-
                 /** @var array<int|string, array{0: string, 1: int}> $matches */
-                return $rule->rewriteMatch($matches, $replacement);
+                $rewritten = $rule->rewriteMatch($matches, $replacement);
+
+                // A match the rule's validator rejected is left as it was, and
+                // must not count as a redaction.
+                if ($rewritten !== $matches[0][0]) {
+                    $matched = true;
+                }
+
+                return $rewritten;
             },
             $subject,
             $rule->name,

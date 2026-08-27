@@ -166,11 +166,23 @@ return [
                 ],
                 'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
                 'phone_simple' => '/\b\d{3}[.-]?\d{3}[.-]?\d{4}\b/',
-                'ssn' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
+                'ssn' => [
+                    'pattern' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
+                    // Rejects the never-issued area/group/serial values, which
+                    // is most of what matches this shape by accident.
+                    'validator' => 'ssn',
+                ],
                 'credit_card' => [
                     'pattern' => '/\b(?:\d[ -]*?){13,16}\b/',
+                    // Without the Luhn check this matches any 13-16 digit run:
+                    // order numbers, tracking codes, concatenated timestamps.
+                    'validator' => 'luhn',
                     'mode' => 'partial',
                     'keep' => 4,
+                ],
+                'iban' => [
+                    'pattern' => '/\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/',
+                    'validator' => 'iban',
                 ],
             ],
 
@@ -299,8 +311,9 @@ return [
                 ],
                 'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
                 'phone' => '/\+?[\d\s\-\(\)]{7,15}/',
-                'ssn' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
-                'credit_card' => '/\b(?:\d[ -]*?){13,16}\b/',
+                'ssn' => ['pattern' => '/\b\d{3}-?\d{2}-?\d{4}\b/', 'validator' => 'ssn'],
+                'credit_card' => ['pattern' => '/\b(?:\d[ -]*?){13,16}\b/', 'validator' => 'luhn'],
+                'iban' => ['pattern' => '/\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/', 'validator' => 'iban'],
                 'ipv4' => '/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/',
                 'uuid' => '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i',
                 'jwt' => '/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/',
@@ -369,10 +382,14 @@ return [
 
                 'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
                 'phone_simple' => '/\b\d{3}[.-]?\d{3}[.-]?\d{4}\b/',
-                'ssn' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
+                'ssn' => [
+                    'pattern' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
+                    'validator' => 'ssn',
+                ],
 
                 'credit_card' => [
                     'pattern' => '/\b(?:\d[ -]*?){13,16}\b/',
+                    'validator' => 'luhn',
                     'mode' => 'partial',
                     'keep' => 4,
                 ],

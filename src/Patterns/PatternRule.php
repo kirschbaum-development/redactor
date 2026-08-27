@@ -64,6 +64,13 @@ final readonly class PatternRule
          * its label and lose only the value.
          */
         public int $capture = 0,
+        /**
+         * Structural check the matched text must pass to count as a finding.
+         *
+         * A regex asserts shape only; a validator asserts that the value could
+         * actually be what the pattern claims. Null means shape is enough.
+         */
+        public ?string $validator = null,
     ) {}
 
     /**
@@ -101,6 +108,11 @@ final readonly class PatternRule
         $mode = ConfigValue::enum($definition['mode'] ?? self::MODE_REPLACE, self::MODES, self::MODE_REPLACE, $path.'.mode');
         $keep = ConfigValue::positiveInt($definition['keep'] ?? 4, 4, $path.'.keep');
         $maskCharacter = ConfigValue::string($definition['mask_character'] ?? '*', '*', $path.'.mask_character');
+        $validator = $definition['validator'] ?? null;
+        $validator = $validator === null
+            ? null
+            : ConfigValue::enum($validator, Validator::NAMES, Validator::LUHN, $path.'.validator');
+
         $capture = $definition['capture'] ?? 0;
         $capture = $capture === 0 || $capture === '0'
             ? 0
@@ -117,7 +129,16 @@ final readonly class PatternRule
             keep: $keep,
             maskCharacter: mb_substr($maskCharacter, 0, 1),
             capture: $capture,
+            validator: $validator,
         );
+    }
+
+    /**
+     * Whether the matched text passes this rule's structural check.
+     */
+    public function accepts(string $match): bool
+    {
+        return $this->validator === null || Validator::passes($this->validator, $match);
     }
 
     /**
@@ -139,14 +160,18 @@ final readonly class PatternRule
         [$full, $fullOffset] = $matches[0];
 
         if ($this->capture === 0 || ! isset($matches[$this->capture])) {
-            return $this->substitute($full, $replacement);
+            return $this->accepts($full) ? $this->substitute($full, $replacement) : $full;
         }
 
         [$group, $groupOffset] = $matches[$this->capture];
 
         // An optional group that did not participate reports offset -1.
         if ($groupOffset < 0 || $group === '') {
-            return $this->substitute($full, $replacement);
+            return $this->accepts($full) ? $this->substitute($full, $replacement) : $full;
+        }
+
+        if (! $this->accepts($group)) {
+            return $full;
         }
 
         $relative = $groupOffset - $fullOffset;
