@@ -130,31 +130,21 @@ describe('Redactor Content Tests', function () {
 
         expect($hasShannon)->toBeFalse();
 
-        // calculateShannonEntropy uses default profile by default, so we need to check directly
-        // Since the method searches through strategies in the default profile, and our no_shannon profile
-        // doesn't have ShannonEntropyStrategy, we need to test with empty strategies
-        $entropy = $redactor->calculateShannonEntropy('high-entropy-string-xyz123');
+        // Entropy is a property of the string, not of the profile: it stays the
+        // same whether or not the active profile lists ShannonEntropyStrategy.
+        $entropy = (new ShannonEntropyStrategy)->calculateShannonEntropy('high-entropy-string-xyz123');
+        expect($entropy)->toBeGreaterThan(0.0);
 
-        // The default profile still has ShannonEntropyStrategy, so let's verify the logic
-        // by testing the actual case where no strategy is found
-        expect($entropy)->toBeGreaterThan(0.0); // Default profile has the strategy
-
-        // Create redactor instance that specifically uses no_shannon profile for this test
-        // Since calculateShannonEntropy uses default profile, we test the edge case directly
         config()->set('redactor.default_profile', 'no_shannon');
-        $noShannonRedactor = new Redactor;
-        $entropyNoStrategy = $noShannonRedactor->calculateShannonEntropy('high-entropy-string-xyz123');
-        expect($entropyNoStrategy)->toBe(0.0);
+        expect((new ShannonEntropyStrategy)->calculateShannonEntropy('high-entropy-string-xyz123'))
+            ->toBe($entropy);
     });
 
-    test('it returns false when no ShannonEntropyStrategy is found during pattern checking', function () {
-        // Set profile without ShannonEntropyStrategy as default
+    test('it reports no exclusion match when the profile configures no exclusion patterns', function () {
         config()->set('redactor.default_profile', 'no_shannon');
-        $redactor = new Redactor;
         $config = RedactorConfig::fromConfig('no_shannon');
 
-        // Should return false when no strategy found
-        $isCommon = $redactor->isCommonPattern('192.168.1.1', $config);
+        $isCommon = (new ShannonEntropyStrategy)->isCommonPattern('192.168.1.1', $config);
 
         expect($isCommon)->toBe(false);
     });
@@ -167,14 +157,14 @@ describe('Redactor Content Tests', function () {
         $longHex = str_repeat('a1b2c3d4', 8); // 64 characters
 
         // This will exercise the specific branch where hex strings >= 32 continue
-        $isCommon = $redactor->isCommonPattern($longHex, $config);
+        $isCommon = (new ShannonEntropyStrategy)->isCommonPattern($longHex, $config);
 
         // The method should return false for long hex strings, allowing them to be entropy-checked
         expect($isCommon)->toBe(false);
 
         // Short hex should be considered common
         $shortHex = 'a1b2c3d4';
-        $isCommonShort = $redactor->isCommonPattern($shortHex, $config);
+        $isCommonShort = (new ShannonEntropyStrategy)->isCommonPattern($shortHex, $config);
         expect($isCommonShort)->toBe(true);
     });
 
@@ -780,7 +770,7 @@ describe('Redactor Content Tests', function () {
 
         // Test the public calculateShannonEntropy method
         $highEntropyString = 'aB3$xY9#mK2@pL5!qR8%';
-        $entropy = $redactor->calculateShannonEntropy($highEntropyString);
+        $entropy = (new ShannonEntropyStrategy)->calculateShannonEntropy($highEntropyString);
 
         // Should return a reasonable entropy value
         expect($entropy)->toBeGreaterThan(0.0)

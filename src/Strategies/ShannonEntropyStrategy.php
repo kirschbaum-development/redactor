@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\RedactionContext;
+use Kirschbaum\Redactor\RedactorConfig;
 
 class ShannonEntropyStrategy implements RedactionStrategyInterface
 {
@@ -40,7 +41,7 @@ class ShannonEntropyStrategy implements RedactionStrategyInterface
         }
 
         // Skip common words and patterns that might have high entropy but are not sensitive
-        if ($this->isCommonPattern($string, $context)) {
+        if ($this->isCommonPattern($string, $context->config)) {
             return false;
         }
 
@@ -51,12 +52,14 @@ class ShannonEntropyStrategy implements RedactionStrategyInterface
     }
 
     /**
-     * Calculate Shannon entropy of a string with caching.
+     * Calculate the Shannon entropy of a string, in bits per character.
+     *
+     * Pass a context to reuse (and populate) its per-redaction entropy cache.
      */
-    protected function calculateShannonEntropy(string $string, RedactionContext $context): float
+    public function calculateShannonEntropy(string $string, ?RedactionContext $context = null): float
     {
         // Check cache first
-        $cachedEntropy = $context->getCachedEntropy($string);
+        $cachedEntropy = $context?->getCachedEntropy($string);
         if ($cachedEntropy !== null) {
             return $cachedEntropy;
         }
@@ -64,7 +67,7 @@ class ShannonEntropyStrategy implements RedactionStrategyInterface
         $length = strlen($string);
         if ($length <= 1) {
             $entropy = 0.0;
-            $context->cacheEntropy($string, $entropy);
+            $context?->cacheEntropy($string, $entropy);
 
             return $entropy;
         }
@@ -86,17 +89,18 @@ class ShannonEntropyStrategy implements RedactionStrategyInterface
         }
 
         // Cache the result
-        $context->cacheEntropy($string, $entropy);
+        $context?->cacheEntropy($string, $entropy);
 
         return $entropy;
     }
 
     /**
-     * Check if a string matches common patterns that shouldn't be redacted despite high entropy.
+     * Check if a string matches a configured exclusion pattern, meaning it should
+     * not be redacted despite scoring above the entropy threshold.
      */
-    protected function isCommonPattern(string $string, RedactionContext $context): bool
+    public function isCommonPattern(string $string, RedactorConfig $config): bool
     {
-        $shannonConfig = $context->config->shannonEntropy;
+        $shannonConfig = $config->shannonEntropy;
         $exclusionPatterns = $shannonConfig['exclusion_patterns'] ?? [];
 
         if (! is_array($exclusionPatterns)) {

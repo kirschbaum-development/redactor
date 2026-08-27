@@ -6,9 +6,7 @@ namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
-use Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
 use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
-use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
 class Redactor
 {
@@ -376,79 +374,5 @@ class Redactor
         $config = RedactorConfig::fromConfig($profile);
 
         return $this->getStrategiesForProfile($config);
-    }
-
-    // Legacy methods for backward compatibility
-
-    /**
-     * Add a custom strategy to the redactor.
-     *
-     * @deprecated Use registerCustomStrategy instead
-     */
-    public function addStrategy(RedactionStrategyInterface $strategy): void
-    {
-        // For backward compatibility, add to default profile
-        $defaultProfile = Config::get('redactor.default_profile', 'default');
-        $this->registerCustomStrategy('custom_'.uniqid(), $strategy);
-    }
-
-    /**
-     * Remove a strategy from the redactor.
-     *
-     * @deprecated Strategy removal should be handled via profile configuration
-     */
-    public function removeStrategy(string $strategyClass): void
-    {
-        // Clear cached strategies to force rebuild
-        $this->profileStrategies = [];
-    }
-
-    /**
-     * Calculate Shannon entropy of a string (for testing purposes).
-     * Delegates to the ShannonEntropyStrategy.
-     */
-    public function calculateShannonEntropy(string $string): float
-    {
-        $config = RedactorConfig::fromConfig();
-        $context = new RedactionContext($config);
-        $strategies = $this->getStrategiesForProfile($config);
-
-        foreach ($strategies as $strategy) {
-            if ($strategy instanceof ShannonEntropyStrategy) {
-                $reflection = new \ReflectionClass($strategy);
-                $method = $reflection->getMethod('calculateShannonEntropy');
-                $method->setAccessible(true);
-
-                $result = $method->invoke($strategy, $string, $context);
-
-                return is_float($result) ? $result : 0.0;
-            }
-        }
-
-        return 0.0;
-    }
-
-    /**
-     * Check if a string matches common patterns (for testing purposes).
-     * Delegates to the ShannonEntropyStrategy.
-     */
-    public function isCommonPattern(string $string, RedactorConfig $config): bool
-    {
-        $context = new RedactionContext($config);
-        $strategies = $this->getStrategiesForProfile($config);
-
-        foreach ($strategies as $strategy) {
-            if ($strategy instanceof ShannonEntropyStrategy) {
-                $reflection = new \ReflectionClass($strategy);
-                $method = $reflection->getMethod('isCommonPattern');
-                $method->setAccessible(true);
-
-                $result = $method->invoke($strategy, $string, $context);
-
-                return is_bool($result) ? $result : false;
-            }
-        }
-
-        return false;
     }
 }

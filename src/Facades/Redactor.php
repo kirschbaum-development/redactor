@@ -12,8 +12,6 @@ use Illuminate\Support\Facades\Facade;
  * @method static array<string> getAvailableProfiles()
  * @method static bool profileExists(string $profile)
  * @method static array<\Kirschbaum\Redactor\Strategies\RedactionStrategyInterface> getStrategies(?string $profile = null)
- * @method static float calculateShannonEntropy(string $string)
- * @method static bool isCommonPattern(string $string, \Kirschbaum\Redactor\RedactorConfig $config)
  *
  * @see \Kirschbaum\Redactor\Redactor
  */

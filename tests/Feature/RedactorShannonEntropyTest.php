@@ -497,13 +497,13 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
         $config = RedactorConfig::fromConfig();
 
         // Test URL pattern
-        expect($redactor->isCommonPattern('https://example.com', $config))->toBeTrue()
-            ->and($redactor->isCommonPattern('http://test.org', $config))->toBeTrue()
-            ->and($redactor->isCommonPattern('ftp://example.com', $config))->toBeFalse();
+        expect((new ShannonEntropyStrategy)->isCommonPattern('https://example.com', $config))->toBeTrue()
+            ->and((new ShannonEntropyStrategy)->isCommonPattern('http://test.org', $config))->toBeTrue()
+            ->and((new ShannonEntropyStrategy)->isCommonPattern('ftp://example.com', $config))->toBeFalse();
 
         // Test UUID pattern
-        expect($redactor->isCommonPattern('550e8400-e29b-41d4-a716-446655440000', $config))->toBeTrue()
-            ->and($redactor->isCommonPattern('not-a-uuid-string', $config))->toBeFalse();
+        expect((new ShannonEntropyStrategy)->isCommonPattern('550e8400-e29b-41d4-a716-446655440000', $config))->toBeTrue()
+            ->and((new ShannonEntropyStrategy)->isCommonPattern('not-a-uuid-string', $config))->toBeFalse();
     });
 
     it('uses custom entropy exclusion patterns from configuration', function () {
@@ -580,13 +580,8 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
         );
         $context1 = new RedactionContext($config1);
 
-        // Use reflection to call isCommonPattern directly
-        $reflection = new \ReflectionClass($strategy);
-        $method = $reflection->getMethod('isCommonPattern');
-        $method->setAccessible(true);
-
-        // This should hit line 103: return false (exclusion_patterns not array)
-        $result1 = $method->invoke($strategy, 'test string', $context1);
+        // exclusion_patterns is not an array, so nothing can be excluded.
+        $result1 = $strategy->isCommonPattern('test string', $context1->config);
         expect($result1)->toBeFalse();
 
         // Test line 108: continue when pattern is not a string
@@ -617,8 +612,8 @@ describe('Shannon Entropy Common Pattern Detection Tests', function () {
         );
         $context2 = new RedactionContext($config2);
 
-        // This should hit line 108: continue (non-string patterns skipped)
-        $result2 = $method->invoke($strategy, 'valid_pattern', $context2);
+        // Non-string patterns are skipped rather than fatal.
+        $result2 = $strategy->isCommonPattern('valid_pattern', $context2->config);
         expect($result2)->toBeTrue(); // Should match the valid pattern after skipping non-strings
     });
 });
@@ -653,11 +648,11 @@ describe('Shannon Entropy Algorithm Tests', function () {
         $redactor = new Redactor;
 
         // Test known entropy values
-        expect($redactor->calculateShannonEntropy('aaaa'))->toBe(0.0) // All same character
-            ->and($redactor->calculateShannonEntropy('abcd'))->toBeGreaterThan(1.9) // Perfect distribution
-            ->and($redactor->calculateShannonEntropy('abcd'))->toBeLessThan(2.1) // Perfect distribution
-            ->and($redactor->calculateShannonEntropy('a'))->toBe(0.0) // Single character
-            ->and($redactor->calculateShannonEntropy(''))->toBe(0.0); // Empty string
+        expect((new ShannonEntropyStrategy)->calculateShannonEntropy('aaaa'))->toBe(0.0) // All same character
+            ->and((new ShannonEntropyStrategy)->calculateShannonEntropy('abcd'))->toBeGreaterThan(1.9) // Perfect distribution
+            ->and((new ShannonEntropyStrategy)->calculateShannonEntropy('abcd'))->toBeLessThan(2.1) // Perfect distribution
+            ->and((new ShannonEntropyStrategy)->calculateShannonEntropy('a'))->toBe(0.0) // Single character
+            ->and((new ShannonEntropyStrategy)->calculateShannonEntropy(''))->toBe(0.0); // Empty string
     });
 
     it('handles edge cases in entropy calculation', function () {
@@ -689,26 +684,27 @@ describe('Shannon Entropy Algorithm Tests', function () {
         $redactor = new Redactor;
 
         // Edge cases
-        expect($redactor->calculateShannonEntropy(''))->toBe(0.0)
-            ->and($redactor->calculateShannonEntropy('a'))->toBe(0.0)
-            ->and($redactor->calculateShannonEntropy('aa'))->toBe(0.0)
-            ->and($redactor->calculateShannonEntropy('ab'))->toBeGreaterThan(0.9)
-            ->and($redactor->calculateShannonEntropy('ab'))->toBeLessThan(1.1);
+        expect((new ShannonEntropyStrategy)->calculateShannonEntropy(''))->toBe(0.0)
+            ->and((new ShannonEntropyStrategy)->calculateShannonEntropy('a'))->toBe(0.0)
+            ->and((new ShannonEntropyStrategy)->calculateShannonEntropy('aa'))->toBe(0.0)
+            ->and((new ShannonEntropyStrategy)->calculateShannonEntropy('ab'))->toBeGreaterThan(0.9)
+            ->and((new ShannonEntropyStrategy)->calculateShannonEntropy('ab'))->toBeLessThan(1.1);
 
         // Unicode characters
-        $unicodeEntropy = $redactor->calculateShannonEntropy('αβγδ');
+        $unicodeEntropy = (new ShannonEntropyStrategy)->calculateShannonEntropy('αβγδ');
         expect($unicodeEntropy)->toBeGreaterThan(1.9)
             ->and($unicodeEntropy)->toBeLessThan(2.1);
     });
 
-    it('returns zero entropy when no ShannonEntropyStrategy is found during entropy calculation', function () {
-        // Explicit profile without Shannon entropy strategy
+    it('computes entropy independently of which strategies a profile enables', function () {
+        // Entropy is a pure property of the string. It used to be routed through
+        // Redactor, which silently returned 0.0 when the active profile happened
+        // not to list ShannonEntropyStrategy - a fallback that reported
+        // high-entropy secrets as perfectly ordered text.
         config()->set('redactor.default_profile', 'no_entropy_strategy_test');
         config()->set('redactor.profiles.no_entropy_strategy_test', [
             'enabled' => true,
-            'strategies' => [
-                SafeKeysStrategy::class,
-            ],
+            'strategies' => [SafeKeysStrategy::class],
             'safe_keys' => [],
             'blocked_keys' => [],
             'patterns' => [],
@@ -719,28 +715,18 @@ describe('Shannon Entropy Algorithm Tests', function () {
             'max_value_length' => null,
             'redact_large_objects' => false,
             'max_object_size' => 100,
-            'shannon_entropy' => [
-                'enabled' => false,
-                'threshold' => 4.0,
-                'min_length' => 25,
-                'exclusion_patterns' => [],
-            ],
+            'shannon_entropy' => ['enabled' => false],
         ]);
 
-        $redactor = new Redactor;
-
-        // Should return 0.0 when no ShannonEntropyStrategy is found
-        expect($redactor->calculateShannonEntropy('high-entropy-string-12345'))->toBe(0.0);
+        expect((new ShannonEntropyStrategy)->calculateShannonEntropy('high-entropy-string-12345'))
+            ->toBeGreaterThan(3.0);
     });
 
-    it('returns false when no ShannonEntropyStrategy is found during pattern checking', function () {
-        // Explicit profile without Shannon entropy strategy
+    it('reports exclusion matches independently of the active profile strategies', function () {
         config()->set('redactor.default_profile', 'no_pattern_strategy_test');
         config()->set('redactor.profiles.no_pattern_strategy_test', [
             'enabled' => true,
-            'strategies' => [
-                SafeKeysStrategy::class,
-            ],
+            'strategies' => [SafeKeysStrategy::class],
             'safe_keys' => [],
             'blocked_keys' => [],
             'patterns' => [],
@@ -753,17 +739,14 @@ describe('Shannon Entropy Algorithm Tests', function () {
             'max_object_size' => 100,
             'shannon_entropy' => [
                 'enabled' => false,
-                'threshold' => 4.0,
-                'min_length' => 25,
-                'exclusion_patterns' => [],
+                'exclusion_patterns' => ['/^https?:\\/\\//'],
             ],
         ]);
 
-        $redactor = new Redactor;
         $config = RedactorConfig::fromConfig();
 
-        // Should return false when no ShannonEntropyStrategy is found
-        expect($redactor->isCommonPattern('https://example.com', $config))->toBeFalse();
+        expect((new ShannonEntropyStrategy)->isCommonPattern('https://example.com', $config))->toBeTrue()
+            ->and((new ShannonEntropyStrategy)->isCommonPattern('not-a-url', $config))->toBeFalse();
     });
 
     it('uses entropy caching for performance optimization', function () {
@@ -797,9 +780,9 @@ describe('Shannon Entropy Algorithm Tests', function () {
         $testString = 'sk-1234567890abcdef1234567890abcdef12345678';
 
         // Calculate entropy multiple times - should use caching
-        $entropy1 = $redactor->calculateShannonEntropy($testString);
-        $entropy2 = $redactor->calculateShannonEntropy($testString);
-        $entropy3 = $redactor->calculateShannonEntropy($testString);
+        $entropy1 = (new ShannonEntropyStrategy)->calculateShannonEntropy($testString);
+        $entropy2 = (new ShannonEntropyStrategy)->calculateShannonEntropy($testString);
+        $entropy3 = (new ShannonEntropyStrategy)->calculateShannonEntropy($testString);
 
         // All calculations should return the same value
         expect($entropy1)->toBe($entropy2)
@@ -833,18 +816,13 @@ describe('Shannon Entropy Algorithm Tests', function () {
         );
         $context = new RedactionContext($config);
 
-        // Use reflection to directly call calculateShannonEntropy
-        $reflection = new \ReflectionClass($strategy);
-        $method = $reflection->getMethod('calculateShannonEntropy');
-        $method->setAccessible(true);
-
         $testString = 'test string for entropy calculation';
 
         // First call calculates and caches
-        $entropy1 = $method->invoke($strategy, $testString, $context);
+        $entropy1 = $strategy->calculateShannonEntropy($testString, $context);
 
-        // Second call should hit cached path
-        $entropy2 = $method->invoke($strategy, $testString, $context);
+        // Second call should hit the cached path
+        $entropy2 = $strategy->calculateShannonEntropy($testString, $context);
 
         expect($entropy1)->toBe($entropy2);
         expect($entropy1)->toBeFloat();
@@ -876,12 +854,7 @@ describe('Shannon Entropy Algorithm Tests', function () {
         );
         $context = new RedactionContext($config);
 
-        // Use reflection to directly call isCommonPattern to hit line 103
-        $reflection = new \ReflectionClass($strategy);
-        $method = $reflection->getMethod('isCommonPattern');
-        $method->setAccessible(true);
-
-        $result = $method->invoke($strategy, 'test string that is long enough to be processed', $context);
+        $result = $strategy->isCommonPattern('test string that is long enough to be processed', $context->config);
 
         // Should return false when exclusion_patterns is not an array
         expect($result)->toBeFalse();

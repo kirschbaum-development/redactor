@@ -696,26 +696,30 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
         expect($result)->toBe(123); // Should return original value
     });
 
-    it('uses deprecated addStrategy method for backward compatibility', function () {
-        // Test deprecated addStrategy method
+    it('registers a named custom strategy and uses it in a profile', function () {
         $redactor = new Redactor;
-        $customStrategy = new TestValidCustomStrategy;
+        $redactor->registerCustomStrategy('valid_custom', new TestValidCustomStrategy);
 
-        $redactor->addStrategy($customStrategy);
+        config()->set('redactor.profiles.named_custom', [
+            'enabled' => true,
+            'strategies' => ['valid_custom'],
+            'safe_keys' => [],
+            'blocked_keys' => [],
+            'patterns' => [],
+            'replacement' => '[REDACTED]',
+            'mark_redacted' => false,
+            'track_redacted_keys' => false,
+            'non_redactable_object_behavior' => 'preserve',
+            'max_value_length' => null,
+            'redact_large_objects' => false,
+            'max_object_size' => 100,
+            'shannon_entropy' => ['enabled' => false],
+        ]);
 
-        // Should register the strategy (check that it doesn't throw an error)
-        $strategies = $redactor->getStrategies('default');
-        expect($strategies)->toBeArray();
-    });
+        $strategies = $redactor->getStrategies('named_custom');
 
-    it('uses deprecated removeStrategy method for backward compatibility', function () {
-        // Test deprecated removeStrategy method
-        $redactor = new Redactor;
-
-        $redactor->removeStrategy('some_strategy');
-
-        // Should clear cached strategies (no exception should be thrown)
-        expect($redactor->getStrategies('default'))->toBeArray();
+        expect($strategies)->toHaveCount(1)
+            ->and($strategies[0])->toBeInstanceOf(TestValidCustomStrategy::class);
     });
 });
 
