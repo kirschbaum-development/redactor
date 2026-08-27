@@ -91,22 +91,27 @@ item below is one commit, with tests.
 - Coverage floor of 90% (CI reports 95.3%), a performance regression suite run
   without coverage instrumentation, and
   `failOnWarning`/`failOnRisky`/`failOnDeprecation` in phpunit.xml. (R-24)
-- Mutation testing (Pest's built-in mutator) runs on pull requests and reports
-  its score, but does not yet gate: two consecutive runs over an identical
-  1,557-mutant set scored 70.6% and 66.7%, with the only change between them
-  being 21 added passing tests. Until that variance is removed the number is
-  information, not a threshold. (R-24)
+- Mutation testing (Pest's built-in mutator) is available locally via
+  `composer mutate`. It is not run in CI: two consecutive runs over an
+  identical 1,557-mutant set scored 70.6% and 66.7% with only added passing
+  tests between them, so the number is not stable enough to act on
+  automatically. (R-24)
 - Boundary tests for every redaction threshold - max_object_size,
   max_value_length, the entropy threshold and min_length, max_depth, partial
   mode's `keep`, and the Luhn length window. Mutation testing surfaced these:
   the thresholds were covered but never their edges, so `>` could become `>=`
   without a test noticing. On a redactor an off-by-one there is the difference
   between catching a secret and emitting it.
-- The test matrix no longer uses `fail-fast`, and the Laravel 11 legs install
-  with `--no-security-blocking`: every 11.x release is now flagged by a
-  Packagist advisory, so Composer's default policy refuses to install any of
-  them. Whether to keep supporting Laravel 11 is a release decision this PR
-  deliberately leaves open.
+- **Laravel 11 support dropped**; the package now requires
+  `illuminate/support ^12.0|^13.0`. Every 11.x release is flagged by a
+  Packagist security advisory, so Composer's default policy refuses to install
+  any of them, making the declared support unusable in practice.
+- **Laravel 13 supported** and in the test matrix. `symfony/finder` widened to
+  `^7.0|^8.0`, which Laravel 13 requires.
+- Dropped the unused `pestphp/pest-plugin-laravel` dev dependency. It was the
+  only thing pinning the test toolchain to a single Laravel major, and no test
+  used it - `$this->artisan()` comes from Testbench.
+- The test matrix no longer uses `fail-fast`.
 - Pint passes. `LICENCE.md` renamed to `LICENSE.md` so the README links and the
   Packagist licence detection work. (R-22, R-23)
 

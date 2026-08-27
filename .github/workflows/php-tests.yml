@@ -15,19 +15,13 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         php: ['8.3', '8.4', '8.5']
-        laravel: [11.*, 12.*]
+        laravel: [12.*, 13.*]
         stability: [prefer-lowest, prefer-stable]
         include:
-          - laravel: 11.*
-            testbench: ^9.9
-            carbon: ^2.63
           - laravel: 12.*
             testbench: 10.*
-            carbon: ^2.63|^3.0
-        exclude:
-          # Laravel 11 does not support PHP 8.5.
-          - php: '8.5'
-            laravel: 11.*
+          - laravel: 13.*
+            testbench: 11.*
 
     name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
 
@@ -47,19 +41,13 @@ jobs:
           echo "::add-matcher::${{ runner.tool_cache }}/php.json"
           echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
 
-      # Every Laravel 11.x release is now flagged by a Packagist security
-      # advisory, so Composer's default policy refuses to install any of
-      # them. The advisory blocking is disabled for that leg only, so the
-      # package's declared Laravel 11 support stays under test. Nothing
-      # vulnerable is shipped - this is a CI install of a framework the
-      # library only ever runs against here.
-      #
-      # The real decision this defers is whether to keep supporting
-      # Laravel 11 at all, which is a release call rather than a CI one.
+      # Carbon is not pinned here: the package only reaches it through
+      # Laravel's helpers, so whatever the framework resolves is the version
+      # worth testing against.
       - name: Install dependencies
         run: |
-          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" "nesbot/carbon:${{ matrix.carbon }}" --no-interaction --no-update
-          composer update --${{ matrix.stability }} --prefer-dist --no-interaction ${{ startsWith(matrix.laravel, '11') && '--no-security-blocking' || '' }}
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+          composer update --${{ matrix.stability }} --prefer-dist --no-interaction
 
       - name: List Installed Dependencies
         run: composer show -D
