@@ -21,8 +21,7 @@
     ],
     "autoload": {
         "psr-4": {
-            "Kirschbaum\\Redactor\\": "src/",
-            "Tests\\": "tests/"
+            "Kirschbaum\\Redactor\\": "src/"
         }
     },
     "autoload-dev": {
@@ -40,11 +39,10 @@
         }
     ],
     "require-dev": {
-        "pestphp/pest": "^3.8",
-        "laravel/pint": "^1.22",
         "larastan/larastan": "^3.4",
-        "orchestra/testbench": "^10.3",
-        "pestphp/pest-plugin-laravel": "^3.1",
+        "laravel/pint": "^1.22",
+        "orchestra/testbench": "^10.3|^11.0",
+        "pestphp/pest": "^3.8",
         "timacdonald/log-fake": "^2.4"
     },
     "config": {
@@ -53,9 +51,10 @@
         }
     },
     "require": {
-        "illuminate/support": "^11.9|^12.0",
-        "spatie/laravel-package-tools": "^1.16",
-        "php": "^8.3|^8.4"
+        "php": "^8.3|^8.4|^8.5",
+        "illuminate/support": "^12.0|^13.0",
+        "monolog/monolog": "^3.0",
+        "symfony/finder": "^7.0|^8.0"
     },
     "extra": {
         "laravel": {
@@ -85,7 +84,7 @@
         ],
         "lint": [
             "@php vendor/bin/pint --ansi",
-            "@php vendor/bin/phpstan analyse --verbose --ansi"
+            "@php vendor/bin/phpstan analyse --verbose --ansi --memory-limit=1G"
         ],
         "test": [
             "@clear",
@@ -93,8 +92,15 @@
         ],
         "preflight": [
             "@php vendor/bin/pint --test --ansi",
-            "@php vendor/bin/phpstan analyse --no-progress --ansi",
+            "@php vendor/bin/phpstan analyse --no-progress --ansi --memory-limit=1G",
             "@php vendor/bin/pest --parallel"
+        ],
+        "test-coverage": [
+            "@clear",
+            "@php vendor/bin/pest --coverage --min=90"
+        ],
+        "mutate": [
+            "@php vendor/bin/pest --mutate --everything --covered-only"
         ]
     }
 }

@@ -6,6 +6,8 @@ namespace Tests\Feature;
 
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 
 describe('Redactor Configuration Tests', function () {
     beforeEach(function () {
@@ -16,7 +18,7 @@ describe('Redactor Configuration Tests', function () {
     it('can be disabled via configuration', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => false,
-            'strategies' => [\Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class],
+            'strategies' => [BlockedKeysStrategy::class],
             'safe_keys' => [],
             'blocked_keys' => ['password'],
             'patterns' => [],
@@ -45,7 +47,7 @@ describe('Redactor Configuration Tests', function () {
     it('does not add redacted flag when mark_redacted is false', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
-            'strategies' => [\Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class],
+            'strategies' => [BlockedKeysStrategy::class],
             'safe_keys' => [],
             'blocked_keys' => ['password'],
             'patterns' => [],
@@ -78,8 +80,8 @@ describe('RedactorConfig DTO Tests', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -121,8 +123,8 @@ describe('RedactorConfig DTO Tests', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => ['ID', 'User_ID'],
             'blocked_keys' => ['PASSWORD', 'Secret'],
@@ -145,17 +147,19 @@ describe('RedactorConfig DTO Tests', function () {
 
         expect($config->safeKeys)->toBe(['id', 'user_id']) // Converted to lowercase
             ->and($config->blockedKeys)->toBe(['password', 'secret']) // Converted to lowercase
-            ->and($config->patterns)->toBe(['valid' => '/valid-pattern/', 'another_valid' => '/another-valid-pattern/']) // Invalid pattern filtered out
+            ->and(array_keys($config->patterns))->toBe(['valid', 'another_valid']) // Invalid pattern filtered out
+            ->and($config->patterns['valid']->pattern)->toBe('/valid-pattern/')
+            ->and($config->patterns['another_valid']->pattern)->toBe('/another-valid-pattern/')
             ->and($config->replacement)->toBe('[CUSTOM]')
             ->and($config->maxValueLength)->toBe(100)
             ->and($config->trackRedactedKeys)->toBeTrue()
             ->and($config->nonRedactableObjectBehavior)->toBe('remove');
     });
 
-    it('handles non-integer max_value_length config', function () {
+    it('rejects a non-numeric max_value_length instead of silently disabling it', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
-            'strategies' => [\Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class],
+            'strategies' => [SafeKeysStrategy::class],
             'safe_keys' => [],
             'blocked_keys' => [],
             'patterns' => [],
@@ -169,9 +173,10 @@ describe('RedactorConfig DTO Tests', function () {
             'shannon_entropy' => ['enabled' => false],
         ]);
 
-        $config = RedactorConfig::fromConfig();
-
-        expect($config->maxValueLength)->toBeNull();
+        // Previously this fell back to null, silently switching off the length
+        // cap the operator had asked for.
+        expect(fn () => RedactorConfig::fromConfig())
+            ->toThrow(\InvalidArgumentException::class, 'profiles.default.max_value_length');
     });
 
     it('throws exception for non-existent profile', function () {
@@ -217,46 +222,49 @@ describe('RedactorConfig DTO Tests', function () {
         })->toThrow(\InvalidArgumentException::class, "Invalid configuration for profile 'invalid_profile'");
     });
 
-    it('handles zero and negative values in max value length validation', function () {
-        // Test validateMaxValueLength returning null for zero/negative values
-        config()->set('redactor.profiles.test_zero_max', [
-            'enabled' => true,
-            'strategies' => [],
-            'max_value_length' => 0, // Zero value should return null
-            'safe_keys' => [],
-            'blocked_keys' => [],
-            'patterns' => [],
-            'replacement' => '[REDACTED]',
-            'mark_redacted' => true,
-            'track_redacted_keys' => false,
-            'non_redactable_object_behavior' => 'preserve',
-            'redact_large_objects' => true,
-            'max_object_size' => 100,
-            'shannon_entropy' => ['enabled' => false],
-        ]);
+    it('rejects zero and negative max_value_length', function () {
+        foreach ([0, -5, '0', '-5'] as $bad) {
+            config()->set('redactor.profiles.test_bad_max', [
+                'enabled' => true,
+                'strategies' => [],
+                'max_value_length' => $bad,
+                'safe_keys' => [],
+                'blocked_keys' => [],
+                'patterns' => [],
+                'replacement' => '[REDACTED]',
+                'mark_redacted' => true,
+                'track_redacted_keys' => false,
+                'non_redactable_object_behavior' => 'preserve',
+                'redact_large_objects' => true,
+                'max_object_size' => 100,
+                'shannon_entropy' => ['enabled' => false],
+            ]);
 
-        $config = RedactorConfig::fromConfig('test_zero_max');
-        expect($config->maxValueLength)->toBeNull();
+            expect(fn () => RedactorConfig::fromConfig('test_bad_max'))
+                ->toThrow(\InvalidArgumentException::class, 'profiles.test_bad_max.max_value_length');
+        }
+    });
 
-        // Test with negative value
-        config()->set('redactor.profiles.test_negative_max', [
-            'enabled' => true,
-            'strategies' => [],
-            'max_value_length' => -5, // Negative value should return null
-            'safe_keys' => [],
-            'blocked_keys' => [],
-            'patterns' => [],
-            'replacement' => '[REDACTED]',
-            'mark_redacted' => true,
-            'track_redacted_keys' => false,
-            'non_redactable_object_behavior' => 'preserve',
-            'redact_large_objects' => true,
-            'max_object_size' => 100,
-            'shannon_entropy' => ['enabled' => false],
-        ]);
+    it('treats null and an empty string as "no max_value_length"', function () {
+        foreach ([null, ''] as $disabled) {
+            config()->set('redactor.profiles.test_no_max', [
+                'enabled' => true,
+                'strategies' => [],
+                'max_value_length' => $disabled,
+                'safe_keys' => [],
+                'blocked_keys' => [],
+                'patterns' => [],
+                'replacement' => '[REDACTED]',
+                'mark_redacted' => true,
+                'track_redacted_keys' => false,
+                'non_redactable_object_behavior' => 'preserve',
+                'redact_large_objects' => true,
+                'max_object_size' => 100,
+                'shannon_entropy' => ['enabled' => false],
+            ]);
 
-        $config2 = RedactorConfig::fromConfig('test_negative_max');
-        expect($config2->maxValueLength)->toBeNull();
+            expect(RedactorConfig::fromConfig('test_no_max')->maxValueLength)->toBeNull();
+        }
     });
 
     it('validates regex patterns and removes invalid ones', function () {

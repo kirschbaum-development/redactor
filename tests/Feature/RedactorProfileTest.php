@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 
 describe('Redactor Profile Tests', function () {
     beforeEach(function () {
@@ -15,8 +19,8 @@ describe('Redactor Profile Tests', function () {
             'default' => [
                 'enabled' => true,
                 'strategies' => [
-                    \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                    \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                    SafeKeysStrategy::class,
+                    BlockedKeysStrategy::class,
                 ],
                 'safe_keys' => ['id', 'uuid'],
                 'blocked_keys' => ['password', 'secret'],
@@ -37,8 +41,8 @@ describe('Redactor Profile Tests', function () {
             'strict' => [
                 'enabled' => true,
                 'strategies' => [
-                    \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                    \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                    SafeKeysStrategy::class,
+                    BlockedKeysStrategy::class,
                 ],
                 'safe_keys' => ['id'],
                 'blocked_keys' => ['password', 'secret', 'email', 'name'],
@@ -57,8 +61,8 @@ describe('Redactor Profile Tests', function () {
             'performance' => [
                 'enabled' => true,
                 'strategies' => [
-                    \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                    \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                    SafeKeysStrategy::class,
+                    BlockedKeysStrategy::class,
                     // No large object or string strategies for performance
                 ],
                 'safe_keys' => ['id', 'uuid', 'timestamp', 'level'],
@@ -181,19 +185,19 @@ describe('Redactor Profile Tests', function () {
     test('it can register custom strategies', function () {
         $redactor = new Redactor;
 
-        $customStrategy = new class implements \Kirschbaum\Redactor\Strategies\RedactionStrategyInterface
+        $customStrategy = new class implements RedactionStrategyInterface
         {
             public function getPriority(): int
             {
                 return 10;
             }
 
-            public function shouldHandle(mixed $value, string $key, \Kirschbaum\Redactor\RedactionContext $context): bool
+            public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
             {
                 return $key === 'custom_field';
             }
 
-            public function handle(mixed $value, string $key, \Kirschbaum\Redactor\RedactionContext $context): mixed
+            public function handle(mixed $value, string $key, RedactionContext $context): mixed
             {
                 $context->markRedacted();
 
@@ -212,7 +216,7 @@ describe('Redactor Profile Tests', function () {
         // Add a disabled profile
         config()->set('redactor.profiles.disabled_profile', [
             'enabled' => false,
-            'strategies' => [\Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class],
+            'strategies' => [BlockedKeysStrategy::class],
             'safe_keys' => [],
             'blocked_keys' => ['password'],
             'patterns' => [],

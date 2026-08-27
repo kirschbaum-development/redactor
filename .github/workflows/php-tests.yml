@@ -10,19 +10,18 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      # One unusable matrix leg should not cancel the other nine.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        php: [8.3, 8.4]
-        laravel: [11.*, 12.*]
+        php: ['8.3', '8.4', '8.5']
+        laravel: [12.*, 13.*]
         stability: [prefer-lowest, prefer-stable]
         include:
-          - laravel: 11.*
-            testbench: ^9.9
-            carbon: ^2.63
           - laravel: 12.*
             testbench: 10.*
-            carbon: ^2.63|^3.0
+          - laravel: 13.*
+            testbench: 11.*
 
     name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
 
@@ -42,13 +41,40 @@ jobs:
           echo "::add-matcher::${{ runner.tool_cache }}/php.json"
           echo "::add-matcher::${{ runner.tool_cache }}/phpunit.json"
 
+      # Carbon is not pinned here: the package only reaches it through
+      # Laravel's helpers, so whatever the framework resolves is the version
+      # worth testing against.
       - name: Install dependencies
         run: |
-          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" "nesbot/carbon:${{ matrix.carbon }}" --no-interaction --no-update
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
           composer update --${{ matrix.stability }} --prefer-dist --no-interaction
 
       - name: List Installed Dependencies
         run: composer show -D
 
       - name: Execute tests
-        run: vendor/bin/pest --ci --bail --compact --memory --coverage
+        run: vendor/bin/pest --ci --compact --memory --coverage --min=90
+
+  performance:
+    name: performance guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, intl, fileinfo
+          # Explicitly no coverage: instrumentation dominates the clock and
+          # flattens the difference between a fast and a slow implementation,
+          # so these assertions skip themselves when a driver is active.
+          coverage: none
+
+      - name: Install composer dependencies
+        uses: ramsey/composer-install@v3
+
+      - name: Run performance guards
+        run: vendor/bin/pest --testsuite=Performance --ci

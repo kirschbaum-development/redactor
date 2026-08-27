@@ -4,7 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\RedactorConfig;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
+use Kirschbaum\Redactor\Strategies\LargeStringStrategy;
+use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
+use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
 // Test object with toArray method for testing array conversion
 class TestObjectWithToArray
@@ -28,12 +36,12 @@ describe('Redactor Large Object Tests', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -192,12 +200,12 @@ describe('Redactor String Length Tests', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -259,12 +267,12 @@ describe('Redactor Object Handling Tests', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => ['password'],
@@ -464,12 +472,12 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -730,9 +738,9 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
     it('handles LargeObjectStrategy with scalar values passed directly to handle method', function () {
         // Test the final return $value; line in LargeObjectStrategy that can only be reached
         // by calling handle directly with a scalar value (shouldHandle would never allow this)
-        $strategy = new \Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
-        $config = \Kirschbaum\Redactor\RedactorConfig::fromConfig('default');
-        $context = new \Kirschbaum\Redactor\RedactionContext($config);
+        $strategy = new LargeObjectStrategy;
+        $config = RedactorConfig::fromConfig('default');
+        $context = new RedactionContext($config);
 
         // Call handle directly with scalar values
         expect($strategy->handle('test string', 'test_key', $context))->toBe('test string');
@@ -744,9 +752,9 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
 
     it('handles LargeObjectStrategy toArray exception in handle method', function () {
         // Test exception handling in toArray during handle method
-        $strategy = new \Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
-        $config = \Kirschbaum\Redactor\RedactorConfig::fromConfig('default');
-        $context = new \Kirschbaum\Redactor\RedactionContext($config);
+        $strategy = new LargeObjectStrategy;
+        $config = RedactorConfig::fromConfig('default');
+        $context = new RedactionContext($config);
 
         $problematicObject = new class
         {
@@ -766,9 +774,9 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
 
     it('handles LargeObjectStrategy JSON encoding exception in handle method', function () {
         // Test JSON encoding exception handling in handle method else branch
-        $strategy = new \Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
-        $config = \Kirschbaum\Redactor\RedactorConfig::fromConfig('default');
-        $context = new \Kirschbaum\Redactor\RedactionContext($config);
+        $strategy = new LargeObjectStrategy;
+        $config = RedactorConfig::fromConfig('default');
+        $context = new RedactionContext($config);
 
         // Create an object without toArray method that will fail JSON encoding
         $problematicObject = new class

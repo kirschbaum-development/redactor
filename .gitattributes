@@ -1,0 +1,18 @@
+* text=auto eol=lf
+
+# Keep development-only material out of the distributed package.
+/.github            export-ignore
+/.githooks          export-ignore
+/scripts            export-ignore
+/tests              export-ignore
+/workbench          export-ignore
+/.gitattributes     export-ignore
+/.gitignore         export-ignore
+/phpstan.neon.dist  export-ignore
+/phpunit.xml.dist   export-ignore
+/pint.json          export-ignore
+/testbench.yaml     export-ignore
+
+# Diff/linguist hints
+*.php               diff=php
+/tests/**           linguist-vendored

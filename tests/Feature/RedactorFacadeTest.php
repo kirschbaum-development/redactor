@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Kirschbaum\Redactor\Facades\Redactor;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 
 describe('Redactor Facade Tests', function () {
     beforeEach(function () {
@@ -13,8 +15,8 @@ describe('Redactor Facade Tests', function () {
         config()->set('redactor.profiles.facade_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => ['id'],
             'blocked_keys' => ['password'],
@@ -48,7 +50,7 @@ describe('Redactor Facade Tests', function () {
         config()->set('redactor.profiles.strict_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => ['id', 'password'],

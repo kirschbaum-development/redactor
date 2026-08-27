@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\RedactionContext;
+use Kirschbaum\Redactor\RedactorConfig;
+use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
+use Kirschbaum\Redactor\Support\Pcre;
 
-class ShannonEntropyStrategy implements RedactionStrategyInterface
+class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInterface
 {
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
@@ -16,15 +19,193 @@ class ShannonEntropyStrategy implements RedactionStrategyInterface
             return false;
         }
 
-        return $this->shouldRedactByEntropy($value, $context);
+        if ($this->tooShort($value, $shannonConfig)) {
+            return false;
+        }
+
+        foreach ($this->tokenize($value) as $token) {
+            if ($this->shouldRedactByEntropy($token, $context)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
-        $context->markRedacted();
+        if (! is_string($value)) {
+            return $value;
+        }
 
-        return $context->config->replacement;
+        if ($this->tooShort($value, $context->config->shannonEntropy)) {
+            return $value;
+        }
+
+        $replacement = $context->config->replacement;
+
+        /** @var array<int, array{offset: int, length: int, matched: string}> $hits */
+        $hits = [];
+
+        // A value with no internal whitespace is a single token, so this
+        // degenerates to replacing the whole value - the pre-existing
+        // behaviour for API keys and the like. A sentence with a secret
+        // embedded in it loses only the secret.
+        //
+        // PREG_OFFSET_CAPTURE turns each match into a [text, offset] pair; the
+        // pair is unpacked defensively rather than assumed, because the shape
+        // depends on a flag a future edit could drop.
+        $rewrite = function (array $matches) use ($context, $replacement, &$hits): string {
+            $match = $matches[0] ?? null;
+
+            $token = is_array($match) && is_string($match[0] ?? null) ? $match[0] : '';
+            $offset = is_array($match) && is_int($match[1] ?? null) ? $match[1] : 0;
+
+            if ($token === '' || ! $this->shouldRedactByEntropy($token, $context)) {
+                return $token;
+            }
+
+            $hits[] = [
+                'offset' => $offset,
+                'length' => strlen($token),
+                'matched' => $token,
+            ];
+
+            return $replacement;
+        };
+
+        // Spelled out rather than selected into a variable so the /u decision
+        // is visible at the point it matters.
+        $result = $this->isAscii($value)
+            ? preg_replace_callback('/\S+/', $rewrite, $value, -1, $count, PREG_OFFSET_CAPTURE)
+            : preg_replace_callback('/\S+/u', $rewrite, $value, -1, $count, PREG_OFFSET_CAPTURE);
+
+        if ($result === null) {
+            // The engine gave up. Fail closed rather than emit a partially
+            // substituted string.
+            $context->recordRedaction($key, 'shannon_entropy', 0, strlen($value));
+
+            return $replacement;
+        }
+
+        if ($hits === []) {
+            return $value;
+        }
+
+        foreach ($hits as $hit) {
+            $context->recordRedaction($key, 'shannon_entropy', $hit['offset'], $hit['length'], $hit['matched']);
+        }
+
+        return $result;
     }
+
+    /**
+     * Whether a subject is pure ASCII, and so can use the cheaper patterns.
+     *
+     * The /u modifier makes PCRE validate the whole subject as UTF-8 on every
+     * call, which for ASCII input buys nothing and costs a great deal: 40us
+     * against 12us to split a 2.2KB string, on a path that runs over every
+     * value scanned. Detecting ASCII costs about 1us, so the check pays for
+     * itself many times over on exactly the long subjects where it matters.
+     *
+     * Dropping /u for non-ASCII input would be wrong rather than merely slower
+     * - \s stops recognising Unicode whitespace, so tokens would join - which
+     * is why the choice is made per subject rather than once for the profile.
+     */
+    protected function isAscii(string $value): bool
+    {
+        return preg_match('/[\x80-\xff]/', $value) !== 1;
+    }
+
+    /**
+     * Whether a subject is too short to contain anything worth measuring.
+     *
+     * Checked twice over, cheapest first. A byte count is an upper bound on a
+     * character count, so a subject under the minimum in bytes is certainly
+     * under it in characters - which means the cheap test can only ever skip
+     * work that was provably going to find nothing. Only what survives it pays
+     * for the encoding check a character count requires.
+     *
+     * Applied at the value level as well as per token: a value shorter than
+     * min_length cannot contain a token that long, so the whole tokenise pass
+     * can be skipped. Most values in a log payload are well under it.
+     *
+     * @param  array<string, mixed>  $shannonConfig
+     */
+    protected function tooShort(string $subject, array $shannonConfig): bool
+    {
+        $minLength = $shannonConfig['min_length'] ?? 25;
+
+        if (! is_numeric($minLength)) {
+            return false;
+        }
+
+        $minLength = (int) $minLength;
+
+        if (strlen($subject) < $minLength) {
+            return true;
+        }
+
+        return $this->length($subject) < $minLength;
+    }
+
+    /**
+     * Split a string into characters, falling back to bytes for input that is
+     * not valid UTF-8 (binary blobs reach this during file scanning).
+     *
+     * @return array<int, string>
+     */
+    protected function characters(string $string): array
+    {
+        if (! mb_check_encoding($string, 'UTF-8')) {
+            return str_split($string);
+        }
+
+        $characters = mb_str_split($string, 1, 'UTF-8');
+
+        return $characters === [] ? str_split($string) : $characters;
+    }
+
+    /**
+     * Character count, byte count for non-UTF-8 input.
+     */
+    protected function length(string $string): int
+    {
+        return mb_check_encoding($string, 'UTF-8')
+            ? mb_strlen($string, 'UTF-8')
+            : strlen($string);
+    }
+
+    /**
+     * Split a value into the tokens entropy is measured over.
+     *
+     * @return array<int, string>
+     */
+    protected function tokenize(string $value): array
+    {
+        $tokens = $this->isAscii($value)
+            ? preg_split('/\s+/', $value, -1, PREG_SPLIT_NO_EMPTY)
+            : preg_split('/\s+/u', $value, -1, PREG_SPLIT_NO_EMPTY);
+
+        return $tokens === false ? [$value] : $tokens;
+    }
+
+    /**
+     * Charsets a token can be drawn from, most restrictive first.
+     *
+     * A 40-character hex digest tops out at 4 bits of entropy per character
+     * because it only has 16 symbols to draw on, so judging it against a
+     * base64 threshold guarantees a miss. Judging base64 against a hex
+     * threshold guarantees false positives. detect-secrets solves this the
+     * same way: pick the threshold from the alphabet.
+     *
+     * @var array<string, string>
+     */
+    protected const CHARSET_PATTERNS = [
+        'hex' => '/^[0-9a-f]+$/i',
+        'base64' => '/^[A-Za-z0-9+\/]+={0,2}$/',
+        'base64url' => '/^[A-Za-z0-9_-]+$/',
+    ];
 
     /**
      * Determine if a string should be redacted based on Shannon entropy.
@@ -33,46 +214,97 @@ class ShannonEntropyStrategy implements RedactionStrategyInterface
     {
         $shannonConfig = $context->config->shannonEntropy;
 
-        // Only analyze strings that meet minimum length requirement
-        $minLength = $shannonConfig['min_length'] ?? 25;
-        if (strlen($string) < $minLength) {
+        // Only analyze strings that meet minimum length requirement.
+        // Counted in characters, not bytes, so a short multibyte token is not
+        // mistaken for a long one - but the byte count settles most cases
+        // first, without the encoding check that a character count needs.
+        if ($this->tooShort($string, $shannonConfig)) {
             return false;
         }
 
         // Skip common words and patterns that might have high entropy but are not sensitive
-        if ($this->isCommonPattern($string, $context)) {
+        if ($this->isCommonPattern($string, $context->config)) {
             return false;
         }
 
         $entropy = $this->calculateShannonEntropy($string, $context);
-        $threshold = $shannonConfig['threshold'] ?? 4.8;
 
-        return $entropy >= $threshold;
+        return $entropy >= $this->thresholdFor($string, $context);
     }
 
     /**
-     * Calculate Shannon entropy of a string with caching.
+     * The entropy threshold to judge this particular token against.
+     *
+     * charset_thresholds is an opt-in refinement: when a profile configures
+     * one for the token's alphabet it wins, otherwise the profile's single
+     * `threshold` applies. An explicitly configured threshold is never
+     * overridden by a value the operator cannot see.
      */
-    protected function calculateShannonEntropy(string $string, RedactionContext $context): float
+    protected function thresholdFor(string $string, RedactionContext $context): float
+    {
+        $shannonConfig = $context->config->shannonEntropy;
+
+        $configured = $shannonConfig['charset_thresholds'] ?? [];
+
+        if (is_array($configured) && $configured !== []) {
+            $charset = $this->detectCharset($string);
+
+            if ($charset !== null && is_numeric($configured[$charset] ?? null)) {
+                /** @var numeric $value */
+                $value = $configured[$charset];
+
+                return (float) $value;
+            }
+        }
+
+        $fallback = $shannonConfig['threshold'] ?? 4.8;
+
+        return is_numeric($fallback) ? (float) $fallback : 4.8;
+    }
+
+    /**
+     * Identify the alphabet a token is drawn from, if it is a recognised one.
+     */
+    protected function detectCharset(string $string): ?string
+    {
+        foreach (self::CHARSET_PATTERNS as $name => $pattern) {
+            if (Pcre::matches($pattern, $string, onError: false, rule: 'charset:'.$name)) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Calculate the Shannon entropy of a string, in bits per character.
+     *
+     * Pass a context to reuse (and populate) its per-redaction entropy cache.
+     */
+    public function calculateShannonEntropy(string $string, ?RedactionContext $context = null): float
     {
         // Check cache first
-        $cachedEntropy = $context->getCachedEntropy($string);
+        $cachedEntropy = $context?->getCachedEntropy($string);
         if ($cachedEntropy !== null) {
             return $cachedEntropy;
         }
 
-        $length = strlen($string);
+        // Split into characters, not bytes: measuring UTF-8 by byte counts
+        // the same character's continuation bytes as separate symbols, which
+        // inflates entropy for any non-ASCII text.
+        $characters = $this->characters($string);
+        $length = count($characters);
+
         if ($length <= 1) {
             $entropy = 0.0;
-            $context->cacheEntropy($string, $entropy);
+            $context?->cacheEntropy($string, $entropy);
 
             return $entropy;
         }
 
         // Count character frequencies and calculate entropy in a single loop
         $frequencies = [];
-        for ($i = 0; $i < $length; $i++) {
-            $char = $string[$i];
+        foreach ($characters as $char) {
             $frequencies[$char] = ($frequencies[$char] ?? 0) + 1;
         }
 
@@ -86,17 +318,18 @@ class ShannonEntropyStrategy implements RedactionStrategyInterface
         }
 
         // Cache the result
-        $context->cacheEntropy($string, $entropy);
+        $context?->cacheEntropy($string, $entropy);
 
         return $entropy;
     }
 
     /**
-     * Check if a string matches common patterns that shouldn't be redacted despite high entropy.
+     * Check if a string matches a configured exclusion pattern, meaning it should
+     * not be redacted despite scoring above the entropy threshold.
      */
-    protected function isCommonPattern(string $string, RedactionContext $context): bool
+    public function isCommonPattern(string $string, RedactorConfig $config): bool
     {
-        $shannonConfig = $context->config->shannonEntropy;
+        $shannonConfig = $config->shannonEntropy;
         $exclusionPatterns = $shannonConfig['exclusion_patterns'] ?? [];
 
         if (! is_array($exclusionPatterns)) {
@@ -108,7 +341,9 @@ class ShannonEntropyStrategy implements RedactionStrategyInterface
                 continue;
             }
 
-            if (preg_match($pattern, $string)) {
+            // onError: false. An exclusion pattern that cannot be evaluated
+            // must not excuse the value from the entropy check.
+            if (Pcre::matches($pattern, $string, onError: false, rule: 'exclusion_pattern')) {
                 // Special case: hex strings need additional length check
                 if ($pattern === '/^[0-9a-f]+$/i' && strlen($string) >= 32) {
                     continue; // Long hex strings might be sensitive (like SHA256)

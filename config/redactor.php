@@ -1,6 +1,12 @@
 <?php
 
 declare(strict_types=1);
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
+use Kirschbaum\Redactor\Strategies\LargeStringStrategy;
+use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
+use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
 return [
     /*
@@ -17,13 +23,106 @@ return [
 
     'scan' => [
         'profile' => env('REDACTOR_SCAN_PROFILE', 'file_scan'),
+
+        /*
+        | Glob patterns, matched against both the file's basename and its path
+        | relative to each scanned directory. A pattern ending in '/*' also
+        | prunes that directory during the walk rather than filtering its
+        | files one at a time.
+        */
         'exclude_patterns' => [
             '*.lock',
             '*.min.js',
+            '*.map',
             'vendor/*',
             'node_modules/*',
+            'storage/framework/*',
+            'public/build/*',
         ],
+
         'max_file_size' => env('REDACTOR_SCAN_MAX_FILE_SIZE', 10_485_760),
+
+        // Skip images, archives and compiled artefacts: scanning them
+        // produces nothing but entropy false positives.
+        'skip_binary' => env('REDACTOR_SCAN_SKIP_BINARY', true),
+
+        // Skip anything git is already ignoring.
+        'respect_gitignore' => env('REDACTOR_SCAN_RESPECT_GITIGNORE', true),
+
+        /*
+        | Files are scanned a window of lines at a time, so memory stays flat
+        | whatever the file size - the files most worth scanning are the large
+        | ones. Windows overlap so a secret spanning a boundary (a PEM block, a
+        | wrapped connection string) is still found; duplicates from the overlap
+        | are dropped by fingerprint.
+        */
+        'window_lines' => env('REDACTOR_SCAN_WINDOW_LINES', 512),
+        'overlap_lines' => env('REDACTOR_SCAN_OVERLAP_LINES', 4),
+
+        /*
+        |----------------------------------------------------------------------
+        | Credential verification
+        |----------------------------------------------------------------------
+        |
+        | Asks each provider whether a detected credential is still live, which
+        | turns a wall of maybes into a short list of keys to rotate today.
+        |
+        | It also sends real secrets to third parties. Nothing here happens
+        | unless all three of these agree:
+        |
+        |   1. enabled is true                (this file, reviewable in a diff)
+        |   2. the run passes --verify        (a human, per run)
+        |   3. the provider is listed below   (who you are willing to tell)
+        |
+        | An empty list means none. Enabling the feature and choosing who to
+        | trust with the secrets are deliberately separate decisions, and
+        | redaction itself can never trigger this - only the scan command can.
+        |
+        */
+        'verification' => [
+            'enabled' => env('REDACTOR_SCAN_VERIFY', false),
+
+            'verifiers' => [
+                // 'github_token',
+                // 'stripe_key',
+                // 'slack_token',
+            ],
+        ],
+
+        /*
+        | Accepted findings, so CI fails on new secrets rather than on known
+        | ones. Generate with:
+        |
+        |     php artisan redactor:scan --update-baseline
+        |
+        | The file stores hashed fingerprints, never the secrets themselves.
+        */
+        'baseline' => env('REDACTOR_SCAN_BASELINE', base_path('.redactor-baseline.json')),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Pseudonymization
+    |--------------------------------------------------------------------------
+    |
+    | The `hash` and `surrogate` operators replace a value with a stable
+    | stand-in, so redacted logs stay joinable: the same email always produces
+    | the same surrogate, and you can still count distinct users or follow one
+    | account through a trace.
+    |
+    | The mapping is one-way (HMAC, not encryption). Anyone holding the key can
+    | confirm a guess, so the key must not travel with the logs. Leave it null
+    | to derive one from APP_KEY, which is never used directly.
+    |
+    | Rotating the key changes every surrogate. That is the intended way to
+    | break correlation with previously exported logs - and the reason not to
+    | rotate it casually.
+    |
+    */
+
+    'pseudonymization' => [
+        'enabled' => env('REDACTOR_PSEUDONYMIZATION', true),
+        'key' => env('REDACTOR_PSEUDONYMIZATION_KEY'),
     ],
 
     /*
@@ -55,33 +154,37 @@ return [
             | Strategies are executed in the order listed below.
             */
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
 
+            /*
+            | Keys whose contents are safe by construction: identifiers,
+            | timestamps and enumerations. Everything under a safe key is
+            | preserved as-is, nested structures included, so a free-text
+            | field must never be listed here however harmless its name.
+            */
             'safe_keys' => [
                 // Core identifiers (high frequency)
                 'id',
                 'uuid',
                 'user_id',
                 'order_id',
-                'session_id',
                 'request_id',
+                'trace_id',
 
                 // Timestamps & metadata (high frequency)
                 'created_at',
                 'updated_at',
                 'timestamp',
 
-                // Redactor framework keys (highest frequency)
+                // Log framework keys (highest frequency)
                 'level',
                 'event',
-                'message',
-                'trace_id',
                 'channel',
                 'duration_ms',
                 'memory_mb',
@@ -94,20 +197,26 @@ return [
                 'breaker_tripped',
                 'uncaught',
 
-                'title',
+                // Enumerations and fixed vocabularies
                 'type',
                 'method',
-                'path',
-                'url',
-                'ip',
-                'user_agent',
                 'operation',
                 'action',
-                'source',
-                'target',
                 'version',
                 'platform',
                 'environment',
+
+                /*
+                | Deliberately NOT safe, though earlier versions listed them:
+                |
+                |   message, title    free text, the commonest PII carrier
+                |   url, path         query strings carry tokens and emails
+                |   ip, user_agent    personal data under GDPR
+                |   source, target    free-form, frequently addresses or paths
+                |   session_id        was simultaneously listed under
+                |                     blocked_keys; safe_keys won, so it was
+                |                     never redacted
+                */
             ],
 
             'blocked_keys' => [
@@ -137,14 +246,86 @@ return [
                 'pin',
             ],
 
+            /*
+            | Rules are applied in the order listed. url_with_auth must come
+            | before email: the email rule would otherwise match "user@host"
+            | inside a credential URL and take the hostname with it.
+            */
             'patterns' => [
-                // Ordered by frequency and performance (most common/fastest first)
+                'url_with_auth' => [
+                    // Replace the credentials, keep the host and path.
+                    'pattern' => '/(https?:\/\/[^:\/\s]+:)([^@\/\s]+)(@)/',
+                    'capture' => 2,
+                ],
                 'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
                 'phone_simple' => '/\b\d{3}[.-]?\d{3}[.-]?\d{4}\b/',
-                'ssn' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
-                'credit_card' => '/\b(?:\d[ -]*?){13,16}\b/',
-                'url_with_auth' => '/https?:\/\/[^:\/\s]+:[^@\/\s]+@[^\s]+/',
+                'ssn' => [
+                    'pattern' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
+                    // Rejects the never-issued area/group/serial values, which
+                    // is most of what matches this shape by accident.
+                    'validator' => 'ssn',
+                ],
+                'credit_card' => [
+                    'pattern' => '/\b(?:\d[ -]*?){13,16}\b/',
+                    // Without the Luhn check this matches any 13-16 digit run:
+                    // order numbers, tracking codes, concatenated timestamps.
+                    'validator' => 'luhn',
+                    'mode' => 'partial',
+                    'keep' => 4,
+                ],
+                'iban' => [
+                    'pattern' => '/\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/',
+                    'validator' => 'iban',
+                ],
             ],
+
+            /*
+            | Rules that name a location outright.
+            |
+            |   request.headers.authorization   exactly there
+            |   user.*.email                    any single level between
+            |   **.password                     at any depth
+            |   users[*].token                  through a list
+            |
+            | Checked before anything else and, when one matches, instead of
+            | everything else - no key guessing, no scanning of the contents,
+            | no walk below the matched node. A path says where; every other
+            | rule in this file is inferring it.
+            |
+            | The more specific pattern wins, so declaration order never
+            | matters, and `preserve` carves an exception out of a broader rule
+            | without disabling it.
+            */
+            'paths' => [
+                // 'request.headers.authorization' => 'redact',
+                // 'user.email'                    => 'surrogate',
+                // 'debug'                         => 'preserve',
+            ],
+
+            /*
+            | What happens to what the detectors find, by entity.
+            |
+            |   redact     replace with the replacement string  (default)
+            |   mask       same length, all mask characters
+            |   partial    keep the last N characters
+            |   remove     delete it
+            |   hash       stable keyed token: [email:k4m9rp2xzq]
+            |   surrogate  stable fake of the same shape
+            |   preserve   detect and report, change nothing
+            |
+            | Entity beats the rule that found it, so a policy decision about
+            | data is not overridden by which regex happened to spot it.
+            */
+            'operators' => [
+                'default' => 'redact',
+                'credit_card' => ['partial' => ['keep' => 4]],
+            ],
+
+            /*
+            | Detections scoring below this are ignored. Raise it to quieten a
+            | noisy profile without weakening any pattern.
+            */
+            'min_confidence' => env('REDACTOR_MIN_CONFIDENCE', 0.0),
 
             'replacement' => env('REDACTOR_REPLACEMENT', '[REDACTED]'),
             'mark_redacted' => env('REDACTOR_MARK_REDACTED', true),
@@ -154,10 +335,32 @@ return [
             'redact_large_objects' => env('REDACTOR_LARGE_OBJECTS', true),
             'max_object_size' => env('REDACTOR_MAX_OBJECT_SIZE', 100),
 
+            /*
+            | How many levels deep the redactor will walk before replacing the
+            | rest of the subtree. Guards against cyclic and pathologically
+            | nested payloads.
+            */
+            'max_depth' => env('REDACTOR_MAX_DEPTH', 32),
+
             'shannon_entropy' => [
                 'enabled' => env('REDACTOR_SHANNON_ENABLED', true),
                 'threshold' => env('REDACTOR_SHANNON_THRESHOLD', 4.8),
                 'min_length' => env('REDACTOR_SHANNON_MIN_LENGTH', 25),
+
+                /*
+                | Per-alphabet thresholds. A hex digest cannot exceed 4.0 bits
+                | per character because it only has 16 symbols to draw on, so
+                | judging it against a base64 threshold guarantees a miss;
+                | judging base64 against a hex threshold guarantees false
+                | positives. Remove this block to judge every token against
+                | the single `threshold` above.
+                */
+                'charset_thresholds' => [
+                    'hex' => 3.0,        // max possible 4.0
+                    'base64' => 4.5,     // max possible 6.0
+                    'base64url' => 4.5,  // max possible 6.0
+                ],
+
                 'exclusion_patterns' => [
                     '/^https?:\/\//',
                     '/^[\/\\\\].+[\/\\\\]/',
@@ -186,15 +389,17 @@ return [
             'enabled' => true,
 
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
 
-            // Minimal safe keys for strict environments
+            // Minimal safe keys for strict environments. 'message' is
+            // excluded: it is free text, which is exactly what strict mode
+            // exists to inspect.
             'safe_keys' => [
                 'id',
                 'uuid',
@@ -203,7 +408,6 @@ return [
                 'timestamp',
                 'level',
                 'event',
-                'message',
             ],
 
             // Extended blocked keys
@@ -242,11 +446,15 @@ return [
             ],
 
             'patterns' => [
+                'url_with_auth' => [
+                    'pattern' => '/(https?:\/\/[^:\/\s]+:)([^@\/\s]+)(@)/',
+                    'capture' => 2,
+                ],
                 'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
                 'phone' => '/\+?[\d\s\-\(\)]{7,15}/',
-                'ssn' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
-                'credit_card' => '/\b(?:\d[ -]*?){13,16}\b/',
-                'url_with_auth' => '/https?:\/\/[^:\/\s]+:[^@\/\s]+@[^\s]+/',
+                'ssn' => ['pattern' => '/\b\d{3}-?\d{2}-?\d{4}\b/', 'validator' => 'ssn'],
+                'credit_card' => ['pattern' => '/\b(?:\d[ -]*?){13,16}\b/', 'validator' => 'luhn'],
+                'iban' => ['pattern' => '/\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/', 'validator' => 'iban'],
                 'ipv4' => '/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/',
                 'uuid' => '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i',
                 'jwt' => '/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/',
@@ -259,6 +467,7 @@ return [
             'max_value_length' => 1000, // More aggressive
             'redact_large_objects' => true,
             'max_object_size' => 25, // Smaller objects
+            'max_depth' => 16, // Shallower walk for stricter environments
 
             'shannon_entropy' => [
                 'enabled' => true,
@@ -288,29 +497,75 @@ return [
             | Only strategies that work well with plain text content
             */
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
 
             // No key-based strategies for file scanning
             'safe_keys' => [],
             'blocked_keys' => [],
 
-            // Enhanced patterns for file content detection
+            /*
+            | Patterns for file content detection.
+            |
+            | Rules that need surrounding context to match confidently declare
+            | a `capture` group, so the label survives and only the secret is
+            | replaced: "aws_secret_access_key = [REDACTED]", not "[REDACTED]".
+            */
             'patterns' => [
+                'url_with_auth' => [
+                    // Replace the credentials, keep the host and path. Must
+                    // precede 'email', which would otherwise match "user@host"
+                    // inside the credential and take the hostname with it.
+                    'pattern' => '/(https?:\/\/[^:\/\s]+:)([^@\/\s]+)(@)/',
+                    'capture' => 2,
+                ],
+
                 'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
                 'phone_simple' => '/\b\d{3}[.-]?\d{3}[.-]?\d{4}\b/',
-                'ssn' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
-                'credit_card' => '/\b(?:\d[ -]*?){13,16}\b/',
-                'url_with_auth' => '/https?:\/\/[^:\/\s]+:[^@\/\s]+@[^\s]+/',
-                'api_key_stripe' => '/sk_(?:test_|live_)[a-zA-Z0-9]{24,}/',
-                'api_key_generic' => '/(?:api[_-]?key|access[_-]?token|secret[_-]?key)[\s=:]+[a-zA-Z0-9_-]{16,}/',
+                'ssn' => [
+                    'pattern' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
+                    'validator' => 'ssn',
+                ],
+
+                'credit_card' => [
+                    'pattern' => '/\b(?:\d[ -]*?){13,16}\b/',
+                    'validator' => 'luhn',
+                    'mode' => 'partial',
+                    'keep' => 4,
+                ],
+
+                'api_key_stripe' => ['pattern' => '/sk_(?:test_|live_)[a-zA-Z0-9]{24,}/', 'entity' => 'stripe_key', 'confidence' => 0.95],
                 'jwt_token' => '/eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]+/',
-                'base64_key' => '/(?:key|token|secret)[\s=:]+[A-Za-z0-9+\/]{32,}={0,2}/',
-                'aws_access_key' => '/AKIA[0-9A-Z]{16}/',
-                'aws_secret_key' => '/[0-9a-zA-Z\/+]{40}/',
-                'github_token' => '/gh[pousr]_[A-Za-z0-9_]{36}/',
-                'password_assignment' => '/password[\s=:]+[^\s\n\r]+/',
+                'aws_access_key' => '/\bAKIA[0-9A-Z]{16}\b/',
+                'github_token' => '/\bgh[pousr]_[A-Za-z0-9_]{36}\b/',
+
+                'api_key_generic' => [
+                    'pattern' => '/(?:api[_-]?key|access[_-]?token|secret[_-]?key)([\s=:]+["\']?)([a-zA-Z0-9_\/+-]{16,})/i',
+                    'capture' => 2,
+                ],
+
+                /*
+                | Was '/[0-9a-zA-Z\/+]{40}/', which matches any 40-character
+                | alphanumeric run: every SHA-1 digest, every base64 chunk,
+                | every minified identifier. AWS secret keys are now only
+                | reported next to something that names them.
+                */
+                'aws_secret_key' => [
+                    'pattern' => '/(aws[_\-. ]?(?:secret[_\-. ]?)?access[_\-. ]?key[_\-. ]?(?:id)?["\']?[\s=:]+["\']?)([0-9a-zA-Z\/+]{40})/i',
+                    'capture' => 2,
+                ],
+
+                'base64_key' => [
+                    'pattern' => '/(?:key|token|secret)([\s=:]+["\']?)([A-Za-z0-9+\/]{32,}={0,2})/i',
+                    'capture' => 2,
+                ],
+
+                'password_assignment' => [
+                    // Keep the "password=" label so the finding is readable.
+                    'pattern' => '/(password["\']?[\s=:]+["\']?)([^\s\n\r"\']+)/i',
+                    'capture' => 2,
+                ],
             ],
 
             'replacement' => '[REDACTED]',
@@ -320,12 +575,18 @@ return [
             'max_value_length' => null,
             'redact_large_objects' => false,
             'max_object_size' => 100,
+            'max_depth' => 32,
 
             // Tuned Shannon entropy for file scanning
             'shannon_entropy' => [
                 'enabled' => true,
                 'threshold' => 4.8, // Standard threshold
                 'min_length' => 25,  // Standard minimum length
+                'charset_thresholds' => [
+                    'hex' => 3.0,
+                    'base64' => 4.5,
+                    'base64url' => 4.5,
+                ],
                 'exclusion_patterns' => [
                     '/^https?:\/\//',
                     '/^[\/\\\\].+[\/\\\\]/',
@@ -347,6 +608,117 @@ return [
 
         /*
         |----------------------------------------------------------------------
+        | Observability Profile
+        |----------------------------------------------------------------------
+        |
+        | For logs and traces you still need to be able to reason about.
+        |
+        | Replacing every value with "[REDACTED]" collapses distinct values into
+        | one, which destroys exactly the questions logs exist to answer: how
+        | many users hit this, is it always the same account, did this session
+        | span both services. This profile pseudonymises instead - the same
+        | input always yields the same stand-in - so counts, joins and traces
+        | survive while the original values do not.
+        |
+        | Requires a pseudonymization key (see above). Without one it degrades
+        | to plain redaction rather than emitting an unkeyed surrogate.
+        |
+        */
+        'observability' => [
+            'enabled' => true,
+
+            'strategies' => [
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
+            ],
+
+            'safe_keys' => [
+                'id', 'uuid', 'user_id', 'order_id', 'request_id', 'trace_id',
+                'created_at', 'updated_at', 'timestamp', 'level', 'event',
+                'channel', 'duration_ms', 'memory_mb', 'status', 'method',
+                'type', 'action', 'operation', 'version', 'environment',
+            ],
+
+            'blocked_keys' => [
+                'password', '*token*', '*secret*', 'authorization', 'private_key',
+                'client_secret', 'cvv', 'pin',
+            ],
+
+            'patterns' => [
+                'email' => [
+                    'pattern' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+/',
+                    'entity' => 'email',
+                    'confidence' => 0.95,
+                ],
+                'credit_card' => [
+                    'pattern' => '/\\b(?:\\d[ -]*?){13,16}\\b/',
+                    'entity' => 'credit_card',
+                    'validator' => 'luhn',
+                ],
+                'phone_simple' => [
+                    'pattern' => '/\\b\\d{3}[.-]?\\d{3}[.-]?\\d{4}\\b/',
+                    'entity' => 'phone',
+                    'confidence' => 0.5,
+                ],
+                'ipv4' => [
+                    'pattern' => '/\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b/',
+                    'entity' => 'ip',
+                    'confidence' => 0.8,
+                ],
+            ],
+
+            /*
+            | Emails keep their domain, so "how many distinct users at this
+            | tenant" still answers correctly. Cards keep their BIN and stay
+            | Luhn-valid. IPs become a different-but-stable address, so rate
+            | analysis by source survives.
+            */
+            'paths' => [
+                'request.headers.authorization' => 'redact',
+                'request.headers.cookie' => 'redact',
+                '**.password' => 'redact',
+            ],
+
+            'operators' => [
+                'default' => 'redact',
+                'email' => ['surrogate' => ['preserve_domain' => true]],
+                'phone' => 'surrogate',
+                'ip' => 'surrogate',
+                'credit_card' => ['surrogate' => ['preserve_bin' => 6]],
+            ],
+
+            'min_confidence' => 0.4,
+
+            'replacement' => '[REDACTED]',
+            'mark_redacted' => false,
+            'track_redacted_keys' => false,
+            'non_redactable_object_behavior' => 'preserve',
+            'max_value_length' => 5000,
+            'redact_large_objects' => true,
+            'max_object_size' => 100,
+            'max_depth' => 32,
+
+            'shannon_entropy' => [
+                'enabled' => true,
+                'threshold' => 4.8,
+                'min_length' => 25,
+                'charset_thresholds' => [
+                    'hex' => 3.0,
+                    'base64' => 4.5,
+                    'base64url' => 4.5,
+                ],
+                'exclusion_patterns' => [
+                    '/^https?:\\/\\//',
+                    '/^\\d{4}-\\d{2}-\\d{2}/',
+                    '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i',
+                ],
+            ],
+        ],
+
+        /*
+        |----------------------------------------------------------------------
         | Performance Profile
         |----------------------------------------------------------------------
         |
@@ -358,27 +730,27 @@ return [
             'enabled' => true,
 
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
                 // Skip large object/string checks for performance
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
+                RegexPatternsStrategy::class,
                 // Disable shannon entropy for performance
             ],
 
+            // Same rule as the default profile: identifiers and enumerations
+            // only, never free text.
             'safe_keys' => [
                 'id',
                 'uuid',
                 'user_id',
                 'order_id',
-                'session_id',
                 'request_id',
+                'trace_id',
                 'created_at',
                 'updated_at',
                 'timestamp',
                 'level',
                 'event',
-                'message',
-                'trace_id',
                 'channel',
                 'duration_ms',
                 'memory_mb',
@@ -388,17 +760,10 @@ return [
                 'status',
                 'breaker_tripped',
                 'uncaught',
-                'title',
                 'type',
                 'method',
-                'path',
-                'url',
-                'ip',
-                'user_agent',
                 'operation',
                 'action',
-                'source',
-                'target',
                 'version',
                 'platform',
                 'environment',
@@ -427,6 +792,7 @@ return [
             'max_value_length' => null, // Disable
             'redact_large_objects' => false, // Disable
             'max_object_size' => null,
+            'max_depth' => 16,
 
             'shannon_entropy' => [
                 'enabled' => false, // Disabled for performance

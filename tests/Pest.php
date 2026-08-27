@@ -1,5 +1,7 @@
 <?php
 
+use Tests\TestCase;
+
 /*
 |--------------------------------------------------------------------------
 | Test Case
@@ -11,9 +13,9 @@
 |
 */
 
-pest()->extend(Tests\TestCase::class)
+pest()->extend(TestCase::class)
  // ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
-    ->in('Feature', 'Unit');
+    ->in('Feature', 'Unit', 'Performance');
 
 /*
 |--------------------------------------------------------------------------
@@ -41,7 +43,61 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * A fixed pseudonymization key for tests.
+ *
+ * Surrogates are only stable for a given key, so assertions about them need a
+ * known one. Defined here rather than as a per-file constant so every suite
+ * agrees, including when a single file is run in isolation.
+ */
+function testPseudonymizationKey(): string
 {
-    // ..
+    return 'a-test-pseudonymization-key-of-sufficient-length';
+}
+
+/**
+ * Whether a coverage driver is actively instrumenting this run.
+ *
+ * Instrumentation dominates the clock and flattens the difference between a
+ * fast and a slow implementation, so timing assertions made under it are
+ * meaningless - a benchmark that shows 8x uninstrumented showed 1.4x under
+ * pcov in CI. Timing-sensitive tests skip themselves rather than flake.
+ */
+function runningWithCoverage(): bool
+{
+    if (extension_loaded('pcov') && (bool) ini_get('pcov.enabled')) {
+        return true;
+    }
+
+    return extension_loaded('xdebug')
+        && str_contains((string) ini_get('xdebug.mode'), 'coverage');
+}
+
+/**
+ * Clean up directory recursively
+ */
+function cleanupDirectory(string $dir): void
+{
+    if (! is_dir($dir)) {
+        return;
+    }
+
+    $files = scandir($dir);
+    foreach ($files as $file) {
+        if ($file === '.' || $file === '..') {
+            continue;
+        }
+
+        $path = $dir.'/'.$file;
+
+        if (is_dir($path)) {
+            cleanupDirectory($path);
+        } else {
+            // Ensure file is writable before deletion
+            chmod($path, 0644);
+            unlink($path);
+        }
+    }
+
+    rmdir($dir);
 }

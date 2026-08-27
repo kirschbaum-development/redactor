@@ -10,12 +10,14 @@ class LargeObjectStrategy implements RedactionStrategyInterface
 {
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
-        if (! $context->config->redactLargeObjects) {
+        $maxObjectSize = $context->config->maxObjectSize;
+
+        if (! $context->config->redactLargeObjects || $maxObjectSize === null) {
             return false;
         }
 
         if (is_array($value)) {
-            return count($value) > $context->config->maxObjectSize;
+            return count($value) > $maxObjectSize;
         }
 
         if (is_object($value)) {
@@ -24,7 +26,7 @@ class LargeObjectStrategy implements RedactionStrategyInterface
                 try {
                     $array = $value->toArray();
 
-                    return is_array($array) && count($array) > $context->config->maxObjectSize;
+                    return is_array($array) && count($array) > $maxObjectSize;
                 } catch (\Throwable) {
                     return false;
                 }
@@ -35,7 +37,7 @@ class LargeObjectStrategy implements RedactionStrategyInterface
                 $jsonString = json_encode($value, JSON_THROW_ON_ERROR);
                 $array = json_decode($jsonString, true, 512, JSON_THROW_ON_ERROR);
 
-                return is_array($array) && count($array) > $context->config->maxObjectSize;
+                return is_array($array) && count($array) > $maxObjectSize;
             } catch (\Throwable) {
                 return false;
             }

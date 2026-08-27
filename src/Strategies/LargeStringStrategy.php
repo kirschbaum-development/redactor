@@ -17,11 +17,13 @@ class LargeStringStrategy implements RedactionStrategyInterface
 
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
-        $context->markRedacted();
-
         if (! is_string($value)) {
+            $context->markRedacted();
+
             return $value;
         }
+
+        $context->recordRedaction($key, 'large_string', 0, strlen($value));
 
         return sprintf('%s (String with %d characters)', $context->config->replacement, strlen($value));
     }

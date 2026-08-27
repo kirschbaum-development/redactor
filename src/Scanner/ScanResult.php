@@ -7,7 +7,7 @@ namespace Kirschbaum\Redactor\Scanner;
 class ScanResult
 {
     /**
-     * @param  array<int, array<string, mixed>>  $findings
+     * @param  array<int, ScanFinding>  $findings
      */
     public function __construct(
         public readonly string $path,
@@ -20,5 +20,28 @@ class ScanResult
     public function hasFindings(): bool
     {
         return count($this->findings) > 0;
+    }
+
+    /**
+     * The same result with any baseline-accepted findings removed.
+     *
+     * @param  array<string, true>  $acceptedFingerprints
+     */
+    public function withoutBaseline(array $acceptedFingerprints): self
+    {
+        if ($acceptedFingerprints === [] || ! $this->hasFindings()) {
+            return $this;
+        }
+
+        return new self(
+            path: $this->path,
+            findings: array_values(array_filter(
+                $this->findings,
+                fn (ScanFinding $finding) => ! isset($acceptedFingerprints[$finding->fingerprint])
+            )),
+            profile: $this->profile,
+            skipped: $this->skipped,
+            error: $this->error,
+        );
     }
 }

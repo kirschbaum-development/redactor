@@ -4,9 +4,15 @@ on:
   push:
     paths:
       - '**.php'
-      - 'composer.lock'
+      - 'composer.json'
       - 'phpstan.neon.dist'
-      - '.github/workflows/phpstan.yml'
+      - '.github/workflows/static-analysis.yml'
+  pull_request:
+    paths:
+      - '**.php'
+      - 'composer.json'
+      - 'phpstan.neon.dist'
+      - '.github/workflows/static-analysis.yml'
 
 jobs:
   phpstan:
@@ -19,7 +25,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: '8.5'
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo, swoole, openssl
           coverage: none
 
@@ -27,4 +33,4 @@ jobs:
         uses: ramsey/composer-install@v3
 
       - name: Run PHPStan
-        run: ./vendor/bin/phpstan --error-format=github
+        run: ./vendor/bin/phpstan analyse --error-format=github --no-progress --memory-limit=1G

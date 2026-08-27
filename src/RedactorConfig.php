@@ -5,16 +5,49 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
+use Kirschbaum\Redactor\Config\ConfigValue;
+use Kirschbaum\Redactor\Config\ProfileCache;
+use Kirschbaum\Redactor\Operators\OperatorRegistry;
+use Kirschbaum\Redactor\Operators\OperatorSpec;
+use Kirschbaum\Redactor\Operators\RedactionPolicy;
+use Kirschbaum\Redactor\Path\PathTrie;
+use Kirschbaum\Redactor\Patterns\PatternRule;
+use Kirschbaum\Redactor\Support\KeyMatcher;
 
 readonly class RedactorConfig
 {
+    /** @var array<int, string> */
+    public const OBJECT_BEHAVIORS = ['preserve', 'remove', 'empty_array', 'redact'];
+
+    /**
+     * How deep the redactor will walk before it stops and replaces the rest.
+     *
+     * Deep enough for any realistic log context; shallow enough that a cyclic
+     * or pathologically nested payload cannot exhaust memory.
+     */
+    public const DEFAULT_MAX_DEPTH = 32;
+
+    /**
+     * The safe-key list, compiled.
+     *
+     * Held here rather than looked up per call. KeyMatcher memoises on the
+     * pattern list, which means building an implode() of every key to find the
+     * cached matcher - measured at 0.203us against 0.050us for the match it was
+     * avoiding, so the cache cost four times what it saved. Resolving it once
+     * with the profile makes it what it was always meant to be.
+     */
+    public KeyMatcher $safeKeyMatcher;
+
+    /** The blocked-key list, compiled. See $safeKeyMatcher. */
+    public KeyMatcher $blockedKeyMatcher;
+
     public function __construct(
         public bool $enabled,
-        /** @var array<string> */
+        /** @var array<int, string> */
         public array $safeKeys,
-        /** @var array<string> */
+        /** @var array<int, string> */
         public array $blockedKeys,
-        /** @var array<string, string> */
+        /** @var array<string, PatternRule> */
         public array $patterns,
         public string $replacement,
         public bool $markRedacted,
@@ -28,7 +61,29 @@ readonly class RedactorConfig
         /** @var array<string, mixed> */
         public array $strategies,
         public string $profile,
-    ) {}
+        public int $maxDepth = self::DEFAULT_MAX_DEPTH,
+        /**
+         * Detections scoring below this are not acted on.
+         *
+         * Lets a profile be tuned with one number instead of by weakening
+         * patterns, which is the only lever a binary matcher offers.
+         */
+        public float $minConfidence = 0.0,
+        public RedactionPolicy $policy = new RedactionPolicy,
+        /** @var array<string, mixed> */
+        public array $pseudonymization = [],
+        /**
+         * Path rules, compiled once per profile.
+         *
+         * Consulted before any strategy runs: a path says exactly where a value
+         * lives, which is both more precise than guessing from its key and far
+         * cheaper than scanning its contents.
+         */
+        public PathTrie $paths = new PathTrie,
+    ) {
+        $this->safeKeyMatcher = KeyMatcher::for($this->safeKeys);
+        $this->blockedKeyMatcher = KeyMatcher::for($this->blockedKeys);
+    }
 
     /**
      * Create a RedactorConfig instance from Laravel configuration.
@@ -50,74 +105,150 @@ readonly class RedactorConfig
             throw new \InvalidArgumentException("Invalid configuration for profile '".$profile."'.");
         }
 
-        $safeKeys = $config['safe_keys'] ?? [];
-        $blockedKeys = $config['blocked_keys'] ?? [];
-        $patterns = $config['patterns'] ?? [];
-        $shannonEntropy = $config['shannon_entropy'] ?? [];
-        $strategies = $config['strategies'] ?? [];
+        $cached = ProfileCache::get($profile, $config);
 
-        // Ensure proper array types for constructor
-        /** @var array<string, mixed> $typedShannonEntropy */
-        $typedShannonEntropy = is_array($shannonEntropy) ? $shannonEntropy : [];
-        /** @var array<string, mixed> $typedStrategies */
-        $typedStrategies = is_array($strategies) ? $strategies : [];
+        if ($cached !== null) {
+            return $cached;
+        }
 
-        return new self(
-            enabled: is_bool($config['enabled'] ?? true) ? $config['enabled'] ?? true : true,
-            safeKeys: is_array($safeKeys) ? array_map('strtolower', array_filter($safeKeys, 'is_string')) : [],
-            blockedKeys: is_array($blockedKeys) ? array_map('strtolower', array_filter($blockedKeys, 'is_string')) : [],
-            patterns: self::validatePatterns(is_array($patterns) ? $patterns : []),
-            replacement: is_string($config['replacement'] ?? '[REDACTED]') ? $config['replacement'] ?? '[REDACTED]' : '[REDACTED]',
-            markRedacted: is_bool($config['mark_redacted'] ?? true) ? $config['mark_redacted'] ?? true : true,
-            trackRedactedKeys: is_bool($config['track_redacted_keys'] ?? false) ? $config['track_redacted_keys'] ?? false : false,
-            nonRedactableObjectBehavior: is_string($config['non_redactable_object_behavior'] ?? 'preserve') ? $config['non_redactable_object_behavior'] ?? 'preserve' : 'preserve',
-            maxValueLength: self::validateMaxValueLength($config['max_value_length'] ?? null),
-            redactLargeObjects: is_bool($config['redact_large_objects'] ?? true) ? $config['redact_large_objects'] ?? true : true,
-            maxObjectSize: is_int($config['max_object_size'] ?? 100) ? $config['max_object_size'] ?? 100 : 100,
-            shannonEntropy: $typedShannonEntropy,
-            strategies: $typedStrategies,
+        $shannonEntropy = ConfigValue::map($config['shannon_entropy'] ?? [], "profiles.{$profile}.shannon_entropy");
+
+        // Coerce the entropy sub-keys here too: they are read on every string,
+        // and env() hands them over as strings.
+        if (array_key_exists('enabled', $shannonEntropy)) {
+            $shannonEntropy['enabled'] = ConfigValue::bool($shannonEntropy['enabled'], true, "profiles.{$profile}.shannon_entropy.enabled");
+        }
+
+        if (array_key_exists('threshold', $shannonEntropy)) {
+            $shannonEntropy['threshold'] = ConfigValue::float($shannonEntropy['threshold'], 4.8, "profiles.{$profile}.shannon_entropy.threshold");
+        }
+
+        if (array_key_exists('min_length', $shannonEntropy)) {
+            $shannonEntropy['min_length'] = ConfigValue::positiveInt($shannonEntropy['min_length'], 25, "profiles.{$profile}.shannon_entropy.min_length");
+        }
+
+        $built = new self(
+            enabled: ConfigValue::bool($config['enabled'] ?? true, true, "profiles.{$profile}.enabled"),
+            safeKeys: array_map('strtolower', ConfigValue::stringList($config['safe_keys'] ?? [], "profiles.{$profile}.safe_keys")),
+            blockedKeys: array_map('strtolower', ConfigValue::stringList($config['blocked_keys'] ?? [], "profiles.{$profile}.blocked_keys")),
+            patterns: self::buildPatternRules(ConfigValue::map($config['patterns'] ?? [], "profiles.{$profile}.patterns"), $profile),
+            replacement: ConfigValue::string($config['replacement'] ?? '[REDACTED]', '[REDACTED]', "profiles.{$profile}.replacement"),
+            markRedacted: ConfigValue::bool($config['mark_redacted'] ?? true, true, "profiles.{$profile}.mark_redacted"),
+            trackRedactedKeys: ConfigValue::bool($config['track_redacted_keys'] ?? false, false, "profiles.{$profile}.track_redacted_keys"),
+            nonRedactableObjectBehavior: ConfigValue::enum(
+                $config['non_redactable_object_behavior'] ?? 'preserve',
+                self::OBJECT_BEHAVIORS,
+                'preserve',
+                "profiles.{$profile}.non_redactable_object_behavior"
+            ),
+            maxValueLength: ConfigValue::positiveIntOrNull($config['max_value_length'] ?? null, null, "profiles.{$profile}.max_value_length"),
+            redactLargeObjects: ConfigValue::bool($config['redact_large_objects'] ?? true, true, "profiles.{$profile}.redact_large_objects"),
+            maxObjectSize: ConfigValue::positiveIntOrNull($config['max_object_size'] ?? 100, 100, "profiles.{$profile}.max_object_size"),
+            shannonEntropy: $shannonEntropy,
+            strategies: ConfigValue::map($config['strategies'] ?? [], "profiles.{$profile}.strategies"),
             profile: $profile,
+            maxDepth: ConfigValue::positiveInt($config['max_depth'] ?? self::DEFAULT_MAX_DEPTH, self::DEFAULT_MAX_DEPTH, "profiles.{$profile}.max_depth"),
+            minConfidence: self::confidenceFloor($config['min_confidence'] ?? 0.0, "profiles.{$profile}.min_confidence"),
+            policy: self::buildPolicy($config['operators'] ?? [], $profile),
+            pseudonymization: self::pseudonymizationSettings($config['pseudonymization'] ?? [], $profile),
+            paths: self::buildPaths($config['paths'] ?? [], $profile),
+        );
+
+        return ProfileCache::put($profile, $config, $built);
+    }
+
+    /**
+     * Merge the global pseudonymization settings with any profile override.
+     *
+     * The key is almost always global - one key per application, so surrogates
+     * correlate across every profile - while a profile may still want its own
+     * salt to break correlation deliberately, or to switch the feature off.
+     *
+     * @return array<string, mixed>
+     */
+    private static function pseudonymizationSettings(mixed $profileSettings, string $profile): array
+    {
+        $global = ConfigValue::map(Config::get('redactor.pseudonymization', []), 'pseudonymization');
+        $local = ConfigValue::map($profileSettings, "profiles.{$profile}.pseudonymization");
+
+        return [...$global, ...$local];
+    }
+
+    /**
+     * Compile the profile's path rules.
+     */
+    private static function buildPaths(mixed $paths, string $profile): PathTrie
+    {
+        $map = ConfigValue::map($paths, "profiles.{$profile}.paths");
+
+        $rules = [];
+
+        foreach ($map as $pattern => $definition) {
+            $rules[(string) $pattern] = OperatorSpec::parse($definition, "profiles.{$profile}.paths.{$pattern}");
+        }
+
+        return PathTrie::compile($rules);
+    }
+
+    private static function confidenceFloor(mixed $value, string $path): float
+    {
+        $floor = ConfigValue::float($value, 0.0, $path);
+
+        if ($floor < 0.0 || $floor > 1.0) {
+            throw new \InvalidArgumentException(sprintf(
+                'Redactor config [%s] must be between 0 and 1, got %s.',
+                $path,
+                (string) $floor
+            ));
+        }
+
+        return $floor;
+    }
+
+    /**
+     * Build the per-entity operator policy for a profile.
+     *
+     * @param  mixed  $operators
+     */
+    private static function buildPolicy($operators, string $profile): RedactionPolicy
+    {
+        $map = ConfigValue::map($operators, "profiles.{$profile}.operators");
+
+        $specs = [];
+
+        foreach ($map as $entity => $definition) {
+            $specs[$entity] = OperatorSpec::parse($definition, "profiles.{$profile}.operators.{$entity}");
+        }
+
+        return new RedactionPolicy(
+            $specs,
+            $specs['default'] ?? new OperatorSpec(OperatorRegistry::REDACT),
         );
     }
 
     /**
-     * Validate regex patterns and remove invalid ones.
+     * Turn the configured patterns into rules, dropping uncompilable ones.
      *
-     * @param  array<mixed>  $patterns
-     * @return array<string, string>
+     * @param  array<string, mixed>  $patterns
+     * @return array<string, PatternRule>
      */
-    private static function validatePatterns(array $patterns): array
+    private static function buildPatternRules(array $patterns, string $profile): array
     {
-        $validPatterns = [];
+        $rules = [];
 
-        foreach ($patterns as $name => $pattern) {
-            if (! is_string($pattern)) {
-                continue;
+        foreach ($patterns as $name => $definition) {
+            $rule = PatternRule::fromConfig(
+                (string) $name,
+                $definition,
+                "profiles.{$profile}.patterns.{$name}"
+            );
+
+            if ($rule !== null) {
+                $rules[(string) $name] = $rule;
             }
-
-            // Test if the regex pattern is valid
-            if (@preg_match($pattern, '') !== false) {
-                $validPatterns[(string) $name] = $pattern;
-            }
         }
 
-        return $validPatterns;
-    }
-
-    /**
-     * Validate max value length configuration.
-     */
-    private static function validateMaxValueLength(mixed $value): ?int
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        if (is_numeric($value) && $value > 0) {
-            return (int) $value;
-        }
-
-        return null;
+        return $rules;
     }
 
     /**

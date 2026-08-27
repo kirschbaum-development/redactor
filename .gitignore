@@ -2,6 +2,8 @@ vendor
 composer.lock
 node_modules
 build
+.phpunit.cache
+infection.log
 .pint.cache
 .idea
 .DS_Store
