@@ -47,9 +47,10 @@ final class Pcre
         string $pattern,
         callable $callback,
         string $subject,
-        ?string $rule = null
+        ?string $rule = null,
+        int $flags = 0
     ): ?string {
-        $result = @preg_replace_callback($pattern, $callback, $subject);
+        $result = @preg_replace_callback($pattern, $callback, $subject, -1, $count, $flags);
 
         if ($result === null || preg_last_error() !== PREG_NO_ERROR) {
             self::reportFailure($pattern, $rule, strlen($subject));

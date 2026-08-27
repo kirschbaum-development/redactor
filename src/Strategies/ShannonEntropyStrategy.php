@@ -68,6 +68,33 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
     }
 
     /**
+     * Split a string into characters, falling back to bytes for input that is
+     * not valid UTF-8 (binary blobs reach this during file scanning).
+     *
+     * @return array<int, string>
+     */
+    protected function characters(string $string): array
+    {
+        if (! mb_check_encoding($string, 'UTF-8')) {
+            return str_split($string);
+        }
+
+        $characters = mb_str_split($string, 1, 'UTF-8');
+
+        return $characters === [] ? str_split($string) : $characters;
+    }
+
+    /**
+     * Character count, byte count for non-UTF-8 input.
+     */
+    protected function length(string $string): int
+    {
+        return mb_check_encoding($string, 'UTF-8')
+            ? mb_strlen($string, 'UTF-8')
+            : strlen($string);
+    }
+
+    /**
      * Split a value into the tokens entropy is measured over.
      *
      * @return array<int, string>
@@ -80,15 +107,34 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
     }
 
     /**
+     * Charsets a token can be drawn from, most restrictive first.
+     *
+     * A 40-character hex digest tops out at 4 bits of entropy per character
+     * because it only has 16 symbols to draw on, so judging it against a
+     * base64 threshold guarantees a miss. Judging base64 against a hex
+     * threshold guarantees false positives. detect-secrets solves this the
+     * same way: pick the threshold from the alphabet.
+     *
+     * @var array<string, string>
+     */
+    protected const CHARSET_PATTERNS = [
+        'hex' => '/^[0-9a-f]+$/i',
+        'base64' => '/^[A-Za-z0-9+\/]+={0,2}$/',
+        'base64url' => '/^[A-Za-z0-9_-]+$/',
+    ];
+
+    /**
      * Determine if a string should be redacted based on Shannon entropy.
      */
     protected function shouldRedactByEntropy(string $string, RedactionContext $context): bool
     {
         $shannonConfig = $context->config->shannonEntropy;
 
-        // Only analyze strings that meet minimum length requirement
+        // Only analyze strings that meet minimum length requirement.
+        // Counted in characters, not bytes, so a short multibyte token is not
+        // mistaken for a long one.
         $minLength = $shannonConfig['min_length'] ?? 25;
-        if (strlen($string) < $minLength) {
+        if ($this->length($string) < $minLength) {
             return false;
         }
 
@@ -98,9 +144,52 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
         }
 
         $entropy = $this->calculateShannonEntropy($string, $context);
-        $threshold = $shannonConfig['threshold'] ?? 4.8;
 
-        return $entropy >= $threshold;
+        return $entropy >= $this->thresholdFor($string, $context);
+    }
+
+    /**
+     * The entropy threshold to judge this particular token against.
+     *
+     * charset_thresholds is an opt-in refinement: when a profile configures
+     * one for the token's alphabet it wins, otherwise the profile's single
+     * `threshold` applies. An explicitly configured threshold is never
+     * overridden by a value the operator cannot see.
+     */
+    protected function thresholdFor(string $string, RedactionContext $context): float
+    {
+        $shannonConfig = $context->config->shannonEntropy;
+
+        $configured = $shannonConfig['charset_thresholds'] ?? [];
+
+        if (is_array($configured) && $configured !== []) {
+            $charset = $this->detectCharset($string);
+
+            if ($charset !== null && is_numeric($configured[$charset] ?? null)) {
+                /** @var numeric $value */
+                $value = $configured[$charset];
+
+                return (float) $value;
+            }
+        }
+
+        $fallback = $shannonConfig['threshold'] ?? 4.8;
+
+        return is_numeric($fallback) ? (float) $fallback : 4.8;
+    }
+
+    /**
+     * Identify the alphabet a token is drawn from, if it is a recognised one.
+     */
+    protected function detectCharset(string $string): ?string
+    {
+        foreach (self::CHARSET_PATTERNS as $name => $pattern) {
+            if (Pcre::matches($pattern, $string, onError: false, rule: 'charset:'.$name)) {
+                return $name;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -116,7 +205,12 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
             return $cachedEntropy;
         }
 
-        $length = strlen($string);
+        // Split into characters, not bytes: measuring UTF-8 by byte counts
+        // the same character's continuation bytes as separate symbols, which
+        // inflates entropy for any non-ASCII text.
+        $characters = $this->characters($string);
+        $length = count($characters);
+
         if ($length <= 1) {
             $entropy = 0.0;
             $context?->cacheEntropy($string, $entropy);
@@ -126,8 +220,7 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
 
         // Count character frequencies and calculate entropy in a single loop
         $frequencies = [];
-        for ($i = 0; $i < $length; $i++) {
-            $char = $string[$i];
+        foreach ($characters as $char) {
             $frequencies[$char] = ($frequencies[$char] ?? 0) + 1;
         }
 

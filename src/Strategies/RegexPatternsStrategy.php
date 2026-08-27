@@ -87,10 +87,12 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
             function (array $matches) use ($rule, $replacement, &$matched): string {
                 $matched = true;
 
-                return $rule->substitute((string) $matches[0], $replacement);
+                /** @var array<int|string, array{0: string, 1: int}> $matches */
+                return $rule->rewriteMatch($matches, $replacement);
             },
             $subject,
-            $rule->name
+            $rule->name,
+            PREG_OFFSET_CAPTURE
         );
 
         if ($result === null) {

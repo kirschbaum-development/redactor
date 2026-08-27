@@ -153,13 +153,25 @@ return [
                 'pin',
             ],
 
+            /*
+            | Rules are applied in the order listed. url_with_auth must come
+            | before email: the email rule would otherwise match "user@host"
+            | inside a credential URL and take the hostname with it.
+            */
             'patterns' => [
-                // Ordered by frequency and performance (most common/fastest first)
+                'url_with_auth' => [
+                    // Replace the credentials, keep the host and path.
+                    'pattern' => '/(https?:\/\/[^:\/\s]+:)([^@\/\s]+)(@)/',
+                    'capture' => 2,
+                ],
                 'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
                 'phone_simple' => '/\b\d{3}[.-]?\d{3}[.-]?\d{4}\b/',
                 'ssn' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
-                'credit_card' => '/\b(?:\d[ -]*?){13,16}\b/',
-                'url_with_auth' => '/https?:\/\/[^:\/\s]+:[^@\/\s]+@[^\s]+/',
+                'credit_card' => [
+                    'pattern' => '/\b(?:\d[ -]*?){13,16}\b/',
+                    'mode' => 'partial',
+                    'keep' => 4,
+                ],
             ],
 
             'replacement' => env('REDACTOR_REPLACEMENT', '[REDACTED]'),
@@ -181,6 +193,21 @@ return [
                 'enabled' => env('REDACTOR_SHANNON_ENABLED', true),
                 'threshold' => env('REDACTOR_SHANNON_THRESHOLD', 4.8),
                 'min_length' => env('REDACTOR_SHANNON_MIN_LENGTH', 25),
+
+                /*
+                | Per-alphabet thresholds. A hex digest cannot exceed 4.0 bits
+                | per character because it only has 16 symbols to draw on, so
+                | judging it against a base64 threshold guarantees a miss;
+                | judging base64 against a hex threshold guarantees false
+                | positives. Remove this block to judge every token against
+                | the single `threshold` above.
+                */
+                'charset_thresholds' => [
+                    'hex' => 3.0,        // max possible 4.0
+                    'base64' => 4.5,     // max possible 6.0
+                    'base64url' => 4.5,  // max possible 6.0
+                ],
+
                 'exclusion_patterns' => [
                     '/^https?:\/\//',
                     '/^[\/\\\\].+[\/\\\\]/',
@@ -266,11 +293,14 @@ return [
             ],
 
             'patterns' => [
+                'url_with_auth' => [
+                    'pattern' => '/(https?:\/\/[^:\/\s]+:)([^@\/\s]+)(@)/',
+                    'capture' => 2,
+                ],
                 'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
                 'phone' => '/\+?[\d\s\-\(\)]{7,15}/',
                 'ssn' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
                 'credit_card' => '/\b(?:\d[ -]*?){13,16}\b/',
-                'url_with_auth' => '/https?:\/\/[^:\/\s]+:[^@\/\s]+@[^\s]+/',
                 'ipv4' => '/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/',
                 'uuid' => '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i',
                 'jwt' => '/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/',
@@ -321,21 +351,63 @@ return [
             'safe_keys' => [],
             'blocked_keys' => [],
 
-            // Enhanced patterns for file content detection
+            /*
+            | Patterns for file content detection.
+            |
+            | Rules that need surrounding context to match confidently declare
+            | a `capture` group, so the label survives and only the secret is
+            | replaced: "aws_secret_access_key = [REDACTED]", not "[REDACTED]".
+            */
             'patterns' => [
+                'url_with_auth' => [
+                    // Replace the credentials, keep the host and path. Must
+                    // precede 'email', which would otherwise match "user@host"
+                    // inside the credential and take the hostname with it.
+                    'pattern' => '/(https?:\/\/[^:\/\s]+:)([^@\/\s]+)(@)/',
+                    'capture' => 2,
+                ],
+
                 'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
                 'phone_simple' => '/\b\d{3}[.-]?\d{3}[.-]?\d{4}\b/',
                 'ssn' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
-                'credit_card' => '/\b(?:\d[ -]*?){13,16}\b/',
-                'url_with_auth' => '/https?:\/\/[^:\/\s]+:[^@\/\s]+@[^\s]+/',
+
+                'credit_card' => [
+                    'pattern' => '/\b(?:\d[ -]*?){13,16}\b/',
+                    'mode' => 'partial',
+                    'keep' => 4,
+                ],
+
                 'api_key_stripe' => '/sk_(?:test_|live_)[a-zA-Z0-9]{24,}/',
-                'api_key_generic' => '/(?:api[_-]?key|access[_-]?token|secret[_-]?key)[\s=:]+[a-zA-Z0-9_-]{16,}/',
                 'jwt_token' => '/eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]+/',
-                'base64_key' => '/(?:key|token|secret)[\s=:]+[A-Za-z0-9+\/]{32,}={0,2}/',
-                'aws_access_key' => '/AKIA[0-9A-Z]{16}/',
-                'aws_secret_key' => '/[0-9a-zA-Z\/+]{40}/',
-                'github_token' => '/gh[pousr]_[A-Za-z0-9_]{36}/',
-                'password_assignment' => '/password[\s=:]+[^\s\n\r]+/',
+                'aws_access_key' => '/\bAKIA[0-9A-Z]{16}\b/',
+                'github_token' => '/\bgh[pousr]_[A-Za-z0-9_]{36}\b/',
+
+                'api_key_generic' => [
+                    'pattern' => '/(?:api[_-]?key|access[_-]?token|secret[_-]?key)([\s=:]+["\']?)([a-zA-Z0-9_\/+-]{16,})/i',
+                    'capture' => 2,
+                ],
+
+                /*
+                | Was '/[0-9a-zA-Z\/+]{40}/', which matches any 40-character
+                | alphanumeric run: every SHA-1 digest, every base64 chunk,
+                | every minified identifier. AWS secret keys are now only
+                | reported next to something that names them.
+                */
+                'aws_secret_key' => [
+                    'pattern' => '/(aws[_\-. ]?(?:secret[_\-. ]?)?access[_\-. ]?key[_\-. ]?(?:id)?["\']?[\s=:]+["\']?)([0-9a-zA-Z\/+]{40})/i',
+                    'capture' => 2,
+                ],
+
+                'base64_key' => [
+                    'pattern' => '/(?:key|token|secret)([\s=:]+["\']?)([A-Za-z0-9+\/]{32,}={0,2})/i',
+                    'capture' => 2,
+                ],
+
+                'password_assignment' => [
+                    // Keep the "password=" label so the finding is readable.
+                    'pattern' => '/(password["\']?[\s=:]+["\']?)([^\s\n\r"\']+)/i',
+                    'capture' => 2,
+                ],
             ],
 
             'replacement' => '[REDACTED]',
@@ -352,6 +424,11 @@ return [
                 'enabled' => true,
                 'threshold' => 4.8, // Standard threshold
                 'min_length' => 25,  // Standard minimum length
+                'charset_thresholds' => [
+                    'hex' => 3.0,
+                    'base64' => 4.5,
+                    'base64url' => 4.5,
+                ],
                 'exclusion_patterns' => [
                     '/^https?:\/\//',
                     '/^[\/\\\\].+[\/\\\\]/',

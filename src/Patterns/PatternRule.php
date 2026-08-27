@@ -55,6 +55,15 @@ final readonly class PatternRule
         public string $mode = self::MODE_REPLACE,
         public int $keep = 4,
         public string $maskCharacter = '*',
+        /**
+         * Which capture group holds the secret.
+         *
+         * 0 means the whole match. Use a group when the pattern needs
+         * surrounding context to match confidently but that context is not
+         * itself sensitive - "aws_secret_access_key = <40 chars>" should keep
+         * its label and lose only the value.
+         */
+        public int $capture = 0,
     ) {}
 
     /**
@@ -92,6 +101,10 @@ final readonly class PatternRule
         $mode = ConfigValue::enum($definition['mode'] ?? self::MODE_REPLACE, self::MODES, self::MODE_REPLACE, $path.'.mode');
         $keep = ConfigValue::positiveInt($definition['keep'] ?? 4, 4, $path.'.keep');
         $maskCharacter = ConfigValue::string($definition['mask_character'] ?? '*', '*', $path.'.mask_character');
+        $capture = $definition['capture'] ?? 0;
+        $capture = $capture === 0 || $capture === '0'
+            ? 0
+            : ConfigValue::positiveInt($capture, 0, $path.'.capture');
 
         if ($maskCharacter === '') {
             $maskCharacter = '*';
@@ -103,6 +116,7 @@ final readonly class PatternRule
             mode: $mode,
             keep: $keep,
             maskCharacter: mb_substr($maskCharacter, 0, 1),
+            capture: $capture,
         );
     }
 
@@ -112,6 +126,34 @@ final readonly class PatternRule
     public function replacesWholeValue(): bool
     {
         return $this->mode === self::MODE_FULL;
+    }
+
+    /**
+     * Rewrite one match, substituting only the capture group when the rule
+     * names one, so the surrounding context the pattern needed survives.
+     *
+     * @param  array<int|string, array{0: string, 1: int}>  $matches  offset-capture matches
+     */
+    public function rewriteMatch(array $matches, string $replacement): string
+    {
+        [$full, $fullOffset] = $matches[0];
+
+        if ($this->capture === 0 || ! isset($matches[$this->capture])) {
+            return $this->substitute($full, $replacement);
+        }
+
+        [$group, $groupOffset] = $matches[$this->capture];
+
+        // An optional group that did not participate reports offset -1.
+        if ($groupOffset < 0 || $group === '') {
+            return $this->substitute($full, $replacement);
+        }
+
+        $relative = $groupOffset - $fullOffset;
+
+        return substr($full, 0, $relative)
+            .$this->substitute($group, $replacement)
+            .substr($full, $relative + strlen($group));
     }
 
     /**
