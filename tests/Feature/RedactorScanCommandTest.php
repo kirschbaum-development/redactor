@@ -287,7 +287,7 @@ describe('RedactorScanCommand', function () {
         expect($data)->toBeArray();
         expect($data[0]['status'])->toBe('findings');
         expect($data[0]['findings_count'])->toBe(1);
-        expect($data[0]['findings'][0]['type'])->toBe('full_content_redacted');
+        expect($data[0]['findings'][0]['type'])->toBe('content_redacted');
         expect($data[0]['profile'])->toBe('file_scan');
     });
 

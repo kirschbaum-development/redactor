@@ -55,18 +55,19 @@ class Scanner
      */
     protected function analyzeStringRedaction(string $original, string $redacted, string $profile): array
     {
-        $findings = [];
-
-        // Current redaction strategies replace the entire content when any sensitive data is found
-        if ($redacted === '[REDACTED]') {
-            $findings[] = [
-                'type' => 'full_content_redacted',
-                'reason' => 'Entire content was redacted',
-                'original_length' => strlen($original),
-                'profile' => $profile,
-            ];
+        if ($redacted === $original) {
+            return [];
         }
 
-        return $findings;
+        // Redaction now rewrites the matched spans rather than the whole
+        // value, so "did anything change" is the signal, not "was the result
+        // exactly the replacement string".
+        return [[
+            'type' => 'content_redacted',
+            'reason' => 'Sensitive content was redacted',
+            'original_length' => strlen($original),
+            'redacted_length' => strlen($redacted),
+            'profile' => $profile,
+        ]];
     }
 }

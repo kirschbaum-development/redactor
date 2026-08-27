@@ -69,7 +69,8 @@ describe('Scanner', function () {
         $redactor = resolve(Redactor::class);
         $scanner = new Scanner($redactor);
 
-        // Create content with sensitive information - this will get fully redacted
+        // Create content with sensitive information - the address is replaced,
+        // the surrounding log lines survive.
         $sensitiveFile = $this->tempDir.'/sensitive.txt';
         $content = "This is a log file.\nContact: john@example.com\nEnd of log.";
 
@@ -83,8 +84,8 @@ describe('Scanner', function () {
         expect($result->findings)->toHaveCount(1);
 
         $finding = $result->findings[0];
-        expect($finding['type'])->toBe('full_content_redacted');
-        expect($finding['reason'])->toBe('Entire content was redacted');
+        expect($finding['type'])->toBe('content_redacted');
+        expect($finding['reason'])->toBe('Sensitive content was redacted');
         expect($finding['original_length'])->toBe(strlen($content));
         expect($finding['profile'])->toBe('file_scan');
     });

@@ -147,7 +147,9 @@ describe('RedactorConfig DTO Tests', function () {
 
         expect($config->safeKeys)->toBe(['id', 'user_id']) // Converted to lowercase
             ->and($config->blockedKeys)->toBe(['password', 'secret']) // Converted to lowercase
-            ->and($config->patterns)->toBe(['valid' => '/valid-pattern/', 'another_valid' => '/another-valid-pattern/']) // Invalid pattern filtered out
+            ->and(array_keys($config->patterns))->toBe(['valid', 'another_valid']) // Invalid pattern filtered out
+            ->and($config->patterns['valid']->pattern)->toBe('/valid-pattern/')
+            ->and($config->patterns['another_valid']->pattern)->toBe('/another-valid-pattern/')
             ->and($config->replacement)->toBe('[CUSTOM]')
             ->and($config->maxValueLength)->toBe(100)
             ->and($config->trackRedactedKeys)->toBeTrue()

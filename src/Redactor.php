@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
+use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
 use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
+use Kirschbaum\Redactor\Strategies\StrategyOutcome;
 use Kirschbaum\Redactor\Support\InternalLog;
 
 class Redactor
@@ -229,7 +231,7 @@ class Redactor
     {
         if (! is_array($data) && ! is_object($data)) {
             // Apply strategies to scalar values
-            return $this->applyStrategies($data, $key, $context, $strategies);
+            return $this->applyStrategiesToValue($data, $key, $context, $strategies);
         }
 
         // Nothing below here may recurse without a depth budget: a self-
@@ -277,17 +279,17 @@ class Redactor
     protected function redactArray(array $array, RedactionContext $context, array $strategies): array
     {
         // Check for large arrays first (applies to the whole array)
-        $arrayAsValue = $this->applyStrategies($array, '', $context, $strategies);
-        if ($arrayAsValue !== $array) {
+        $outcome = $this->applyStrategies($array, '', $context, $strategies);
+        if ($outcome !== null && $outcome->value !== $array) {
             // Array was redacted by a strategy (e.g., LargeObjectStrategy)
-            if (is_array($arrayAsValue)) {
+            if (is_array($outcome->value)) {
                 /** @var array<string, mixed> $typedArray */
-                $typedArray = $arrayAsValue;
+                $typedArray = $outcome->value;
 
                 return $typedArray;
             }
 
-            return ['_redacted_array' => $arrayAsValue];
+            return ['_redacted_array' => $outcome->value];
         }
 
         /** @var array<string, mixed> $result */
@@ -297,15 +299,16 @@ class Redactor
             $keyString = (string) $key;
 
             // Apply strategies to the key-value pair
-            $processedValue = $this->applyStrategies($value, $keyString, $context, $strategies);
+            $outcome = $this->applyStrategies($value, $keyString, $context, $strategies);
+            $processedValue = $outcome !== null ? $outcome->value : $value;
 
             // Handle object removal case
             if ($processedValue === '__REDACTOR_REMOVE_OBJECT__') {
                 continue; // Skip adding this key to the result
             }
 
-            // If the value wasn't handled by key-based strategies, process recursively
-            if ($processedValue === $value && (is_array($value) || is_object($value))) {
+            // No strategy claimed this container, so walk into it.
+            if ($outcome === null && (is_array($value) || is_object($value))) {
                 $processedValue = $this->redactRecursively($value, $keyString, $context, $strategies);
 
                 // Handle object removal case after recursive processing
@@ -328,9 +331,9 @@ class Redactor
     protected function redactObject(object $object, string $key, RedactionContext $context, array $strategies): mixed
     {
         // First, check if the object itself should be redacted by strategies
-        $objectAsValue = $this->applyStrategies($object, $key, $context, $strategies);
-        if ($objectAsValue !== $object) {
-            return $objectAsValue;
+        $outcome = $this->applyStrategies($object, $key, $context, $strategies);
+        if ($outcome !== null && $outcome->value !== $object) {
+            return $outcome->value;
         }
 
         // An object already on the stack means following it again would loop.
@@ -411,15 +414,39 @@ class Redactor
      *
      * @param  array<RedactionStrategyInterface>  $strategies
      */
-    protected function applyStrategies(mixed $value, string $key, RedactionContext $context, array $strategies): mixed
+    protected function applyStrategies(mixed $value, string $key, RedactionContext $context, array $strategies): ?StrategyOutcome
     {
+        $handled = false;
+
         foreach ($strategies as $strategy) {
-            if ($strategy->shouldHandle($value, $key, $context)) {
-                return $strategy->handle($value, $key, $context);
+            if (! $strategy->shouldHandle($value, $key, $context)) {
+                continue;
+            }
+
+            $value = $strategy->handle($value, $key, $context);
+            $handled = true;
+
+            // A strategy that replaces the value wholesale ends the chain.
+            // A chainable one only rewrote part of a string, so the remaining
+            // strategies still need to inspect what is left standing.
+            if (! $strategy instanceof ChainableStrategy) {
+                return new StrategyOutcome($value);
             }
         }
 
-        return $value; // No strategy handled this value
+        return $handled ? new StrategyOutcome($value) : null;
+    }
+
+    /**
+     * Run the strategy chain, returning the value unchanged if none applied.
+     *
+     * @param  array<RedactionStrategyInterface>  $strategies
+     */
+    protected function applyStrategiesToValue(mixed $value, string $key, RedactionContext $context, array $strategies): mixed
+    {
+        $outcome = $this->applyStrategies($value, $key, $context, $strategies);
+
+        return $outcome !== null ? $outcome->value : $value;
     }
 
     /**

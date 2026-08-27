@@ -95,10 +95,12 @@ describe('Redactor Strategy Priority Tests', function () {
 
         $result = $redactor->redact($context);
 
-        // user_email should be redacted due to blocked_keys
-        // message should be redacted due to regex pattern
+        // user_email is redacted by blocked_keys, which replaces the whole
+        // value because the key itself is the signal.
+        // message is redacted by the regex pattern, which replaces only the
+        // address and leaves the sentence readable.
         expect($result['user_email'])->toBe('[REDACTED]')
-            ->and($result['message'])->toBe('[REDACTED]')
+            ->and($result['message'])->toBe('Contact me at [REDACTED]')
             ->and($result['_redacted'])->toBeTrue();
     });
 
@@ -369,9 +371,9 @@ describe('Redactor Regex Patterns Strategy Tests', function () {
 
         $result = $redactor->redact($context);
 
-        expect($result['user_message'])->toBe('[REDACTED]')
-            ->and($result['payment_info'])->toBe('[REDACTED]')
-            ->and($result['contact'])->toBe('[REDACTED]')
+        expect($result['user_message'])->toBe('Contact me at [REDACTED]')
+            ->and($result['payment_info'])->toBe('Credit card: [REDACTED]')
+            ->and($result['contact'])->toBe('Call me at [REDACTED]')
             ->and($result['normal_text'])->toBe('This is just normal text')
             ->and($result['_redacted'])->toBeTrue();
     });
@@ -414,7 +416,8 @@ describe('Redactor Regex Patterns Strategy Tests', function () {
 
         $result = $redactor->redact($context);
 
-        expect($result['contact_info'])->toBe('[REDACTED]') // Contains both email and phone
+        // Both matches are replaced in place; the labels around them survive.
+        expect($result['contact_info'])->toBe('Email: [REDACTED], Phone: [REDACTED]')
             ->and($result['simple_text'])->toBe('No sensitive data here')
             ->and($result['_redacted'])->toBeTrue();
     });
@@ -509,7 +512,7 @@ describe('Strategy Management Tests', function () {
 
         expect($result['id'])->toBe(12345) // Safe key
             ->and($result['password'])->toBe('[REDACTED]') // Blocked key
-            ->and($result['email_text'])->toBe('[REDACTED]') // Regex pattern
+            ->and($result['email_text'])->toBe('Contact: [REDACTED]') // Regex pattern, span only
             ->and($result['high_entropy'])->toBe('sk-1234567890abcdef1234567890abcdef12345678') // Not redacted (no Shannon entropy strategy)
             ->and($result['_redacted'])->toBeTrue();
     });

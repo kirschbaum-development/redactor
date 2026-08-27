@@ -6,7 +6,7 @@ namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
 use Kirschbaum\Redactor\Config\ConfigValue;
-use Kirschbaum\Redactor\Support\Pcre;
+use Kirschbaum\Redactor\Patterns\PatternRule;
 
 readonly class RedactorConfig
 {
@@ -27,7 +27,7 @@ readonly class RedactorConfig
         public array $safeKeys,
         /** @var array<string> */
         public array $blockedKeys,
-        /** @var array<string, string> */
+        /** @var array<string, PatternRule> */
         public array $patterns,
         public string $replacement,
         public bool $markRedacted,
@@ -84,7 +84,7 @@ readonly class RedactorConfig
             enabled: ConfigValue::bool($config['enabled'] ?? true, true, "profiles.{$profile}.enabled"),
             safeKeys: array_map('strtolower', ConfigValue::stringList($config['safe_keys'] ?? [], "profiles.{$profile}.safe_keys")),
             blockedKeys: array_map('strtolower', ConfigValue::stringList($config['blocked_keys'] ?? [], "profiles.{$profile}.blocked_keys")),
-            patterns: self::validatePatterns(ConfigValue::map($config['patterns'] ?? [], "profiles.{$profile}.patterns")),
+            patterns: self::buildPatternRules(ConfigValue::map($config['patterns'] ?? [], "profiles.{$profile}.patterns"), $profile),
             replacement: ConfigValue::string($config['replacement'] ?? '[REDACTED]', '[REDACTED]', "profiles.{$profile}.replacement"),
             markRedacted: ConfigValue::bool($config['mark_redacted'] ?? true, true, "profiles.{$profile}.mark_redacted"),
             trackRedactedKeys: ConfigValue::bool($config['track_redacted_keys'] ?? false, false, "profiles.{$profile}.track_redacted_keys"),
@@ -105,27 +105,28 @@ readonly class RedactorConfig
     }
 
     /**
-     * Validate regex patterns and remove invalid ones.
+     * Turn the configured patterns into rules, dropping uncompilable ones.
      *
-     * @param  array<mixed>  $patterns
-     * @return array<string, string>
+     * @param  array<string, mixed>  $patterns
+     * @return array<string, PatternRule>
      */
-    private static function validatePatterns(array $patterns): array
+    private static function buildPatternRules(array $patterns, string $profile): array
     {
-        $validPatterns = [];
+        $rules = [];
 
-        foreach ($patterns as $name => $pattern) {
-            if (! is_string($pattern)) {
-                continue;
-            }
+        foreach ($patterns as $name => $definition) {
+            $rule = PatternRule::fromConfig(
+                (string) $name,
+                $definition,
+                "profiles.{$profile}.patterns.{$name}"
+            );
 
-            // Test if the regex pattern is valid
-            if (Pcre::isValidPattern($pattern)) {
-                $validPatterns[(string) $name] = $pattern;
+            if ($rule !== null) {
+                $rules[(string) $name] = $rule;
             }
         }
 
-        return $validPatterns;
+        return $rules;
     }
 
     /**

@@ -98,6 +98,21 @@ class RedactionContext
     }
 
     /**
+     * Record that a rule redacted something under the given key.
+     *
+     * The key may be empty (a bare string passed straight to redact()), in
+     * which case only the redaction flag is set.
+     */
+    public function recordRedaction(string $key, ?string $rule = null): void
+    {
+        $this->wasRedacted = true;
+
+        if ($key !== '') {
+            $this->redactedKeys[] = $key;
+        }
+    }
+
+    /**
      * Mark that redaction occurred.
      */
     public function markRedacted(): void

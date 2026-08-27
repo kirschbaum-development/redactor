@@ -6,9 +6,10 @@ namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\RedactorConfig;
+use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
 use Kirschbaum\Redactor\Support\Pcre;
 
-class ShannonEntropyStrategy implements RedactionStrategyInterface
+class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInterface
 {
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
@@ -18,14 +19,64 @@ class ShannonEntropyStrategy implements RedactionStrategyInterface
             return false;
         }
 
-        return $this->shouldRedactByEntropy($value, $context);
+        foreach ($this->tokenize($value) as $token) {
+            if ($this->shouldRedactByEntropy($token, $context)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
-        $context->markRedacted();
+        if (! is_string($value)) {
+            return $value;
+        }
 
-        return $context->config->replacement;
+        $replacement = $context->config->replacement;
+
+        // A value with no internal whitespace is a single token, so this
+        // degenerates to replacing the whole value - the pre-existing
+        // behaviour for API keys and the like. A sentence with a secret
+        // embedded in it loses only the secret.
+        $result = preg_replace_callback(
+            '/\S+/u',
+            function (array $matches) use ($context, $replacement): string {
+                $token = (string) $matches[0];
+
+                return $this->shouldRedactByEntropy($token, $context) ? $replacement : $token;
+            },
+            $value
+        );
+
+        if ($result === null || $result === $value) {
+            // preg failed, or nothing matched (a whitespace-only string that
+            // somehow reached here). Fail closed on the former.
+            if ($result === null) {
+                $context->recordRedaction($key, 'shannon_entropy');
+
+                return $replacement;
+            }
+
+            return $value;
+        }
+
+        $context->recordRedaction($key, 'shannon_entropy');
+
+        return $result;
+    }
+
+    /**
+     * Split a value into the tokens entropy is measured over.
+     *
+     * @return array<int, string>
+     */
+    protected function tokenize(string $value): array
+    {
+        $tokens = preg_split('/\s+/u', $value, -1, PREG_SPLIT_NO_EMPTY);
+
+        return $tokens === false ? [$value] : $tokens;
     }
 
     /**
