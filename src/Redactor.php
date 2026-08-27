@@ -146,19 +146,44 @@ class Redactor
      */
     protected function redactRecursively(mixed $data, string $key, RedactionContext $context, array $strategies): mixed
     {
-        if (is_array($data)) {
-            /** @var array<string, mixed> $arrayData */
-            $arrayData = $data;
-
-            return $this->redactArray($arrayData, $context, $strategies);
+        if (! is_array($data) && ! is_object($data)) {
+            // Apply strategies to scalar values
+            return $this->applyStrategies($data, $key, $context, $strategies);
         }
 
-        if (is_object($data)) {
+        // Nothing below here may recurse without a depth budget: a self-
+        // referencing toArray() or a pathologically nested payload would
+        // otherwise run until PHP exhausts its memory limit and dies.
+        if (! $context->enterDepth()) {
+            return $this->markDepthExceeded($context);
+        }
+
+        try {
+            if (is_array($data)) {
+                /** @var array<string, mixed> $arrayData */
+                $arrayData = $data;
+
+                return $this->redactArray($arrayData, $context, $strategies);
+            }
+
             return $this->redactObject($data, $key, $context, $strategies);
+        } finally {
+            $context->leaveDepth();
         }
+    }
 
-        // Apply strategies to scalar values
-        return $this->applyStrategies($data, $key, $context, $strategies);
+    /**
+     * Replace a subtree that sits deeper than the configured max depth.
+     */
+    protected function markDepthExceeded(RedactionContext $context): string
+    {
+        $context->markRedacted();
+
+        return sprintf(
+            '%s (Max depth of %d exceeded)',
+            $context->config->replacement,
+            $context->config->maxDepth
+        );
     }
 
     /**
@@ -227,6 +252,33 @@ class Redactor
             return $objectAsValue;
         }
 
+        // An object already on the stack means following it again would loop.
+        // json_encode() catches this for itself, but the toArray() path below
+        // is tried first and has no such protection.
+        if (! $context->enterObject($object)) {
+            $context->markRedacted();
+
+            return sprintf(
+                '%s (Circular reference to %s)',
+                $context->config->replacement,
+                get_class($object)
+            );
+        }
+
+        try {
+            return $this->redactObjectContents($object, $context, $strategies);
+        } finally {
+            $context->leaveObject($object);
+        }
+    }
+
+    /**
+     * Convert an object to an array and redact it.
+     *
+     * @param  array<RedactionStrategyInterface>  $strategies
+     */
+    protected function redactObjectContents(object $object, RedactionContext $context, array $strategies): mixed
+    {
         // Try to convert object to array using toArray() method if available
         if (method_exists($object, 'toArray')) {
             try {

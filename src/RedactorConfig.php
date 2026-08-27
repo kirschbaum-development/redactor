@@ -12,6 +12,14 @@ readonly class RedactorConfig
     /** @var array<int, string> */
     public const OBJECT_BEHAVIORS = ['preserve', 'remove', 'empty_array', 'redact'];
 
+    /**
+     * How deep the redactor will walk before it stops and replaces the rest.
+     *
+     * Deep enough for any realistic log context; shallow enough that a cyclic
+     * or pathologically nested payload cannot exhaust memory.
+     */
+    public const DEFAULT_MAX_DEPTH = 32;
+
     public function __construct(
         public bool $enabled,
         /** @var array<string> */
@@ -32,6 +40,7 @@ readonly class RedactorConfig
         /** @var array<string, mixed> */
         public array $strategies,
         public string $profile,
+        public int $maxDepth = self::DEFAULT_MAX_DEPTH,
     ) {}
 
     /**
@@ -90,6 +99,7 @@ readonly class RedactorConfig
             shannonEntropy: $shannonEntropy,
             strategies: ConfigValue::map($config['strategies'] ?? [], "profiles.{$profile}.strategies"),
             profile: $profile,
+            maxDepth: ConfigValue::positiveInt($config['max_depth'] ?? self::DEFAULT_MAX_DEPTH, self::DEFAULT_MAX_DEPTH, "profiles.{$profile}.max_depth"),
         );
     }
 

@@ -160,6 +160,13 @@ return [
             'redact_large_objects' => env('REDACTOR_LARGE_OBJECTS', true),
             'max_object_size' => env('REDACTOR_MAX_OBJECT_SIZE', 100),
 
+            /*
+            | How many levels deep the redactor will walk before replacing the
+            | rest of the subtree. Guards against cyclic and pathologically
+            | nested payloads.
+            */
+            'max_depth' => env('REDACTOR_MAX_DEPTH', 32),
+
             'shannon_entropy' => [
                 'enabled' => env('REDACTOR_SHANNON_ENABLED', true),
                 'threshold' => env('REDACTOR_SHANNON_THRESHOLD', 4.8),
@@ -265,6 +272,7 @@ return [
             'max_value_length' => 1000, // More aggressive
             'redact_large_objects' => true,
             'max_object_size' => 25, // Smaller objects
+            'max_depth' => 16, // Shallower walk for stricter environments
 
             'shannon_entropy' => [
                 'enabled' => true,
@@ -326,6 +334,7 @@ return [
             'max_value_length' => null,
             'redact_large_objects' => false,
             'max_object_size' => 100,
+            'max_depth' => 32,
 
             // Tuned Shannon entropy for file scanning
             'shannon_entropy' => [
@@ -433,6 +442,7 @@ return [
             'max_value_length' => null, // Disable
             'redact_large_objects' => false, // Disable
             'max_object_size' => null,
+            'max_depth' => 16,
 
             'shannon_entropy' => [
                 'enabled' => false, // Disabled for performance

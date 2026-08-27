@@ -9,6 +9,15 @@ class RedactionContext
     /** @var array<string> */
     private array $redactedKeys = [];
 
+    /**
+     * Objects currently on the recursion stack, used to break reference cycles.
+     *
+     * @var \SplObjectStorage<object, null>
+     */
+    private \SplObjectStorage $activeObjects;
+
+    private int $depth = 0;
+
     /** @var array<string, float> */
     private array $entropyCache = [];
 
@@ -16,7 +25,58 @@ class RedactionContext
 
     public function __construct(
         public readonly RedactorConfig $config
-    ) {}
+    ) {
+        /** @var \SplObjectStorage<object, null> $storage */
+        $storage = new \SplObjectStorage;
+        $this->activeObjects = $storage;
+    }
+
+    /**
+     * Enter one level of nesting. Returns false when the configured max depth
+     * would be exceeded, in which case the caller must not recurse.
+     */
+    public function enterDepth(): bool
+    {
+        if ($this->depth >= $this->config->maxDepth) {
+            return false;
+        }
+
+        $this->depth++;
+
+        return true;
+    }
+
+    public function leaveDepth(): void
+    {
+        if ($this->depth > 0) {
+            $this->depth--;
+        }
+    }
+
+    public function currentDepth(): int
+    {
+        return $this->depth;
+    }
+
+    /**
+     * Mark an object as being processed. Returns false if it is already on the
+     * stack, which means following it again would loop forever.
+     */
+    public function enterObject(object $object): bool
+    {
+        if ($this->activeObjects->contains($object)) {
+            return false;
+        }
+
+        $this->activeObjects->attach($object);
+
+        return true;
+    }
+
+    public function leaveObject(object $object): void
+    {
+        $this->activeObjects->detach($object);
+    }
 
     /**
      * Add a key to the list of redacted keys.
