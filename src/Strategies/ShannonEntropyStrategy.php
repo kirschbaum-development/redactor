@@ -19,6 +19,10 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
             return false;
         }
 
+        if ($this->tooShort($value, $shannonConfig)) {
+            return false;
+        }
+
         foreach ($this->tokenize($value) as $token) {
             if ($this->shouldRedactByEntropy($token, $context)) {
                 return true;
@@ -31,6 +35,10 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
         if (! is_string($value)) {
+            return $value;
+        }
+
+        if ($this->tooShort($value, $context->config->shannonEntropy)) {
             return $value;
         }
 
@@ -83,6 +91,38 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
         }
 
         return $result;
+    }
+
+    /**
+     * Whether a subject is too short to contain anything worth measuring.
+     *
+     * Checked twice over, cheapest first. A byte count is an upper bound on a
+     * character count, so a subject under the minimum in bytes is certainly
+     * under it in characters - which means the cheap test can only ever skip
+     * work that was provably going to find nothing. Only what survives it pays
+     * for the encoding check a character count requires.
+     *
+     * Applied at the value level as well as per token: a value shorter than
+     * min_length cannot contain a token that long, so the whole tokenise pass
+     * can be skipped. Most values in a log payload are well under it.
+     *
+     * @param  array<string, mixed>  $shannonConfig
+     */
+    protected function tooShort(string $subject, array $shannonConfig): bool
+    {
+        $minLength = $shannonConfig['min_length'] ?? 25;
+
+        if (! is_numeric($minLength)) {
+            return false;
+        }
+
+        $minLength = (int) $minLength;
+
+        if (strlen($subject) < $minLength) {
+            return true;
+        }
+
+        return $this->length($subject) < $minLength;
     }
 
     /**
@@ -150,9 +190,9 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
 
         // Only analyze strings that meet minimum length requirement.
         // Counted in characters, not bytes, so a short multibyte token is not
-        // mistaken for a long one.
-        $minLength = $shannonConfig['min_length'] ?? 25;
-        if ($this->length($string) < $minLength) {
+        // mistaken for a long one - but the byte count settles most cases
+        // first, without the encoding check that a character count needs.
+        if ($this->tooShort($string, $shannonConfig)) {
             return false;
         }
 

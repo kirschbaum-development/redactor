@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Kirschbaum\Redactor\Patterns\PatternRule;
 use Kirschbaum\Redactor\Patterns\Validator;
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
 use Kirschbaum\Redactor\Strategies\LargeStringStrategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
@@ -279,5 +280,103 @@ describe('Luhn length window boundaries', function () {
     it('accepts 19 digits and rejects 20', function () {
         expect(Validator::luhn('0000000000000000000'))->toBeTrue()
             ->and(Validator::luhn('00000000000000000000'))->toBeFalse();
+    });
+});
+
+describe('The entropy length gate is a shortcut, not a behaviour change', function () {
+    function gatedProfile(int $minLength, float $threshold = 1.0): array
+    {
+        return boundaryProfile([
+            'strategies' => [ShannonEntropyStrategy::class],
+            'shannon_entropy' => [
+                'enabled' => true,
+                'threshold' => $threshold,
+                'min_length' => $minLength,
+                'exclusion_patterns' => [],
+            ],
+        ]);
+    }
+
+    it('still inspects a value of exactly min_length', function () {
+        config()->set('redactor.profiles.boundary', gatedProfile(16));
+
+        $exact = 'Zx7Qm4Kd9Rb2Vn6T'; // 16 characters
+
+        expect(strlen($exact))->toBe(16)
+            ->and(app(Redactor::class)->redact(['t' => $exact], 'boundary'))->toBe(['t' => '[REDACTED]']);
+    });
+
+    it('still finds a long token inside a long value', function () {
+        config()->set('redactor.profiles.boundary', gatedProfile(20));
+
+        $result = app(Redactor::class)->redact(
+            ['t' => 'deploy used Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf then finished'],
+            'boundary'
+        );
+
+        expect($result['t'])->toBe('deploy used [REDACTED] then finished');
+    });
+
+    it('skips a value that cannot contain a long enough token', function () {
+        config()->set('redactor.profiles.boundary', gatedProfile(30));
+
+        // Every token is short, and so is the value.
+        expect(app(Redactor::class)->redact(['t' => 'a b c d e f'], 'boundary'))
+            ->toBe(['t' => 'a b c d e f']);
+    });
+
+    it('counts characters, not bytes, once the byte gate passes', function () {
+        // 10 characters but 30 bytes: the byte count lets it through, and the
+        // character count must then reject it.
+        config()->set('redactor.profiles.boundary', gatedProfile(20, 0.5));
+
+        $multibyte = '日本語能力試験合格者'; // 10 chars, 30 bytes
+
+        expect(strlen($multibyte))->toBe(30)
+            ->and(mb_strlen($multibyte))->toBe(10)
+            ->and(app(Redactor::class)->redact(['t' => $multibyte], 'boundary'))
+            ->toBe(['t' => $multibyte]);
+    });
+
+    it('inspects a multibyte value that is genuinely long enough', function () {
+        config()->set('redactor.profiles.boundary', gatedProfile(8, 2.0));
+
+        $multibyte = '日本語能力試験合格'; // 9 characters
+
+        expect(mb_strlen($multibyte))->toBe(9)
+            ->and(app(Redactor::class)->redact(['t' => $multibyte], 'boundary'))
+            ->toBe(['t' => '[REDACTED]']);
+    });
+
+    it('rejects a non-numeric min_length at config time', function () {
+        config()->set('redactor.profiles.boundary', boundaryProfile([
+            'strategies' => [ShannonEntropyStrategy::class],
+            'shannon_entropy' => [
+                'enabled' => true,
+                'threshold' => 1.0,
+                'min_length' => 'lots',
+                'exclusion_patterns' => [],
+            ],
+        ]));
+
+        expect(fn () => RedactorConfig::fromConfig('boundary'))
+            ->toThrow(\InvalidArgumentException::class, 'shannon_entropy.min_length');
+    });
+
+    it('analyses everything when a hand-built config carries no usable min_length', function () {
+        // The gate is defensive as well as fast: a config assembled directly,
+        // bypassing validation, must fall through to analysis rather than
+        // silently skipping every value.
+        $strategy = new class extends ShannonEntropyStrategy
+        {
+            public function isTooShort(string $s, array $cfg): bool
+            {
+                return $this->tooShort($s, $cfg);
+            }
+        };
+
+        expect($strategy->isTooShort('short', ['min_length' => 'lots']))->toBeFalse()
+            ->and($strategy->isTooShort('short', []))->toBeTrue()
+            ->and($strategy->isTooShort(str_repeat('a', 40), []))->toBeFalse();
     });
 });
