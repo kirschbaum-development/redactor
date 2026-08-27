@@ -29,11 +29,28 @@ final class SarifReport
                 'defaultConfiguration' => ['level' => 'error'],
             ];
 
+            // Map the score onto SARIF's levels so a low-confidence hit shows
+            // as a note rather than blocking a merge alongside a certain one.
+            $level = match ($finding->severity()) {
+                'high' => 'error',
+                'medium' => 'warning',
+                default => 'note',
+            };
+
             $results[] = [
                 'ruleId' => $finding->rule,
-                'level' => 'error',
-                'message' => ['text' => sprintf('Sensitive content matched rule "%s".', $finding->rule)],
+                'level' => $level,
+                'message' => ['text' => sprintf(
+                    'Sensitive content matched rule "%s"%s.',
+                    $finding->rule,
+                    $finding->confidence === null ? '' : sprintf(' (confidence %.2f)', $finding->confidence)
+                )],
                 'partialFingerprints' => ['redactorFingerprint/v1' => $finding->fingerprint],
+                'properties' => array_filter([
+                    'entity' => $finding->entity,
+                    'confidence' => $finding->confidence,
+                    'signals' => $finding->signals,
+                ], fn ($v) => $v !== null && $v !== '' && $v !== []),
                 'locations' => [[
                     'physicalLocation' => [
                         'artifactLocation' => ['uri' => $finding->path],

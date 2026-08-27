@@ -25,6 +25,7 @@ class RedactorScanCommand extends Command
                             {--bail : Exit with code 1 if findings are detected}
                             {--summary-only : Do not display per-file results}
                             {--output=table : Output format (table|json|sarif)}
+                            {--min-confidence= : Ignore findings scoring below this (0-1)}
                             {--baseline= : Path to a baseline file of accepted findings}
                             {--update-baseline : Write the current findings to the baseline file and exit 0}';
 
@@ -50,6 +51,20 @@ class RedactorScanCommand extends Command
             $this->components->error("Unknown --output format [{$outputFormat}]. Use table, json or sarif.");
 
             return Command::FAILURE;
+        }
+
+        $minConfidence = $this->option('min-confidence');
+
+        if (is_string($minConfidence) && $minConfidence !== '') {
+            if (! is_numeric($minConfidence) || (float) $minConfidence < 0 || (float) $minConfidence > 1) {
+                $this->components->error('--min-confidence must be a number between 0 and 1.');
+
+                return Command::FAILURE;
+            }
+
+            // Applied to the profile rather than filtered afterwards, so a
+            // low-scoring detection is never acted on in the first place.
+            Config::set("redactor.profiles.{$profile}.min_confidence", (float) $minConfidence);
         }
 
         $baselinePath = $this->baselinePath();
@@ -269,12 +284,22 @@ class RedactorScanCommand extends Command
 
         // Findings, not files: a list of file names with a count next to each
         // tells you nothing you can act on.
+        // Sorted by severity so the certain findings are read first, which is
+        // the order anyone triaging actually wants.
+        usort($findings, fn (ScanFinding $a, ScanFinding $b) => ($b->confidence ?? 1.0) <=> ($a->confidence ?? 1.0));
+
         $this->table(
-            ['Rule', 'Location', 'Excerpt'],
+            ['Severity', 'Rule', 'Location', 'Excerpt'],
             array_map(fn (ScanFinding $f) => [
-                "<fg=red>{$f->rule}</>",
-                self::shorten($f->path).":{$f->line}:{$f->column}",
-                self::shorten($f->excerpt, 60),
+                match ($f->severity()) {
+                    'high' => '<fg=red>HIGH</>',
+                    'medium' => '<fg=yellow>MEDIUM</>',
+                    'low' => '<fg=blue>LOW</>',
+                    default => '<fg=gray>VERY LOW</>',
+                },
+                $f->rule,
+                self::shorten($f->path, 44).":{$f->line}:{$f->column}",
+                self::shorten($f->excerpt, 48),
             ], $findings)
         );
 

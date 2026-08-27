@@ -391,7 +391,7 @@ class Redactor
             key: $key,
         );
 
-        $context->recordRedaction($key, 'path:'.$match->pattern, 0, strlen($stringValue), $stringValue);
+        $context->recordDetection($detection);
 
         return $context->operate($detection, null, $spec);
     }

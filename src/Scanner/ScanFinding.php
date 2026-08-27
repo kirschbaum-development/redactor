@@ -22,7 +22,26 @@ final readonly class ScanFinding
         public string $excerpt,
         public string $profile,
         public string $fingerprint,
+        public string $entity = '',
+        /** 0.0-1.0, or null where the rule is structural rather than inferred. */
+        public ?float $confidence = null,
+        /** @var array<int, string> */
+        public array $signals = [],
     ) {}
+
+    /**
+     * A severity a human can sort by.
+     */
+    public function severity(): string
+    {
+        return match (true) {
+            $this->confidence === null => 'high',
+            $this->confidence >= 0.9 => 'high',
+            $this->confidence >= 0.6 => 'medium',
+            $this->confidence >= 0.3 => 'low',
+            default => 'very-low',
+        };
+    }
 
     /**
      * @return array<string, mixed>
@@ -31,9 +50,15 @@ final readonly class ScanFinding
     {
         return [
             'rule' => $this->rule,
+            'entity' => $this->entity,
             'line' => $this->line,
             'column' => $this->column,
             'excerpt' => $this->excerpt,
+            'confidence' => $this->confidence,
+            'severity' => $this->severity(),
+            // Why the score is what it is, so a threshold can be chosen on
+            // evidence rather than by trial and error.
+            'signals' => $this->signals,
             'profile' => $this->profile,
             'fingerprint' => $this->fingerprint,
         ];

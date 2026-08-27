@@ -78,6 +78,9 @@ class Scanner
                 excerpt: self::excerpt($redactedLines[$line - 1] ?? ''),
                 profile: $profile,
                 fingerprint: ScanFinding::fingerprint($match->rule, $path, $match->matched),
+                entity: $match->entity(),
+                confidence: $match->confidence?->score,
+                signals: $match->confidence?->explain() ?? [],
             );
         }
 

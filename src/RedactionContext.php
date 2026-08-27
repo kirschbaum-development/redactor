@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor;
 
+use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Findings\MatchFinding;
 use Kirschbaum\Redactor\Operators\OperatorContext;
@@ -178,6 +179,8 @@ class RedactionContext
         int $offset = 0,
         int $length = 0,
         string $matched = '',
+        ?string $entity = null,
+        ?Confidence $confidence = null,
     ): void {
         $this->wasRedacted = true;
 
@@ -192,8 +195,26 @@ class RedactionContext
                 offset: $offset,
                 length: $length,
                 matched: $matched,
+                entity: $entity,
+                confidence: $confidence,
             );
         }
+    }
+
+    /**
+     * Record a detection, carrying its entity and score through to the report.
+     */
+    public function recordDetection(Detection $detection): void
+    {
+        $this->recordRedaction(
+            key: $detection->key,
+            rule: $detection->rule,
+            offset: $detection->offset,
+            length: $detection->length(),
+            matched: $detection->value,
+            entity: $detection->entity,
+            confidence: $detection->confidence,
+        );
     }
 
     /**

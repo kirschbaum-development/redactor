@@ -109,7 +109,7 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
 
         if ($rule->replacesWholeValue()) {
             $first = $detections[0];
-            $context->recordRedaction($key, $rule->name, $first->offset, $first->length(), $first->value);
+            $context->recordDetection($first);
 
             return $context->operate($first, $rule);
         }
@@ -126,7 +126,7 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
 
             $result = substr_replace($result, $replacement, $detection->offset, $detection->length());
 
-            $context->recordRedaction($key, $rule->name, $detection->offset, $detection->length(), $detection->value);
+            $context->recordDetection($detection);
         }
 
         return $result;
