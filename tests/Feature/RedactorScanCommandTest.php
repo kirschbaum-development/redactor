@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Artisan;
 use Kirschbaum\Redactor\Scanner\Baseline;
 use Kirschbaum\Redactor\Scanner\ScanFinding;
 
-function fixture(string $name): string
+function fixturePath(string $name): string
 {
     return __DIR__.'/fixtures/'.$name;
 }
@@ -25,7 +25,7 @@ describe('RedactorScanCommand output', function () {
     });
 
     it('reports a clean file as clean', function () {
-        [$exitCode, $output] = scan(['paths' => [fixture('clean-text-file.txt')]]);
+        [$exitCode, $output] = scan(['paths' => [fixturePath('clean-text-file.txt')]]);
 
         expect($exitCode)->toBe(0)
             ->and($output)->toContain('No findings')
@@ -36,7 +36,7 @@ describe('RedactorScanCommand output', function () {
     it('names the rule and the line for each finding', function () {
         // The old output was one opaque row per file - "FINDINGS 1 <path>" -
         // with no way to know which rule fired or where to look.
-        [$exitCode, $output] = scan(['paths' => [fixture('sensitive-api-keys.txt')]]);
+        [$exitCode, $output] = scan(['paths' => [fixturePath('sensitive-api-keys.txt')]]);
 
         expect($exitCode)->toBe(0)
             ->and($output)->toContain('Rule')
@@ -77,7 +77,7 @@ describe('RedactorScanCommand output', function () {
     });
 
     it('reports several findings in one file separately', function () {
-        [, $output] = scan(['paths' => [fixture('personal-info.txt')], '--output' => 'json']);
+        [, $output] = scan(['paths' => [fixturePath('personal-info.txt')], '--output' => 'json']);
 
         $findings = json_decode($output, true)[0]['findings'];
 
@@ -87,9 +87,9 @@ describe('RedactorScanCommand output', function () {
 
     it('scans several paths at once', function () {
         [$exitCode, $output] = scan(['paths' => [
-            fixture('clean-text-file.txt'),
-            fixture('sensitive-api-keys.txt'),
-            fixture('personal-info.txt'),
+            fixturePath('clean-text-file.txt'),
+            fixturePath('sensitive-api-keys.txt'),
+            fixturePath('personal-info.txt'),
         ]]);
 
         expect($exitCode)->toBe(0)
@@ -97,7 +97,7 @@ describe('RedactorScanCommand output', function () {
     });
 
     it('scans a directory', function () {
-        [$exitCode, $output] = scan(['paths' => [fixture('subdirectory')]]);
+        [$exitCode, $output] = scan(['paths' => [fixturePath('subdirectory')]]);
 
         expect($exitCode)->toBe(0)
             ->and($output)->toContain('Files scanned:');
@@ -112,7 +112,7 @@ describe('RedactorScanCommand output', function () {
 
     it('honours --summary-only', function () {
         [, $output] = scan([
-            'paths' => [fixture('sensitive-api-keys.txt')],
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--summary-only' => true,
         ]);
 
@@ -122,7 +122,7 @@ describe('RedactorScanCommand output', function () {
 
     it('honours an explicit --profile', function () {
         [$exitCode, $output] = scan([
-            'paths' => [fixture('clean-text-file.txt')],
+            'paths' => [fixturePath('clean-text-file.txt')],
             '--profile' => 'default',
         ]);
 
@@ -138,14 +138,14 @@ describe('RedactorScanCommand exit codes', function () {
     });
 
     it('exits 0 without --bail even when findings exist', function () {
-        [$exitCode] = scan(['paths' => [fixture('sensitive-api-keys.txt')]]);
+        [$exitCode] = scan(['paths' => [fixturePath('sensitive-api-keys.txt')]]);
 
         expect($exitCode)->toBe(0);
     });
 
     it('exits 1 with --bail when findings exist', function () {
         [$exitCode] = scan([
-            'paths' => [fixture('sensitive-api-keys.txt')],
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--bail' => true,
         ]);
 
@@ -154,7 +154,7 @@ describe('RedactorScanCommand exit codes', function () {
 
     it('exits 0 with --bail when the file is clean', function () {
         [$exitCode] = scan([
-            'paths' => [fixture('clean-text-file.txt')],
+            'paths' => [fixturePath('clean-text-file.txt')],
             '--bail' => true,
         ]);
 
@@ -163,7 +163,7 @@ describe('RedactorScanCommand exit codes', function () {
 
     it('rejects an unknown output format rather than silently defaulting', function () {
         [$exitCode, $output] = scan([
-            'paths' => [fixture('clean-text-file.txt')],
+            'paths' => [fixturePath('clean-text-file.txt')],
             '--output' => 'yaml',
         ]);
 
@@ -180,7 +180,7 @@ describe('RedactorScanCommand JSON output', function () {
 
     it('emits parseable JSON with no progress chatter', function () {
         [, $output] = scan([
-            'paths' => [fixture('sensitive-api-keys.txt')],
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--output' => 'json',
         ]);
 
@@ -193,7 +193,7 @@ describe('RedactorScanCommand JSON output', function () {
 
     it('gives every finding a rule, position, excerpt and fingerprint', function () {
         [, $output] = scan([
-            'paths' => [fixture('sensitive-api-keys.txt')],
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--output' => 'json',
         ]);
 
@@ -207,7 +207,7 @@ describe('RedactorScanCommand JSON output', function () {
 
     it('reports a clean file with an empty findings list', function () {
         [, $output] = scan([
-            'paths' => [fixture('clean-text-file.txt')],
+            'paths' => [fixturePath('clean-text-file.txt')],
             '--output' => 'json',
         ]);
 
@@ -226,7 +226,7 @@ describe('RedactorScanCommand SARIF output', function () {
 
     it('emits a valid SARIF 2.1.0 document', function () {
         [, $output] = scan([
-            'paths' => [fixture('sensitive-api-keys.txt')],
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--output' => 'sarif',
         ]);
 
@@ -240,7 +240,7 @@ describe('RedactorScanCommand SARIF output', function () {
 
     it('locates each result for GitHub code scanning', function () {
         [, $output] = scan([
-            'paths' => [fixture('sensitive-api-keys.txt')],
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--output' => 'sarif',
         ]);
 
@@ -255,7 +255,7 @@ describe('RedactorScanCommand SARIF output', function () {
 
     it('declares every rule it reports', function () {
         [, $output] = scan([
-            'paths' => [fixture('personal-info.txt')],
+            'paths' => [fixturePath('personal-info.txt')],
             '--output' => 'sarif',
         ]);
 
@@ -298,7 +298,7 @@ describe('RedactorScanCommand baseline', function () {
 
     it('writes accepted findings and exits 0', function () {
         [$exitCode, $output] = scan([
-            'paths' => [fixture('sensitive-api-keys.txt')],
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--update-baseline' => true,
         ]);
 
@@ -314,10 +314,10 @@ describe('RedactorScanCommand baseline', function () {
     });
 
     it('suppresses baselined findings on the next run', function () {
-        scan(['paths' => [fixture('sensitive-api-keys.txt')], '--update-baseline' => true]);
+        scan(['paths' => [fixturePath('sensitive-api-keys.txt')], '--update-baseline' => true]);
 
         [$exitCode, $output] = scan([
-            'paths' => [fixture('sensitive-api-keys.txt')],
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--bail' => true,
         ]);
 
@@ -329,10 +329,10 @@ describe('RedactorScanCommand baseline', function () {
     });
 
     it('still fails on a finding the baseline does not cover', function () {
-        scan(['paths' => [fixture('clean-text-file.txt')], '--update-baseline' => true]);
+        scan(['paths' => [fixturePath('clean-text-file.txt')], '--update-baseline' => true]);
 
         [$exitCode] = scan([
-            'paths' => [fixture('sensitive-api-keys.txt')],
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--bail' => true,
         ]);
 
@@ -354,14 +354,14 @@ describe('RedactorScanCommand baseline', function () {
     it('reports a malformed baseline instead of ignoring it', function () {
         file_put_contents($this->baseline, '{"nope": true}');
 
-        [$exitCode, $output] = scan(['paths' => [fixture('clean-text-file.txt')]]);
+        [$exitCode, $output] = scan(['paths' => [fixturePath('clean-text-file.txt')]]);
 
         expect($exitCode)->toBe(1)
             ->and($output)->toContain('findings');
     });
 
     it('treats a missing baseline file as empty', function () {
-        [$exitCode] = scan(['paths' => [fixture('clean-text-file.txt')]]);
+        [$exitCode] = scan(['paths' => [fixturePath('clean-text-file.txt')]]);
 
         expect($exitCode)->toBe(0);
     });
@@ -370,7 +370,7 @@ describe('RedactorScanCommand baseline', function () {
         config(['redactor.scan.baseline' => null]);
 
         [$exitCode, $output] = scan([
-            'paths' => [fixture('clean-text-file.txt')],
+            'paths' => [fixturePath('clean-text-file.txt')],
             '--update-baseline' => true,
         ]);
 
