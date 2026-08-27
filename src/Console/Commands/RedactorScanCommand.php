@@ -5,6 +5,7 @@ namespace Kirschbaum\Redactor\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
+use Kirschbaum\Redactor\Config\ConfigValue;
 use Kirschbaum\Redactor\Scanner\FileCollector;
 use Kirschbaum\Redactor\Scanner\Scanner;
 use Kirschbaum\Redactor\Scanner\ScanResult;
@@ -43,11 +44,18 @@ class RedactorScanCommand extends Command
 
         $this->components->info('Scanning paths: '.implode(', ', $paths)." with profile: {$profile}");
 
-        /** @var array<int, string> $ignorePatterns */
-        $ignorePatterns = Config::array('redactor.scan.exclude_patterns', []);
+        // Config::array()/Config::integer() throw when the value arrives as a
+        // string, which is exactly what env() produces for REDACTOR_SCAN_*.
+        $ignorePatterns = ConfigValue::stringList(
+            Config::get('redactor.scan.exclude_patterns', []),
+            'scan.exclude_patterns'
+        );
 
-        /** @var int $maxFileSize */
-        $maxFileSize = Config::integer('redactor.scan.max_file_size', 10_485_760);
+        $maxFileSize = ConfigValue::positiveInt(
+            Config::get('redactor.scan.max_file_size'),
+            10_485_760,
+            'scan.max_file_size'
+        );
 
         $files = $this->collectFiles($paths, $ignorePatterns, $maxFileSize);
 

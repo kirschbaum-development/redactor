@@ -43,7 +43,31 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Clean up directory recursively
+ */
+function cleanupDirectory(string $dir): void
 {
-    // ..
+    if (! is_dir($dir)) {
+        return;
+    }
+
+    $files = scandir($dir);
+    foreach ($files as $file) {
+        if ($file === '.' || $file === '..') {
+            continue;
+        }
+
+        $path = $dir.'/'.$file;
+
+        if (is_dir($path)) {
+            cleanupDirectory($path);
+        } else {
+            // Ensure file is writable before deletion
+            chmod($path, 0644);
+            unlink($path);
+        }
+    }
+
+    rmdir($dir);
 }

@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
+use Kirschbaum\Redactor\Config\ConfigValue;
 
 readonly class RedactorConfig
 {
+    /** @var array<int, string> */
+    public const OBJECT_BEHAVIORS = ['preserve', 'remove', 'empty_array', 'redact'];
+
     public function __construct(
         public bool $enabled,
         /** @var array<string> */
@@ -50,32 +54,41 @@ readonly class RedactorConfig
             throw new \InvalidArgumentException("Invalid configuration for profile '".$profile."'.");
         }
 
-        $safeKeys = $config['safe_keys'] ?? [];
-        $blockedKeys = $config['blocked_keys'] ?? [];
-        $patterns = $config['patterns'] ?? [];
-        $shannonEntropy = $config['shannon_entropy'] ?? [];
-        $strategies = $config['strategies'] ?? [];
+        $shannonEntropy = ConfigValue::map($config['shannon_entropy'] ?? [], "profiles.{$profile}.shannon_entropy");
 
-        // Ensure proper array types for constructor
-        /** @var array<string, mixed> $typedShannonEntropy */
-        $typedShannonEntropy = is_array($shannonEntropy) ? $shannonEntropy : [];
-        /** @var array<string, mixed> $typedStrategies */
-        $typedStrategies = is_array($strategies) ? $strategies : [];
+        // Coerce the entropy sub-keys here too: they are read on every string,
+        // and env() hands them over as strings.
+        if (array_key_exists('enabled', $shannonEntropy)) {
+            $shannonEntropy['enabled'] = ConfigValue::bool($shannonEntropy['enabled'], true, "profiles.{$profile}.shannon_entropy.enabled");
+        }
+
+        if (array_key_exists('threshold', $shannonEntropy)) {
+            $shannonEntropy['threshold'] = ConfigValue::float($shannonEntropy['threshold'], 4.8, "profiles.{$profile}.shannon_entropy.threshold");
+        }
+
+        if (array_key_exists('min_length', $shannonEntropy)) {
+            $shannonEntropy['min_length'] = ConfigValue::positiveInt($shannonEntropy['min_length'], 25, "profiles.{$profile}.shannon_entropy.min_length");
+        }
 
         return new self(
-            enabled: is_bool($config['enabled'] ?? true) ? $config['enabled'] ?? true : true,
-            safeKeys: is_array($safeKeys) ? array_map('strtolower', array_filter($safeKeys, 'is_string')) : [],
-            blockedKeys: is_array($blockedKeys) ? array_map('strtolower', array_filter($blockedKeys, 'is_string')) : [],
-            patterns: self::validatePatterns(is_array($patterns) ? $patterns : []),
-            replacement: is_string($config['replacement'] ?? '[REDACTED]') ? $config['replacement'] ?? '[REDACTED]' : '[REDACTED]',
-            markRedacted: is_bool($config['mark_redacted'] ?? true) ? $config['mark_redacted'] ?? true : true,
-            trackRedactedKeys: is_bool($config['track_redacted_keys'] ?? false) ? $config['track_redacted_keys'] ?? false : false,
-            nonRedactableObjectBehavior: is_string($config['non_redactable_object_behavior'] ?? 'preserve') ? $config['non_redactable_object_behavior'] ?? 'preserve' : 'preserve',
-            maxValueLength: self::validateMaxValueLength($config['max_value_length'] ?? null),
-            redactLargeObjects: is_bool($config['redact_large_objects'] ?? true) ? $config['redact_large_objects'] ?? true : true,
-            maxObjectSize: is_int($config['max_object_size'] ?? 100) ? $config['max_object_size'] ?? 100 : 100,
-            shannonEntropy: $typedShannonEntropy,
-            strategies: $typedStrategies,
+            enabled: ConfigValue::bool($config['enabled'] ?? true, true, "profiles.{$profile}.enabled"),
+            safeKeys: array_map('strtolower', ConfigValue::stringList($config['safe_keys'] ?? [], "profiles.{$profile}.safe_keys")),
+            blockedKeys: array_map('strtolower', ConfigValue::stringList($config['blocked_keys'] ?? [], "profiles.{$profile}.blocked_keys")),
+            patterns: self::validatePatterns(ConfigValue::map($config['patterns'] ?? [], "profiles.{$profile}.patterns")),
+            replacement: ConfigValue::string($config['replacement'] ?? '[REDACTED]', '[REDACTED]', "profiles.{$profile}.replacement"),
+            markRedacted: ConfigValue::bool($config['mark_redacted'] ?? true, true, "profiles.{$profile}.mark_redacted"),
+            trackRedactedKeys: ConfigValue::bool($config['track_redacted_keys'] ?? false, false, "profiles.{$profile}.track_redacted_keys"),
+            nonRedactableObjectBehavior: ConfigValue::enum(
+                $config['non_redactable_object_behavior'] ?? 'preserve',
+                self::OBJECT_BEHAVIORS,
+                'preserve',
+                "profiles.{$profile}.non_redactable_object_behavior"
+            ),
+            maxValueLength: ConfigValue::positiveIntOrNull($config['max_value_length'] ?? null, null, "profiles.{$profile}.max_value_length"),
+            redactLargeObjects: ConfigValue::bool($config['redact_large_objects'] ?? true, true, "profiles.{$profile}.redact_large_objects"),
+            maxObjectSize: ConfigValue::positiveIntOrNull($config['max_object_size'] ?? 100, 100, "profiles.{$profile}.max_object_size"),
+            shannonEntropy: $shannonEntropy,
+            strategies: ConfigValue::map($config['strategies'] ?? [], "profiles.{$profile}.strategies"),
             profile: $profile,
         );
     }
@@ -102,22 +115,6 @@ readonly class RedactorConfig
         }
 
         return $validPatterns;
-    }
-
-    /**
-     * Validate max value length configuration.
-     */
-    private static function validateMaxValueLength(mixed $value): ?int
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        if (is_numeric($value) && $value > 0) {
-            return (int) $value;
-        }
-
-        return null;
     }
 
     /**
