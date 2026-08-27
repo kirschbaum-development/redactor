@@ -45,6 +45,26 @@ All notable changes to this project will be documented in this file.
 
 ### Performance
 
+- Compiled key matchers are resolved once with the profile instead of being
+  looked up per call. KeyMatcher memoises on the pattern list, so finding the
+  cached matcher meant building an implode() of every configured key on every
+  check - 0.203us against the 0.050us match it was avoiding, making the cache
+  cost four times what it saved.
+- Entropy analysis is skipped for values shorter than min_length. A byte count
+  is an upper bound on a character count, so the check can only skip work that
+  was provably going to find nothing; most values in a log payload are well
+  under the threshold. Measured at 40x over a realistic value set.
+- Tokenising uses the non-/u patterns for ASCII subjects. The /u modifier makes
+  PCRE validate the whole subject as UTF-8 on every call: 40us against 12us to
+  split a 2.2KB string. The choice is made per subject, because dropping /u for
+  non-ASCII input would join tokens rather than merely run faster.
+- Matched spans are rewritten in a single left-to-right pass. substr_replace
+  builds a whole new string per replacement, so a value with several matches
+  copied it several times.
+- An unchanged subtree is returned as it arrived rather than rebuilt, so a
+  payload that redacts to nothing costs a walk and no copy.
+- Net effect: the default profile went from ~17,600 to ~26,800 redactions/sec,
+  and a 2.2KB file-scan subject from ~8,200 to ~26,300.
 - Resolved profiles are cached and invalidated by comparing the raw config, so
   `fromConfig()` no longer revalidates every pattern and recompiles the path
   trie on every redaction: 0.2285ms -> 0.0011ms for a profile with 200 path
@@ -76,6 +96,15 @@ item below is one commit, with tests.
   silently falling back to a default. (R-09)
 
 ### Fixed - correctness and security
+
+- `operators.default` had no effect on anything found by a pattern. A rule can
+  always produce an operator from its `mode`, which defaults to replace, and
+  that default was treated as a choice - so it outranked the profile default
+  and made the setting silently unreachable. Only a rule that actually
+  configured an operator or a non-default mode now outranks it.
+- A path pattern that is purely numeric - `'0' => 'redact'`, or `items.0`
+  written as a key - crashed. PHP turns a numeric array key into an integer,
+  which reached a parameter typed as string.
 
 - Recursion is depth-bounded and cycle-aware. A self-referencing `toArray()`
   used to exhaust memory and kill the process. (R-03)
