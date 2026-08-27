@@ -88,6 +88,70 @@ describe('Span-level replacement', function () {
     });
 });
 
+describe('Single-pass assembly', function () {
+    it('handles many matches in one value', function () {
+        config()->set('redactor.profiles.span', spanProfile(['email' => EMAIL]));
+
+        $value = 'a@x.com then b@y.com then c@z.com then d@w.com then e@v.com';
+
+        expect(app(Redactor::class)->redact($value, 'span'))
+            ->toBe('[REDACTED] then [REDACTED] then [REDACTED] then [REDACTED] then [REDACTED]');
+    });
+
+    it('keeps every character between matches intact', function () {
+        config()->set('redactor.profiles.span', spanProfile(['digits' => '/\d+/']));
+
+        expect(app(Redactor::class)->redact('a1b22c333d', 'span'))
+            ->toBe('a[REDACTED]b[REDACTED]c[REDACTED]d');
+    });
+
+    it('handles a match at the very start and the very end', function () {
+        config()->set('redactor.profiles.span', spanProfile(['digits' => '/\d+/']));
+
+        expect(app(Redactor::class)->redact('1middle2', 'span'))
+            ->toBe('[REDACTED]middle[REDACTED]')
+            ->and(app(Redactor::class)->redact('9', 'span'))
+            ->toBe('[REDACTED]');
+    });
+
+    it('handles adjacent matches with nothing between them', function () {
+        config()->set('redactor.profiles.span', spanProfile(['pair' => '/\d\d/']));
+
+        expect(app(Redactor::class)->redact('1234', 'span'))
+            ->toBe('[REDACTED][REDACTED]');
+    });
+
+    it('returns the subject untouched when every match is preserved', function () {
+        config()->set('redactor.profiles.span', spanProfile([
+            'digits' => ['pattern' => '/\d+/', 'entity' => 'digits'],
+        ], ['operators' => ['digits' => 'preserve']]));
+
+        expect(app(Redactor::class)->redact('a1b22c', 'span'))->toBe('a1b22c');
+    });
+
+    it('replaces only the accepted matches when a validator rejects some', function () {
+        config()->set('redactor.profiles.span', spanProfile([
+            'card' => ['pattern' => '/\b\d{16}\b/', 'validator' => 'luhn'],
+        ]));
+
+        expect(app(Redactor::class)->redact('bad 1234567890123456 good 4111111111111111 end', 'span'))
+            ->toBe('bad 1234567890123456 good [REDACTED] end');
+    });
+
+    it('reports offsets against the original subject, not the rewritten one', function () {
+        config()->set('redactor.profiles.span', spanProfile(['digits' => '/\d+/'], [
+            'mark_redacted' => true,
+            'track_redacted_keys' => true,
+        ]));
+
+        // The replacement is longer than what it replaces, so an offset taken
+        // from the output would drift on every match after the first.
+        $result = app(Redactor::class)->redactWithMetadata(['v' => 'a1b2c3'], 'span');
+
+        expect(array_map(fn ($f) => $f->offset, $result->findings))->toBe([1, 3, 5]);
+    });
+});
+
 describe('Pattern rule modes', function () {
     it('masks the match while preserving its length', function () {
         config()->set('redactor.profiles.span', spanProfile([

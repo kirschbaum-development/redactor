@@ -97,10 +97,15 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
     }
 
     /**
-     * Rewrite every accepted detection for one rule, right to left.
+     * Rewrite every accepted detection for one rule in a single pass.
      *
-     * Right to left because operators change length: splicing from the end
-     * means earlier offsets stay valid without tracking a running delta.
+     * Assembled left to right by appending the gap before each detection and
+     * then its replacement, rather than splicing each span into the subject.
+     * substr_replace builds a whole new string per replacement, so a value with
+     * several matches copies it several times; appending copies it once.
+     *
+     * preg_match_all returns matches in order and non-overlapping, which is
+     * what makes one pass possible.
      *
      * Returns null when PCRE gave up, so the caller can fail closed.
      */
@@ -123,9 +128,11 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
             return $context->operate($first, $rule);
         }
 
-        $result = $subject;
+        $out = '';
+        $cursor = 0;
+        $changed = false;
 
-        foreach (array_reverse($detections) as $detection) {
+        foreach ($detections as $detection) {
             $replacement = $context->operate($detection, $rule);
 
             if ($replacement === $detection->value) {
@@ -133,12 +140,18 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
                 continue;
             }
 
-            $result = substr_replace($result, $replacement, $detection->offset, $detection->length());
+            $out .= substr($subject, $cursor, $detection->offset - $cursor).$replacement;
+            $cursor = $detection->end();
+            $changed = true;
 
             $context->recordDetection($detection);
         }
 
-        return $result;
+        if (! $changed) {
+            return $subject;
+        }
+
+        return $out.substr($subject, $cursor);
     }
 
     /**
