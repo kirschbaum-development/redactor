@@ -79,6 +79,72 @@ describe('Safe key semantics', function () {
             ->toBe(['password' => '[REDACTED]']);
     });
 
+    it('supports the wildcard patterns the README documents', function () {
+        // The README's Wildcard Patterns section has always said both
+        // BlockedKeysStrategy and SafeKeysStrategy support them. SafeKeys was
+        // a strict in_array(), so '*_count' and 'meta_*' were redacted -
+        // documented behaviour that did not exist.
+        config()->set('redactor.profiles.safe', safeKeyProfile([
+            'safe_keys' => ['*_count', 'meta_*'],
+            'blocked_keys' => ['*count*', 'meta*'],
+        ]));
+
+        expect(app(Redactor::class)->redact([
+            'item_count' => 5,
+            'meta_info' => 'x',
+            'other_field' => 'y',
+        ], 'safe'))->toBe([
+            'item_count' => 5,
+            'meta_info' => 'x',
+            'other_field' => 'y',
+        ]);
+    });
+
+    it('supports every wildcard shape in safe_keys', function () {
+        config()->set('redactor.profiles.safe', safeKeyProfile([
+            'safe_keys' => ['exact_ok', '*contains*', 'prefix_*', '*_suffix', 'multi_*_wild'],
+            'blocked_keys' => ['*'],
+        ]));
+
+        $result = app(Redactor::class)->redact([
+            'exact_ok' => 1,
+            'a_contains_b' => 2,
+            'prefix_thing' => 3,
+            'thing_suffix' => 4,
+            'multi_any_wild' => 5,
+            'blocked_one' => 6,
+        ], 'safe');
+
+        expect($result)->toBe([
+            'exact_ok' => 1,
+            'a_contains_b' => 2,
+            'prefix_thing' => 3,
+            'thing_suffix' => 4,
+            'multi_any_wild' => 5,
+            'blocked_one' => '[REDACTED]',
+        ]);
+    });
+
+    it('matches safe-key wildcards case-insensitively', function () {
+        config()->set('redactor.profiles.safe', safeKeyProfile([
+            'safe_keys' => ['*_COUNT'],
+            'blocked_keys' => ['*'],
+        ]));
+
+        expect(app(Redactor::class)->redact(['item_count' => 5], 'safe'))
+            ->toBe(['item_count' => 5]);
+    });
+
+    it('preserves the subtree under a wildcard-matched safe key', function () {
+        config()->set('redactor.profiles.safe', safeKeyProfile([
+            'safe_keys' => ['debug_*'],
+        ]));
+
+        expect(app(Redactor::class)->redact([
+            'debug_dump' => ['password' => 'hunter2'],
+        ], 'safe'))->toBe(['debug_dump' => ['password' => 'hunter2']]);
+    });
+
     it('declares SafeKeysStrategy as preserving', function () {
         expect(new SafeKeysStrategy)->toBeInstanceOf(PreservingStrategy::class);
     });
