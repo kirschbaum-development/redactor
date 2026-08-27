@@ -36,33 +36,51 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
 
         $replacement = $context->config->replacement;
 
+        /** @var array<int, array{offset: int, length: int, matched: string}> $hits */
+        $hits = [];
+
         // A value with no internal whitespace is a single token, so this
         // degenerates to replacing the whole value - the pre-existing
         // behaviour for API keys and the like. A sentence with a secret
         // embedded in it loses only the secret.
         $result = preg_replace_callback(
             '/\S+/u',
-            function (array $matches) use ($context, $replacement): string {
-                $token = (string) $matches[0];
+            function (array $matches) use ($context, $replacement, &$hits): string {
+                [$token, $offset] = $matches[0];
 
-                return $this->shouldRedactByEntropy($token, $context) ? $replacement : $token;
-            },
-            $value
-        );
+                if (! $this->shouldRedactByEntropy((string) $token, $context)) {
+                    return (string) $token;
+                }
 
-        if ($result === null || $result === $value) {
-            // preg failed, or nothing matched (a whitespace-only string that
-            // somehow reached here). Fail closed on the former.
-            if ($result === null) {
-                $context->recordRedaction($key, 'shannon_entropy');
+                $hits[] = [
+                    'offset' => (int) $offset,
+                    'length' => strlen((string) $token),
+                    'matched' => (string) $token,
+                ];
 
                 return $replacement;
-            }
+            },
+            $value,
+            -1,
+            $count,
+            PREG_OFFSET_CAPTURE
+        );
 
+        if ($result === null) {
+            // The engine gave up. Fail closed rather than emit a partially
+            // substituted string.
+            $context->recordRedaction($key, 'shannon_entropy', 0, strlen($value));
+
+            return $replacement;
+        }
+
+        if ($hits === []) {
             return $value;
         }
 
-        $context->recordRedaction($key, 'shannon_entropy');
+        foreach ($hits as $hit) {
+            $context->recordRedaction($key, 'shannon_entropy', $hit['offset'], $hit['length'], $hit['matched']);
+        }
 
         return $result;
     }

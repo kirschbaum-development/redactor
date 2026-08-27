@@ -48,6 +48,16 @@ return [
 
         // Skip anything git is already ignoring.
         'respect_gitignore' => env('REDACTOR_SCAN_RESPECT_GITIGNORE', true),
+
+        /*
+        | Accepted findings, so CI fails on new secrets rather than on known
+        | ones. Generate with:
+        |
+        |     php artisan redactor:scan --update-baseline
+        |
+        | The file stores hashed fingerprints, never the secrets themselves.
+        */
+        'baseline' => env('REDACTOR_SCAN_BASELINE', base_path('.redactor-baseline.json')),
     ],
 
     /*

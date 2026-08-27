@@ -1,12 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kirschbaum\Redactor\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Kirschbaum\Redactor\Config\ConfigValue;
+use Kirschbaum\Redactor\Scanner\Baseline;
 use Kirschbaum\Redactor\Scanner\FileCollector;
+use Kirschbaum\Redactor\Scanner\SarifReport;
+use Kirschbaum\Redactor\Scanner\ScanFinding;
 use Kirschbaum\Redactor\Scanner\Scanner;
 use Kirschbaum\Redactor\Scanner\ScanResult;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -14,43 +19,64 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'redactor:scan', description: 'Scan files for sensitive content using Redactor')]
 class RedactorScanCommand extends Command
 {
-    protected $signature = 'redactor:scan 
+    protected $signature = 'redactor:scan
                             {paths?* : Paths to scan (files or directories, defaults to base_path)}
                             {--profile=file_scan : Redaction profile to use}
                             {--bail : Exit with code 1 if findings are detected}
                             {--summary-only : Do not display per-file results}
-                            {--output=table : Output format (table|json)}';
+                            {--output=table : Output format (table|json|sarif)}
+                            {--baseline= : Path to a baseline file of accepted findings}
+                            {--update-baseline : Write the current findings to the baseline file and exit 0}';
 
     public function handle(): int
     {
         /** @var array<int, string> $paths */
         $paths = $this->argument('paths');
 
-        if (empty($paths)) {
+        if ($paths === []) {
             $paths = [base_path()];
         }
 
         /** @var string $profile */
         $profile = $this->option('profile') ?? config('redactor.scan.profile', 'default');
 
-        /** @var bool $bail */
-        $bail = $this->option('bail');
-
-        /** @var bool $summaryOnly */
-        $summaryOnly = $this->option('summary-only');
+        $bail = (bool) $this->option('bail');
+        $summaryOnly = (bool) $this->option('summary-only');
 
         /** @var string $outputFormat */
         $outputFormat = $this->option('output') ?? 'table';
 
-        $this->components->info('Scanning paths: '.implode(', ', $paths)." with profile: {$profile}");
+        if (! in_array($outputFormat, ['table', 'json', 'sarif'], true)) {
+            $this->components->error("Unknown --output format [{$outputFormat}]. Use table, json or sarif.");
 
-        // Config::array()/Config::integer() throw when the value arrives as a
-        // string, which is exactly what env() produces for REDACTOR_SCAN_*.
+            return Command::FAILURE;
+        }
+
+        $baselinePath = $this->baselinePath();
+        $updateBaseline = (bool) $this->option('update-baseline');
+
+        try {
+            $baseline = $baselinePath !== null ? Baseline::load($baselinePath) : Baseline::empty();
+        } catch (\JsonException $e) {
+            $this->components->error($e->getMessage());
+
+            return Command::FAILURE;
+        }
+
+        // Machine-readable output must not be polluted with progress chatter.
+        $quiet = $outputFormat !== 'table';
+
+        if (! $quiet) {
+            $this->components->info('Scanning paths: '.implode(', ', $paths)." with profile: {$profile}");
+        }
+
         $ignorePatterns = ConfigValue::stringList(
             Config::get('redactor.scan.exclude_patterns', []),
             'scan.exclude_patterns'
         );
 
+        // Config::array()/Config::integer() throw when the value arrives as a
+        // string, which is exactly what env() produces for REDACTOR_SCAN_*.
         $maxFileSize = ConfigValue::positiveInt(
             Config::get('redactor.scan.max_file_size'),
             10_485_760,
@@ -60,27 +86,86 @@ class RedactorScanCommand extends Command
         $skipBinary = ConfigValue::bool(Config::get('redactor.scan.skip_binary'), true, 'scan.skip_binary');
         $respectGitignore = ConfigValue::bool(Config::get('redactor.scan.respect_gitignore'), true, 'scan.respect_gitignore');
 
-        $files = $this->collectFiles($paths, $ignorePatterns, $maxFileSize, $skipBinary, $respectGitignore);
+        $files = $this->collectFiles($paths, $ignorePatterns, $maxFileSize, $skipBinary, $respectGitignore, $quiet);
 
         $scanner = resolve(Scanner::class);
+        $relativeTo = base_path();
 
         /** @var Collection<int, ScanResult> $results */
         $results = collect();
 
         foreach ($files as $file) {
-            $result = $scanner->scanFile($file, $profile);
-            $results->push($result);
+            $results->push($scanner->scanFile($file, $profile, $relativeTo));
         }
 
-        $this->displayResults($results, $outputFormat, $summaryOnly);
+        /** @var Collection<int, ScanFinding> $allFindings */
+        $allFindings = $results->flatMap(fn (ScanResult $r) => $r->findings);
 
-        $findings = $results->filter(fn (ScanResult $r) => $r->hasFindings());
+        if ($updateBaseline) {
+            return $this->writeBaseline($baselinePath, $allFindings->all());
+        }
 
-        $this->newLine();
-        $this->components->info("Scan complete. Files scanned: {$results->count()}");
-        $this->components->info("Files with findings: {$findings->count()}");
+        $suppressed = 0;
 
-        return ($bail && $findings->count() > 0) ? Command::FAILURE : Command::SUCCESS;
+        if (! $baseline->isEmpty()) {
+            $before = $allFindings->count();
+            $results = $results->map(fn (ScanResult $r) => $r->withoutBaseline($baseline->fingerprints));
+            $allFindings = $results->flatMap(fn (ScanResult $r) => $r->findings);
+            $suppressed = $before - $allFindings->count();
+        }
+
+        $this->displayResults($results, $allFindings->all(), $outputFormat, $summaryOnly);
+
+        $filesWithFindings = $results->filter(fn (ScanResult $r) => $r->hasFindings());
+
+        if (! $quiet) {
+            $this->newLine();
+            $this->components->info("Scan complete. Files scanned: {$results->count()}");
+            $this->components->info("Files with findings: {$filesWithFindings->count()}");
+            $this->components->info("Total findings: {$allFindings->count()}");
+
+            if ($suppressed > 0) {
+                $this->components->info("Suppressed by baseline: {$suppressed}");
+            }
+        }
+
+        return ($bail && $allFindings->isNotEmpty()) ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    protected function baselinePath(): ?string
+    {
+        /** @var string|null $option */
+        $option = $this->option('baseline');
+
+        if (is_string($option) && $option !== '') {
+            return $option;
+        }
+
+        $configured = Config::get('redactor.scan.baseline');
+
+        return is_string($configured) && $configured !== '' ? $configured : null;
+    }
+
+    /**
+     * @param  array<int, ScanFinding>  $findings
+     */
+    protected function writeBaseline(?string $path, array $findings): int
+    {
+        if ($path === null) {
+            $this->components->error('--update-baseline needs a path: pass --baseline=<file> or set redactor.scan.baseline.');
+
+            return Command::FAILURE;
+        }
+
+        if (! Baseline::write($path, $findings, now()->toIso8601String())) {
+            $this->components->error("Could not write baseline file [{$path}].");
+
+            return Command::FAILURE;
+        }
+
+        $this->components->info(sprintf('Wrote %d accepted findings to %s', count($findings), $path));
+
+        return Command::SUCCESS;
     }
 
     /**
@@ -95,14 +180,15 @@ class RedactorScanCommand extends Command
         array $ignorePatterns,
         int $maxFileSize,
         bool $skipBinary = true,
-        bool $respectGitignore = true
+        bool $respectGitignore = true,
+        bool $quiet = false
     ): array {
         // Check for non-existent paths and warn user
         $validPaths = [];
         foreach ($paths as $path) {
             if (is_file($path) || is_dir($path)) {
                 $validPaths[] = $path;
-            } else {
+            } elseif (! $quiet) {
                 $this->components->warn("Path not found or not accessible: {$path}");
             }
         }
@@ -121,19 +207,18 @@ class RedactorScanCommand extends Command
      * Display scan results in the specified format.
      *
      * @param  Collection<int, ScanResult>  $results
+     * @param  array<int, ScanFinding>  $findings
      */
-    protected function displayResults(Collection $results, string $format, bool $summaryOnly): void
+    protected function displayResults(Collection $results, array $findings, string $format, bool $summaryOnly): void
     {
-        if ($format === 'json') {
-            $this->displayJsonResults($results);
-        } else {
-            $this->displayTableResults($results, $summaryOnly);
-        }
+        match ($format) {
+            'json' => $this->displayJsonResults($results),
+            'sarif' => $this->displaySarifResults($findings),
+            default => $this->displayTableResults($results, $findings, $summaryOnly),
+        };
     }
 
     /**
-     * Display results in JSON format.
-     *
      * @param  Collection<int, ScanResult>  $results
      */
     protected function displayJsonResults(Collection $results): void
@@ -142,48 +227,66 @@ class RedactorScanCommand extends Command
             'path' => $r->path,
             'status' => $r->skipped ? 'skipped' : ($r->hasFindings() ? 'findings' : 'clean'),
             'findings_count' => count($r->findings),
-            'findings' => $r->findings,
+            'findings' => array_map(fn (ScanFinding $f) => $f->toArray(), $r->findings),
             'profile' => $r->profile,
             'error' => $r->error,
         ])->toArray();
 
-        $jsonOutput = json_encode($jsonData, JSON_PRETTY_PRINT);
+        $jsonOutput = json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
         if ($jsonOutput !== false) {
             $this->output->writeln($jsonOutput);
         }
     }
 
     /**
-     * Display results in table format.
-     *
-     * @param  Collection<int, ScanResult>  $results
+     * @param  array<int, ScanFinding>  $findings
      */
-    protected function displayTableResults(Collection $results, bool $summaryOnly): void
+    protected function displaySarifResults(array $findings): void
+    {
+        $sarif = json_encode(SarifReport::build($findings), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+        if ($sarif !== false) {
+            $this->output->writeln($sarif);
+        }
+    }
+
+    /**
+     * @param  Collection<int, ScanResult>  $results
+     * @param  array<int, ScanFinding>  $findings
+     */
+    protected function displayTableResults(Collection $results, array $findings, bool $summaryOnly): void
     {
         if ($summaryOnly) {
             return;
         }
 
-        $tableData = $results->map(function (ScanResult $result) {
-            $status = $result->skipped
-                ? '<fg=yellow>SKIPPED</>'
-                : ($result->hasFindings() ? '<fg=red>FINDINGS</>' : '<fg=green>CLEAN</>');
+        if ($findings === []) {
+            $this->components->info(sprintf('No findings across %d files.', $results->count()));
 
-            $findingsCount = $result->skipped ? '-' : (string) count($result->findings);
+            return;
+        }
 
-            $path = $result->path;
-            // Truncate very long paths for better table display
-            if (strlen($path) > 60) {
-                $path = '...'.substr($path, -57);
-            }
+        // Findings, not files: a list of file names with a count next to each
+        // tells you nothing you can act on.
+        $this->table(
+            ['Rule', 'Location', 'Excerpt'],
+            array_map(fn (ScanFinding $f) => [
+                "<fg=red>{$f->rule}</>",
+                self::shorten($f->path).":{$f->line}:{$f->column}",
+                self::shorten($f->excerpt, 60),
+            ], $findings)
+        );
 
-            return [
-                'Status' => $status,
-                'Findings' => $findingsCount,
-                'File Path' => $path,
-            ];
-        })->toArray();
+        $skipped = $results->filter(fn (ScanResult $r) => $r->skipped);
 
-        $this->table(['Status', 'Findings', 'File Path'], $tableData);
+        foreach ($skipped as $result) {
+            $this->components->warn("Skipped {$result->path}: {$result->error}");
+        }
+    }
+
+    private static function shorten(string $value, int $limit = 60): string
+    {
+        return strlen($value) > $limit ? '...'.substr($value, -($limit - 3)) : $value;
     }
 }

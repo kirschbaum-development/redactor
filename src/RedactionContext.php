@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor;
 
+use Kirschbaum\Redactor\Findings\MatchFinding;
+
 class RedactionContext
 {
     /** @var array<int, string> */
     private array $redactedKeys = [];
+
+    /** @var array<int, MatchFinding> */
+    private array $findings = [];
 
     /**
      * Objects currently on the recursion stack, used to break reference cycles.
@@ -103,13 +108,38 @@ class RedactionContext
      * The key may be empty (a bare string passed straight to redact()), in
      * which case only the redaction flag is set.
      */
-    public function recordRedaction(string $key, ?string $rule = null): void
-    {
+    public function recordRedaction(
+        string $key,
+        ?string $rule = null,
+        int $offset = 0,
+        int $length = 0,
+        string $matched = '',
+    ): void {
         $this->wasRedacted = true;
 
         if ($key !== '') {
             $this->redactedKeys[] = $key;
         }
+
+        if ($rule !== null) {
+            $this->findings[] = new MatchFinding(
+                rule: $rule,
+                key: $key,
+                offset: $offset,
+                length: $length,
+                matched: $matched,
+            );
+        }
+    }
+
+    /**
+     * Every match recorded during this redaction, in the order found.
+     *
+     * @return array<int, MatchFinding>
+     */
+    public function getFindings(): array
+    {
+        return $this->findings;
     }
 
     /**

@@ -78,7 +78,7 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
             if ($applied === null) {
                 // The engine failed partway through. Emitting a partially
                 // substituted string would leak whatever it did not reach.
-                $context->recordRedaction($key, $rule->name);
+                $context->recordRedaction($key, $rule->name, 0, strlen($result));
 
                 return $replacement;
             }
@@ -104,24 +104,37 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
                 return $subject;
             }
 
-            $context->recordRedaction($key, $rule->name);
+            $context->recordRedaction($key, $rule->name, 0, strlen($subject), $subject);
 
             return $replacement;
         }
 
-        $matched = false;
+        /** @var array<int, array{offset: int, length: int, matched: string}> $hits */
+        $hits = [];
 
         $result = Pcre::replaceCallback(
             $rule->pattern,
-            function (array $matches) use ($rule, $replacement, &$matched): string {
+            function (array $matches) use ($rule, $replacement, &$hits): string {
                 /** @var array<int|string, array{0: string, 1: int}> $matches */
                 $rewritten = $rule->rewriteMatch($matches, $replacement);
 
                 // A match the rule's validator rejected is left as it was, and
                 // must not count as a redaction.
-                if ($rewritten !== $matches[0][0]) {
-                    $matched = true;
+                if ($rewritten === $matches[0][0]) {
+                    return $rewritten;
                 }
+
+                // Report the position of the secret itself, which is the
+                // capture group when the rule names one.
+                $target = $rule->capture > 0 && isset($matches[$rule->capture]) && $matches[$rule->capture][1] >= 0
+                    ? $matches[$rule->capture]
+                    : $matches[0];
+
+                $hits[] = [
+                    'offset' => $target[1],
+                    'length' => strlen($target[0]),
+                    'matched' => $target[0],
+                ];
 
                 return $rewritten;
             },
@@ -134,8 +147,8 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
             return null;
         }
 
-        if ($matched) {
-            $context->recordRedaction($key, $rule->name);
+        foreach ($hits as $hit) {
+            $context->recordRedaction($key, $rule->name, $hit['offset'], $hit['length'], $hit['matched']);
         }
 
         return $result;

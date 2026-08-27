@@ -61,6 +61,7 @@ class Redactor
             value: $redactedContent,
             wasRedacted: $context->hasRedactions(),
             redactedKeys: $redactedKeys,
+            findings: $context->getFindings(),
         );
     }
 

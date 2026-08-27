@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor;
 
+use Kirschbaum\Redactor\Findings\MatchFinding;
+
 /**
  * The outcome of a redaction, with its metadata alongside the value rather
  * than injected into it.
@@ -21,10 +23,12 @@ final readonly class RedactionResult
 {
     /**
      * @param  array<int, string>  $redactedKeys
+     * @param  array<int, MatchFinding>  $findings
      */
     public function __construct(
         public mixed $value,
         public bool $wasRedacted,
         public array $redactedKeys = [],
+        public array $findings = [],
     ) {}
 }
