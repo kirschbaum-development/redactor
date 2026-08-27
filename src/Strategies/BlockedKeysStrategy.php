@@ -5,47 +5,26 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\RedactionContext;
-use Kirschbaum\Redactor\Support\Pcre;
+use Kirschbaum\Redactor\Support\KeyMatcher;
 
+/**
+ * Redacts a value because of the name of the key holding it.
+ *
+ * Supports exact names and '*' wildcards: '*token*', 'password*', '*_key',
+ * 'user_*_token'. Matching is case-insensitive.
+ */
 class BlockedKeysStrategy implements RedactionStrategyInterface
 {
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
-        $keyLower = strtolower($key);
-
-        foreach ($context->config->blockedKeys as $blockedKey) {
-            // Check for wildcard patterns
-            if ($this->matchesPattern($keyLower, $blockedKey)) {
-                return true;
-            }
-        }
-
-        return false;
+        // onError: true. An unevaluatable blocked-key pattern blocks the key.
+        return KeyMatcher::for($context->config->blockedKeys)->matches($key, onError: true);
     }
 
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
-        $context->addRedactedKey($key);
+        $context->recordRedaction($key, 'blocked_key');
 
         return $context->config->replacement;
-    }
-
-    /**
-     * Check if a key matches a blocked key pattern.
-     * Supports wildcard patterns using '*' as a wildcard character.
-     */
-    private function matchesPattern(string $key, string $pattern): bool
-    {
-        // If no wildcards, do exact match (case-insensitive)
-        if (strpos($pattern, '*') === false) {
-            return $key === strtolower($pattern);
-        }
-
-        // Convert wildcard pattern to regex
-        // Escape the pattern first, then replace escaped wildcards
-        $regexPattern = '/^'.str_replace('\\*', '.*', preg_quote($pattern, '/')).'$/i';
-
-        // onError: true. An unevaluatable blocked-key pattern blocks the key.
-        return Pcre::matches($regexPattern, $key, onError: true, rule: 'blocked_key:'.$pattern);
     }
 }

@@ -23,9 +23,9 @@ readonly class RedactorConfig
 
     public function __construct(
         public bool $enabled,
-        /** @var array<string> */
+        /** @var array<int, string> */
         public array $safeKeys,
-        /** @var array<string> */
+        /** @var array<int, string> */
         public array $blockedKeys,
         /** @var array<string, PatternRule> */
         public array $patterns,
