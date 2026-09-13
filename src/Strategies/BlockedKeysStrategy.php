@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Strategies;
 
+use Kirschbaum\Redactor\Detection\Confidence;
+use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\RedactionContext;
 
 /**
@@ -11,6 +13,11 @@ use Kirschbaum\Redactor\RedactionContext;
  *
  * Supports exact names and '*' wildcards: '*token*', 'password*', '*_key',
  * 'user_*_token'. Matching is case-insensitive.
+ *
+ * The key is the entity. `operators.email` therefore applies to a value under
+ * a key named `email` whether the key rule or the email pattern found it, so
+ * "every email in this profile becomes a surrogate" holds without having to
+ * know which strategy got there first.
  */
 class BlockedKeysStrategy implements RedactionStrategyInterface
 {
@@ -22,8 +29,26 @@ class BlockedKeysStrategy implements RedactionStrategyInterface
 
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
-        $context->recordRedaction($key, 'blocked_key');
+        // Containers, booleans and nulls have no text an operator could act
+        // on: masking an array or pseudonymising `true` means nothing. They
+        // collapse to the replacement string as they always did.
+        if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
+            $context->recordRedaction($key, 'blocked_key');
 
-        return $context->config->replacement;
+            return $context->config->replacement;
+        }
+
+        $detection = new Detection(
+            entity: strtolower($key),
+            rule: 'blocked_key',
+            offset: 0,
+            value: (string) $value,
+            confidence: Confidence::of(Confidence::CERTAIN, sprintf('key "%s" is blocked', $key)),
+            key: $key,
+        );
+
+        $context->recordDetection($detection);
+
+        return $context->operate($detection);
     }
 }
