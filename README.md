@@ -72,7 +72,7 @@ The package uses a class-based configuration:
 1. **SafeKeysStrategy** - Preserves safe keys like `id`, `user_id`
 2. **BlockedKeysStrategy** - Always redacts blocked keys like `password`, `secret`
 3. **LargeObjectStrategy** - Redacts objects/arrays exceeding size limits
-4. **LargeStringStrategy** - Redacts strings exceeding length limits
+4. **LargeStringStrategy** - Truncates strings exceeding length limits, scanning the head it keeps
 5. **RegexPatternsStrategy** - Custom regex patterns for emails, credit cards, etc.
 6. **ShannonEntropyStrategy** - Detects high-entropy strings (API keys, tokens)
 
@@ -154,6 +154,7 @@ return [
             'track_redacted_keys' => false,
             'non_redactable_object_behavior' => 'preserve', // 'preserve', 'remove', 'redact', 'empty_array'
             'max_value_length' => 5000,
+            'large_string_behavior' => 'truncate', // keep the head and scan it; 'redact' replaces the value
             'redact_large_objects' => true,
             'max_object_size' => 100,
             'max_depth' => 32,   // guards cyclic and pathologically nested payloads
@@ -663,6 +664,12 @@ $redacted = Redactor::redact($user);
 $object = new stdClass();
 $object->secret = 'sensitive';
 $redacted = Redactor::redact($object);
+
+// Throwables, DateTimeInterface, DateTimeZone, enums and closures pass
+// through untouched: a Throwable has nothing to inspect and the formatter
+// needs the object to render the trace. Key rules still apply to them.
+Log::error('failed', ['exception' => $e, 'password' => 'x']);
+// ['exception' => $e, 'password' => '[REDACTED]']
 
 // Non-serializable objects (configurable behavior)
 $resource = fopen('file.txt', 'r');

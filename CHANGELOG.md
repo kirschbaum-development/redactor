@@ -75,6 +75,17 @@ item below is one commit, with tests.
 
 ### Changed - behaviour you should read before upgrading
 
+- **Long strings are truncated and scanned, not replaced.** A value over
+  `max_value_length` keeps its head, which the remaining strategies still
+  inspect, followed by `[REDACTED] (String truncated: 65536 characters, 5000
+  kept)`. The values most often over the limit in a Laravel log are stack traces
+  and request bodies, and replacing them wholesale destroyed exactly what the
+  reader needed. `large_string_behavior: redact` restores the old behaviour.
+- **Throwables, dates, enums and closures pass through the walk untouched.** A
+  Throwable has no public properties and encoded to `{}`, so `['exception' =>
+  $e]` reached the formatter as `[]` and the stack trace was lost; a Carbon
+  instance was exploded into its `toArray()` components. Key rules still apply
+  to these values, so `['secret' => $enum]` is still redacted.
 - **Redaction now replaces the matched span, not the whole value.**
   `redact('User bob@example.com placed order 123')` returns
   `'User [REDACTED] placed order 123'` rather than `'[REDACTED]'`. (R-01)
@@ -97,6 +108,9 @@ item below is one commit, with tests.
 
 ### Fixed - correctness and security
 
+- On PHP 8.5 every object walked raised three `SplObjectStorage` deprecations,
+  which Laravel logs - and a log record raised from inside a log tap is redacted,
+  which raises them again. Active objects are now tracked by `spl_object_id`.
 - `operators.default` had no effect on anything found by a pattern. A rule can
   always produce an operator from its `mode`, which defaults to replace, and
   that default was treated as a choice - so it outranked the profile default
