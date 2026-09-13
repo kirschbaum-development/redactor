@@ -391,6 +391,14 @@ return [
     ],
 
     /*
+    | Dispatch a RedactionPerformed event whenever something is redacted. It
+    | carries the profile, the keys, and counts per rule and per entity -
+    | never a value - so a listener can feed metrics or an audit trail without
+    | becoming a leak itself.
+    */
+    'events' => env('REDACTOR_EVENTS', true),
+
+    /*
     |--------------------------------------------------------------------------
     | Redaction Profiles
     |--------------------------------------------------------------------------

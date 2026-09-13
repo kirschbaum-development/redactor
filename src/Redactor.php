@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Event;
 use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
+use Kirschbaum\Redactor\Events\RedactionPerformed;
 use Kirschbaum\Redactor\Operators\Operator;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\Path\PathCursor;
@@ -137,12 +139,55 @@ class Redactor
             $redactedContent = $this->markResultArray($redactedContent, $redactedKeys, $config);
         }
 
-        return new RedactionResult(
+        $result = new RedactionResult(
             value: $redactedContent,
             wasRedacted: $context->hasRedactions(),
             redactedKeys: $redactedKeys,
             findings: $context->getFindings(),
         );
+
+        if ($result->wasRedacted && $this->eventsEnabled()) {
+            $this->announce($config->profile, $result);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Whether RedactionPerformed events are dispatched, read once per process.
+     */
+    private function eventsEnabled(): bool
+    {
+        return $this->events ??= (bool) Config::get('redactor.events', true);
+    }
+
+    private ?bool $events = null;
+
+    /**
+     * Dispatch a RedactionPerformed event carrying names and counts only.
+     *
+     * Dispatching must never break redaction: a listener that throws inside
+     * the logging pipeline would take the log line down with it, so the
+     * event is fire-and-forget and any failure is swallowed.
+     */
+    private function announce(string $profile, RedactionResult $result): void
+    {
+        $rules = [];
+        $entities = [];
+
+        foreach ($result->findings as $finding) {
+            $rules[$finding->rule] = ($rules[$finding->rule] ?? 0) + 1;
+            $entities[$finding->entity()] = ($entities[$finding->entity()] ?? 0) + 1;
+        }
+
+        try {
+            Event::dispatch(new RedactionPerformed($profile, $result->redactedKeys, $rules, $entities, count($result->findings)));
+        } catch (\Throwable $e) {
+            InternalLog::warning('A RedactionPerformed listener failed', [
+                'exception_type' => get_class($e),
+                'exception_message' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
