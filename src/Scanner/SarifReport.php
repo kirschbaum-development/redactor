@@ -29,8 +29,7 @@ class SarifReport
                 'defaultConfiguration' => ['level' => 'error'],
             ];
 
-            // Map the score onto SARIF's levels so a low-confidence hit shows
-            // as a note rather than blocking a merge alongside a certain one.
+            // Map the score onto SARIF's levels so a low-confidence hit is a note, not a merge blocker...
             $level = match ($finding->severity()) {
                 'high' => 'error',
                 'medium' => 'warning',
@@ -57,9 +56,7 @@ class SarifReport
                         'region' => [
                             'startLine' => max(1, $finding->line),
                             'startColumn' => max(1, $finding->column),
-                            // The snippet comes from the redacted output, so a
-                            // SARIF file can be uploaded without publishing the
-                            // secret it reports.
+                            // The snippet is redacted output, so the file can be uploaded without the secret...
                             'snippet' => ['text' => $finding->excerpt],
                         ],
                     ],
@@ -77,8 +74,7 @@ class SarifReport
                         'informationUri' => 'https://github.com/kirschbaum-development/redactor',
                         'version' => $version,
                         'rules' => array_values($rules),
-                        // Which rules produced these results, so two runs can
-                        // be compared and a rules change is visible.
+                        // Record which rules produced these results so two runs can be compared...
                         'properties' => array_filter(['rulesetFingerprint' => $ruleset]),
                     ],
                 ],

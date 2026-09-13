@@ -8,7 +8,7 @@ use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Operators\Surrogates\SurrogateFactory;
 
 /**
- * Replace the span with a stable fake of the same shape.
+ * Replaces the span with a stable fake of the same shape.
  *
  *     alice@customer.com   ->  u_7f3ac9@customer.com
  *     4111 1111 1111 1111  ->  4111 1193 7420 8846
@@ -20,18 +20,22 @@ use Kirschbaum\Redactor\Operators\Surrogates\SurrogateFactory;
  */
 class SurrogateOperator implements Operator
 {
+    /**
+     * Create a new surrogate operator instance.
+     */
     public function __construct(
         private readonly SurrogateFactory $surrogates = new SurrogateFactory,
     ) {}
 
+    /**
+     * Replace the span with a surrogate of the same shape.
+     */
     public function apply(Detection $detection, OperatorContext $context): string
     {
         $pseudonymizer = $context->pseudonymizer();
 
         if ($pseudonymizer === null) {
-            // Without a key there is no stable mapping to produce, and an
-            // unstable one would be worse than useless - it would look joinable
-            // and silently not be.
+            // Without a key there is no stable mapping to produce, and an unstable one would look joinable and silently not be...
             return $context->replacement;
         }
 
@@ -43,6 +47,9 @@ class SurrogateOperator implements Operator
         );
     }
 
+    /**
+     * Determine if the operator leaves the value as it found it.
+     */
     public function isPreserving(): bool
     {
         return false;

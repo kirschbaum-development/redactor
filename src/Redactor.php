@@ -54,23 +54,25 @@ class Redactor
     }
 
     /**
-     * Register a named entity recogniser, selectable from config by name.
+     * Register a named entity recognizer, selectable from config by name.
      */
     public function registerRecognizer(Recognizer $recognizer): void
     {
         $this->recognizers->register($recognizer);
     }
 
+    /**
+     * Get the recognizer registry.
+     */
     public function recognizers(): RecognizerRegistry
     {
         return $this->recognizers;
     }
 
     /**
-     * Exchange every known token in the content back for its original value.
+     * Exchange every known token in the content for its original value.
      *
-     * The counterpart of the `tokenize` operator. Unknown tokens - expired,
-     * foreign, invented by a model - are left as they are.
+     * Unknown tokens - expired, foreign, invented by a model - are left as they are.
      */
     public function detokenize(mixed $content): mixed
     {
@@ -83,9 +85,8 @@ class Redactor
     /**
      * Register a value that must never appear in output, for every profile.
      *
-     * For credentials that only exist at runtime - a token minted after boot,
-     * a value fetched from a vault. Refused, and false returned, when the value
-     * is too short to match safely.
+     * Meant for credentials that only exist at runtime. Values too short to
+     * match safely are refused, and false is returned.
      */
     public function registerSecret(string $value, string $entity = 'known_secret'): bool
     {
@@ -100,6 +101,9 @@ class Redactor
         $this->operators->register($name, $operator);
     }
 
+    /**
+     * Get the operator registry.
+     */
     public function operators(): OperatorRegistry
     {
         return $this->operators;
@@ -130,10 +134,9 @@ class Redactor
     }
 
     /**
-     * Redact content and return the redaction metadata alongside it.
+     * Redact the content and return the redaction metadata alongside it.
      *
-     * Preferred over redact() when you need to know whether anything matched:
-     * the metadata is kept out of the payload rather than written into it.
+     * The metadata is kept out of the payload rather than written into it.
      */
     public function redactWithMetadata(mixed $content, ?string $profile = null, ?bool $mark = null): RedactionResult
     {
@@ -150,8 +153,7 @@ class Redactor
 
         $redactedKeys = $context->getRedactedKeys();
 
-        // $mark overrides the profile: a response or an export has consumers
-        // who did not ask for the redactor's bookkeeping in their payload.
+        // An explicit $mark overrides the profile, since a response or export did not ask for markers...
         if (is_array($redactedContent) && $context->hasRedactions() && ($mark ?? $config->markRedacted)) {
             $redactedContent = $this->markResultArray($redactedContent, $redactedKeys, $config);
         }
@@ -171,7 +173,7 @@ class Redactor
     }
 
     /**
-     * Whether RedactionPerformed events are dispatched, read once per process.
+     * Determine if redaction events should be dispatched.
      */
     private function eventsEnabled(): bool
     {
@@ -183,9 +185,8 @@ class Redactor
     /**
      * Dispatch a RedactionPerformed event carrying names and counts only.
      *
-     * Dispatching must never break redaction: a listener that throws inside
-     * the logging pipeline would take the log line down with it, so the
-     * event is fire-and-forget and any failure is swallowed.
+     * A listener that throws inside the logging pipeline would take the log
+     * line down with it, so any failure is swallowed.
      */
     private function announce(string $profile, RedactionResult $result): void
     {
@@ -216,13 +217,12 @@ class Redactor
      */
     private function markResultArray(array $array, array $redactedKeys, RedactorConfig $config): array
     {
-        // Adding a string key to a list turns it into an object once encoded,
-        // breaking any consumer expecting a JSON array.
+        // A string key would turn a JSON list into an object once encoded...
         if (array_is_list($array) && $array !== []) {
             return $array;
         }
 
-        // Never clobber a key the caller is actually using.
+        // Never clobber a key the caller is already using...
         if (array_key_exists('_redacted', $array)) {
             InternalLog::warning('Payload already contains a "_redacted" key; redaction markers were not added', [
                 'profile' => $config->profile,
@@ -241,15 +241,12 @@ class Redactor
     }
 
     /**
-     * Redact content without ever throwing.
+     * Redact the content without ever throwing.
      *
-     * Intended for the logging pipeline, where an exception - a profile name
-     * typo, an unreadable config value, a strategy that blows up on unexpected
-     * input - would take down logging for the whole channel, including the
-     * error that would have explained why.
-     *
-     * On failure the content is replaced wholesale rather than passed through:
-     * if redaction could not be verified, the data is not safe to emit.
+     * Meant for the logging pipeline, where an exception would take down the
+     * whole channel, including the error that explains why. On failure the
+     * content is replaced wholesale rather than passed through, since data
+     * whose redaction could not be verified is not safe to emit.
      */
     public function redactSafely(mixed $content, ?string $profile = null): mixed
     {
@@ -267,7 +264,7 @@ class Redactor
     }
 
     /**
-     * The value emitted when redaction could not be completed.
+     * Get the value emitted when redaction could not be completed.
      */
     protected function failClosed(?string $profile): string
     {
@@ -276,7 +273,7 @@ class Redactor
         try {
             $replacement = RedactorConfig::fromConfig($profile)->replacement;
         } catch (\Throwable) {
-            // The config is what failed; fall back to the documented default.
+            // The config is what failed, so fall back to the documented default...
         }
 
         return $replacement.' (redaction failed)';
@@ -285,8 +282,8 @@ class Redactor
     /**
      * Resolve every configured profile, collecting the problems found.
      *
-     * Run this at deploy time (see the redactor:validate command) so a bad
-     * profile fails the deploy rather than the first log line that uses it.
+     * Run at deploy time so a bad profile fails the deploy rather than the
+     * first log line that uses it.
      *
      * @return array<string, string> profile name => error message
      */
@@ -305,17 +302,15 @@ class Redactor
                 $conflicts = array_values(array_intersect($config->safeKeys, $config->blockedKeys));
 
                 if ($conflicts !== []) {
-                    // SafeKeysStrategy runs first in every shipped profile, so
-                    // a key in both lists is silently never redacted.
+                    // SafeKeysStrategy runs first, so a key in both lists is silently never redacted...
                     $errors[$profile] = 'Keys listed in both safe_keys and blocked_keys (safe_keys wins, so these are never redacted): '
                         .implode(', ', $conflicts);
 
                     continue;
                 }
 
-                // Resolved one by one rather than by comparing counts: a
-                // conditional strategy the profile has switched off is
-                // resolvable, it just stays out of the chain.
+                // Resolved one by one rather than by count, since a conditional strategy
+                // the profile switched off still resolves but stays out of the chain...
                 $unresolved = array_values(array_filter(
                     $configured,
                     fn (string $name) => $this->createStrategyInstance($name, $config) === null
@@ -341,9 +336,7 @@ class Redactor
     }
 
     /**
-     * Run every rule that carries samples against them, through the real
-     * detection path - keywords, min_length, validators and allow-lists all
-     * apply - and describe each one that fails.
+     * Check every rule's samples through the real detection path, describing each that fails.
      *
      * @return array<int, string>
      */
@@ -370,6 +363,9 @@ class Redactor
         return $problems;
     }
 
+    /**
+     * Determine if the given rule detects anything in the subject.
+     */
     private function ruleDetectsIn(RegexPatternsStrategy $strategy, string $rule, string $subject, RedactionContext $context): bool
     {
         foreach ($strategy->detect($subject, '', $context) as $detection) {
@@ -382,21 +378,19 @@ class Redactor
     }
 
     /**
-     * Get strategies for a specific profile.
+     * Get the strategy chain for the given profile.
      *
      * @return array<Strategy>
      */
     private function getStrategiesForProfile(RedactorConfig $config): array
     {
-        // The redactor is a singleton, so the cache outlives any one call and
-        // must not go stale when the profile changes underneath it. A built
-        // profile carries a number that changes on every rebuild, so keying
-        // on it makes a stale chain impossible - including one that left a
-        // conditional strategy out because the old profile had it off.
+        // The redactor is a singleton, so the chain is keyed on the profile's build
+        // id: a rebuilt profile can never be served a stale chain, including one
+        // that left out a conditional strategy the old profile had switched off...
         $cacheKey = $config->profile.'|'.$config->buildId;
 
         if (! isset($this->profileStrategies[$cacheKey])) {
-            // Drop chains built for earlier builds of the same profile.
+            // Drop chains built for earlier builds of the same profile...
             foreach (array_keys($this->profileStrategies) as $key) {
                 if (str_starts_with($key, $config->profile.'|')) {
                     unset($this->profileStrategies[$key]);
@@ -410,7 +404,7 @@ class Redactor
     }
 
     /**
-     * Build strategies for a profile based on configuration.
+     * Build the strategy chain for the given profile.
      *
      * @return array<Strategy>
      */
@@ -419,7 +413,7 @@ class Redactor
         $strategies = [];
         $strategyClasses = $config->strategies;
 
-        // Build strategy instances based on config ordering (array order = priority)
+        // Config order is priority order...
         foreach ($strategyClasses as $strategyClass) {
             if (! is_string($strategyClass)) {
                 continue;
@@ -430,8 +424,7 @@ class Redactor
                 continue;
             }
 
-            // A strategy that can see from the profile that it has nothing to
-            // do stays out of the chain, so it costs nothing per value.
+            // A strategy with nothing to do for this profile stays out of the chain...
             if ($strategy instanceof ConditionalStrategy && ! $strategy->appliesTo($config)) {
                 continue;
             }
@@ -443,18 +436,17 @@ class Redactor
     }
 
     /**
-     * Create a strategy instance by class string.
+     * Create a strategy instance by custom name or class string.
      */
     private function createStrategyInstance(string $strategyClass, RedactorConfig $config): ?Strategy
     {
         $this->loadCustomStrategies();
 
-        // Check for custom strategies first (backward compatibility with name => class mapping)
+        // Custom strategies registered by name take precedence...
         if (isset($this->customStrategies[$strategyClass])) {
             return clone $this->customStrategies[$strategyClass];
         }
 
-        // Create strategy instance from class string
         if (class_exists($strategyClass) && is_subclass_of($strategyClass, Strategy::class)) {
             return new $strategyClass;
         }
@@ -463,12 +455,11 @@ class Redactor
     }
 
     /**
-     * Load custom strategies from configuration.
+     * Load the custom strategies from configuration.
      */
     private function loadCustomStrategies(): void
     {
-        // Loaded lazily rather than in the constructor: as a singleton the
-        // redactor is often built before the config it depends on is final.
+        // Loaded lazily, since the singleton is often built before the config is final...
         if ($this->customStrategiesLoaded) {
             return;
         }
@@ -489,7 +480,7 @@ class Redactor
     }
 
     /**
-     * Recursively redact data using strategies.
+     * Recursively redact the given data using the strategy chain.
      *
      * @param  array<Strategy>  $strategies
      */
@@ -502,13 +493,11 @@ class Redactor
         ?PathCursor $cursor = null
     ): mixed {
         if (! is_array($data) && ! is_object($data)) {
-            // Apply strategies to scalar values
             return $this->applyStrategiesToValue($data, $key, $context, $strategies);
         }
 
-        // Nothing below here may recurse without a depth budget: a self-
-        // referencing toArray() or a pathologically nested payload would
-        // otherwise run until PHP exhausts its memory limit and dies.
+        // Nothing below may recurse without a depth budget, or a self-referencing
+        // toArray() or a pathologically nested payload would exhaust memory...
         if (! $context->enterDepth()) {
             return $this->markDepthExceeded($context);
         }
@@ -535,10 +524,10 @@ class Redactor
     /**
      * Apply a path rule to whatever it landed on.
      *
-     * Scalars get the full operator range. Containers only sensibly support
-     * preserve, remove and replace: masking or pseudonymising an array has no
-     * defensible meaning, so anything else collapses the whole subtree to the
-     * replacement string rather than inventing a behaviour.
+     * Scalars get the full operator range. Containers only support preserve,
+     * remove and replace, since masking or pseudonymising an array has no
+     * defensible meaning; anything else collapses the subtree to the
+     * replacement string.
      */
     protected function applyPathRule(mixed $value, string $key, PathMatch $match, RedactionContext $context): mixed
     {
@@ -577,8 +566,7 @@ class Redactor
             rule: 'path:'.$match->pattern,
             offset: 0,
             value: $stringValue,
-            // A path names the location outright; there is nothing to infer and
-            // therefore nothing to be uncertain about.
+            // A path names the location outright, so there is nothing to be uncertain about...
             confidence: Confidence::of(Confidence::CERTAIN, sprintf('path "%s" matched', $match->pattern)),
             key: $key,
         );
@@ -603,7 +591,7 @@ class Redactor
     }
 
     /**
-     * Redact sensitive data from an array.
+     * Redact the given array.
      *
      * @param  array<string, mixed>  $array
      * @param  array<Strategy>  $strategies
@@ -616,16 +604,15 @@ class Redactor
         bool $alreadyDispatched = false,
         ?PathCursor $cursor = null
     ): array {
-        // Evaluate the array as a whole (LargeObjectStrategy and friends),
-        // unless the caller already ran the chain over this exact value with
-        // its real key - re-running it here would dispatch every nested node
-        // twice for no benefit.
+        // Evaluate the array as a whole unless the caller already ran the chain
+        // over this value with its real key, which would dispatch every nested
+        // node twice...
         $outcome = $alreadyDispatched
             ? null
             : $this->applyStrategies($array, '', $context, $strategies);
 
         if ($outcome !== null && $outcome->value !== $array) {
-            // Array was redacted by a strategy (e.g., LargeObjectStrategy)
+            // A strategy replaced the array wholesale...
             if (is_array($outcome->value)) {
                 /** @var array<string, mixed> $typedArray */
                 $typedArray = $outcome->value;
@@ -636,11 +623,9 @@ class Redactor
             return ['_redacted_array' => $outcome->value];
         }
 
-        // Start from the input rather than an empty array. PHP's copy-on-write
-        // means no allocation happens until something is actually written, so a
-        // subtree that redacts to nothing - which is most of them - costs a
-        // walk and no copy at all. Returning the original array unchanged also
-        // lets the caller's own identity check short-circuit.
+        // Start from the input rather than an empty array: copy-on-write means a
+        // subtree that redacts to nothing costs a walk and no copy, and returning
+        // the original lets the caller's identity check short-circuit...
         /** @var array<string, mixed> $result */
         $result = $array;
         $changed = false;
@@ -648,10 +633,9 @@ class Redactor
         foreach ($array as $key => $value) {
             $keyString = (string) $key;
 
-            // Paths first. A rule that names this exact location is more
-            // certain than anything inferred from the key or the contents, and
-            // settling it here skips the strategy chain and the walk below it
-            // entirely - which is where most of the speed comes from.
+            // Paths first: a rule naming this exact location outranks anything
+            // inferred from the key or contents, and settling it here skips the
+            // strategy chain and the walk below it entirely...
             $childCursor = $cursor?->descend($keyString);
             $pathMatch = $childCursor?->match();
 
@@ -673,21 +657,18 @@ class Redactor
                 continue;
             }
 
-            // Apply strategies to the key-value pair
             $outcome = $this->applyStrategies($value, $keyString, $context, $strategies);
             $processedValue = $outcome !== null ? $outcome->value : $value;
 
-            // Handle object removal case
             if ($processedValue === self::REMOVE_MARKER) {
                 unset($result[$key]);
                 $changed = true;
 
-                continue; // Skip adding this key to the result
+                continue;
             }
 
-            // No strategy claimed this container, so walk into it. The chain
-            // has already run over this value with its real key, so the walk
-            // must not run it again.
+            // No strategy claimed this container, so walk into it without running
+            // the chain over it again...
             if ($outcome === null && (is_array($value) || is_object($value))) {
                 $processedValue = $this->redactRecursively(
                     $value,
@@ -698,12 +679,11 @@ class Redactor
                     cursor: $childCursor,
                 );
 
-                // Handle object removal case after recursive processing
                 if ($processedValue === self::REMOVE_MARKER) {
                     unset($result[$key]);
                     $changed = true;
 
-                    continue; // Skip adding this key to the result
+                    continue;
                 }
             }
 
@@ -717,29 +697,26 @@ class Redactor
     }
 
     /**
-     * Redact sensitive data from an object.
+     * Redact the given object.
      *
      * @param  array<Strategy>  $strategies
      */
     protected function redactObject(object $object, string $key, RedactionContext $context, array $strategies, ?PathCursor $cursor = null): mixed
     {
-        // First, check if the object itself should be redacted by strategies
         $outcome = $this->applyStrategies($object, $key, $context, $strategies);
         if ($outcome !== null && $outcome->value !== $object) {
             return $outcome->value;
         }
 
-        // Some objects are values in their own right, not bags of values, and
-        // taking them apart destroys them: a Throwable has no public
-        // properties and encodes to {}, so the stack trace Laravel's formatter
-        // would have rendered becomes an empty array. Hand them on untouched.
+        // Some objects are values in their own right and taking them apart
+        // destroys them: a Throwable has no public properties, so its stack
+        // trace would become an empty array...
         if ($this->isOpaque($object)) {
             return $object;
         }
 
-        // An object already on the stack means following it again would loop.
-        // json_encode() catches this for itself, but the toArray() path below
-        // is tried first and has no such protection.
+        // An object already on the stack would loop; json_encode() catches this
+        // itself, but the toArray() path below has no such protection...
         if (! $context->enterObject($object)) {
             $context->markRedacted();
 
@@ -758,12 +735,11 @@ class Redactor
     }
 
     /**
-     * Whether an object should pass through the walk whole.
+     * Determine if an object should pass through the walk whole.
      *
-     * Throwables, dates, enums and closures carry no user-supplied fields to
-     * inspect, and every logging formatter already knows how to render them.
-     * A key-based rule still applies to them - `['secret' => $enum]` is
-     * redacted - because the strategy chain runs before this check.
+     * Throwables, dates, enums and closures carry no user-supplied fields, and
+     * every logging formatter already knows how to render them. Key-based
+     * rules still apply to them, since the strategy chain runs before this check.
      */
     protected function isOpaque(object $object): bool
     {
@@ -775,13 +751,12 @@ class Redactor
     }
 
     /**
-     * Convert an object to an array and redact it.
+     * Convert the given object to an array and redact it.
      *
      * @param  array<Strategy>  $strategies
      */
     protected function redactObjectContents(object $object, RedactionContext $context, array $strategies, ?PathCursor $cursor = null): mixed
     {
-        // Try to convert object to array using toArray() method if available
         if (method_exists($object, 'toArray')) {
             try {
                 /** @var array<string, mixed> $array */
@@ -789,11 +764,11 @@ class Redactor
 
                 return $this->redactArray($array, $context, $strategies, alreadyDispatched: true, cursor: $cursor);
             } catch (\Throwable) {
-                // Fall through to other methods
+                // Fall through to JSON encoding...
             }
         }
 
-        // Try JSON encoding first to detect circular references and other issues
+        // JSON encoding also surfaces circular references and unencodable objects...
         try {
             $jsonString = json_encode($object, JSON_THROW_ON_ERROR);
             $array = json_decode($jsonString, true, 512, JSON_THROW_ON_ERROR);
@@ -828,7 +803,7 @@ class Redactor
     }
 
     /**
-     * Apply strategies to a value in priority order.
+     * Apply the strategies to the given value in priority order.
      *
      * @param  array<Strategy>  $strategies
      */
@@ -841,9 +816,9 @@ class Redactor
                 continue;
             }
 
-            // Detecting strategies only report; their reports are acted on
-            // together, once, before anything that would change the string
-            // they were made against gets to run.
+            // Detecting strategies only report; their reports are acted on together,
+            // once, before anything that would change the string they were made
+            // against gets to run...
             if (! $strategy instanceof DetectingStrategy && is_string($value) && $context->hasPendingDetections()) {
                 $value = $context->resolvePendingDetections($value, $key);
             }
@@ -851,19 +826,18 @@ class Redactor
             $value = $strategy->handle($value, $key, $context);
             $handled = true;
 
-            // A preserving strategy declares the value safe. Nothing after it
-            // runs, and the walk does not descend into it: "this key is safe"
-            // has to mean the same thing for a scalar and for the array under
-            // it, or it means nothing predictable at all.
+            // A preserving strategy declares the value safe: nothing after it runs
+            // and the walk does not descend, so "this key is safe" means the same
+            // thing for a scalar and for the array under it...
             if ($strategy instanceof PreservingStrategy) {
                 $context->discardPendingDetections();
 
                 return new StrategyOutcome($value, preserved: true);
             }
 
-            // A strategy that replaces the value wholesale ends the chain.
-            // A chainable one only rewrote part of a string, so the remaining
-            // strategies still need to inspect what is left standing.
+            // A strategy that replaces the value wholesale ends the chain, while a
+            // chainable one only rewrote part of a string, so the remaining
+            // strategies still need to inspect what is left...
             if (! $strategy instanceof ChainableStrategy) {
                 $context->discardPendingDetections();
 
@@ -879,7 +853,7 @@ class Redactor
     }
 
     /**
-     * Run the strategy chain, returning the value unchanged if none applied.
+     * Apply the strategies to the given value, returning it unchanged if none applied.
      *
      * @param  array<Strategy>  $strategies
      */
@@ -891,7 +865,7 @@ class Redactor
     }
 
     /**
-     * Handle objects that cannot be redacted based on configuration.
+     * Handle an object that cannot be redacted according to the configured behavior.
      */
     protected function handleNonRedactableObject(object $object, RedactionContext $context): mixed
     {
@@ -899,12 +873,12 @@ class Redactor
             'remove' => $this->removeObject($context),
             'empty_array' => $this->replaceWithEmptyArray($context),
             'redact' => $this->replaceWithRedactionText($object, $context),
-            default => $object, // 'preserve' or any unknown value
+            default => $object, // "preserve" or an unknown value...
         };
     }
 
     /**
-     * Remove the object entirely (return a special marker that can be filtered out).
+     * Get the marker that removes the object from its parent entirely.
      */
     protected function removeObject(RedactionContext $context): string
     {
@@ -913,7 +887,11 @@ class Redactor
         return self::REMOVE_MARKER;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Replace the object with an empty array.
+     *
+     * @return array<string, mixed>
+     */
     protected function replaceWithEmptyArray(RedactionContext $context): array
     {
         $context->markRedacted();
@@ -922,7 +900,7 @@ class Redactor
     }
 
     /**
-     * Replace with redaction text.
+     * Replace the object with the redaction text.
      */
     protected function replaceWithRedactionText(object $object, RedactionContext $context): string
     {
@@ -940,7 +918,7 @@ class Redactor
 
         $this->customStrategies[$name] = $strategy;
 
-        // Clear cached profile strategies since we've added a new strategy
+        // Drop the cached chains so the new strategy is picked up...
         $this->profileStrategies = [];
     }
 

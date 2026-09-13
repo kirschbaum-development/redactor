@@ -8,13 +8,11 @@ namespace Kirschbaum\Redactor\Support;
  * Values that are never sensitive, however much they look it.
  *
  * Every detector is a guess about content, and some content is known: the
- * support address on every page, the sandbox card number in every fixture,
- * the example key in the documentation. Listing them here beats weakening a
- * pattern to avoid them, which weakens it for the real thing too.
- *
- * An entry is a literal, compared case-insensitively after trimming, or a
- * regex when it is delimited like one. A regex that cannot be evaluated
- * allows nothing: the failure mode of an allow-list is a leak, not noise.
+ * support address on every page, the sandbox card number in every fixture.
+ * Listing them here beats weakening a pattern to avoid them. An entry is a
+ * literal, compared case-insensitively after trimming, or a regex when it is
+ * delimited like one. A regex that cannot be evaluated allows nothing: the
+ * failure mode of an allow-list is a leak, not noise.
  */
 class AllowList
 {
@@ -28,6 +26,8 @@ class AllowList
     private array $patterns = [];
 
     /**
+     * Create a new allow list instance.
+     *
      * @param  array<int, string>  $entries
      */
     private function __construct(array $entries)
@@ -50,6 +50,8 @@ class AllowList
     }
 
     /**
+     * Compile an entry list, reusing the result for identical lists.
+     *
      * @param  array<int, string>  $entries
      */
     public static function for(array $entries): self
@@ -59,16 +61,25 @@ class AllowList
         return self::$memo[$cacheKey] ??= new self($entries);
     }
 
+    /**
+     * Get an empty allow list.
+     */
     public static function none(): self
     {
         return self::for([]);
     }
 
+    /**
+     * Determine if the list has no entries.
+     */
     public function isEmpty(): bool
     {
         return $this->exact === [] && $this->patterns === [];
     }
 
+    /**
+     * Determine if the value is allowed.
+     */
     public function allows(string $value): bool
     {
         if ($this->isEmpty()) {
@@ -80,7 +91,7 @@ class AllowList
         }
 
         foreach ($this->patterns as $pattern) {
-            // onError: false. An entry that cannot be evaluated excuses nothing.
+            // onError: false, since an entry that cannot be evaluated excuses nothing...
             if (Pcre::matches($pattern, $value, onError: false, rule: 'allowlist')) {
                 return true;
             }
@@ -90,7 +101,7 @@ class AllowList
     }
 
     /**
-     * A leading delimiter that closes before an optional modifier suffix.
+     * Determine if an entry has a leading delimiter that closes before an optional modifier suffix.
      */
     private static function looksLikeRegex(string $entry): bool
     {

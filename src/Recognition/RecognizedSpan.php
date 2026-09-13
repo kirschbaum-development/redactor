@@ -14,6 +14,9 @@ namespace Kirschbaum\Redactor\Recognition;
  */
 final readonly class RecognizedSpan
 {
+    /**
+     * Create a new recognized span instance.
+     */
     public function __construct(
         /** The recogniser's own label: PERSON, LOCATION, ORGANIZATION. */
         public string $entity,

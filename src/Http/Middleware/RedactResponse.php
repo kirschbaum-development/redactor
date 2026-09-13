@@ -20,19 +20,13 @@ use Throwable;
  *
  *     Route::get('/export', ExportController::class)->middleware('redact:observability');
  *
- * JSON responses are redacted as data, so structure and types survive and a
- * profile's `nullify` operator can keep a typed field typed. Text responses
- * are redacted as text. A streamed response is redacted as it streams, with
- * a hold-back so nothing split across two chunks gets through. File responses
- * pass through: a file is not a payload.
+ * JSON responses are redacted as data so structure and types survive; text is
+ * redacted as text; a stream is redacted as it streams, with a hold-back so
+ * nothing split across two chunks gets through; files pass through. The
+ * profile's `_redacted` markers are never written into a response.
  *
- * The profile's `_redacted` markers are never written into a response - they
- * are bookkeeping for logs, and a consumer of an API did not ask for them.
- *
- * Fails closed. If the response cannot be redacted - a profile that does not
- * exist, a strategy that throws - the client gets a 500 with no body from the
- * original response, not the original response. Run `redactor:validate` at
- * deploy time so that never happens in production.
+ * Fails closed: if the response cannot be redacted the client gets a 500 with
+ * none of the original body. Run `redactor:validate` at deploy time.
  */
 class RedactResponse
 {

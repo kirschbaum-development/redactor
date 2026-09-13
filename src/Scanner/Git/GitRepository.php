@@ -28,7 +28,7 @@ class GitRepository
     }
 
     /**
-     * The repository root, where git's paths are relative to.
+     * Get the repository root, which git's paths are relative to.
      */
     public function root(): string
     {
@@ -36,7 +36,7 @@ class GitRepository
     }
 
     /**
-     * Lines added by the changes currently staged for commit.
+     * Get the lines added by the changes currently staged for commit.
      *
      * @param  array<int, string>  $pathspec
      * @return array<int, Patch>
@@ -49,7 +49,7 @@ class GitRepository
     }
 
     /**
-     * Lines the working tree adds over a ref: a branch over main, say.
+     * Get the lines the working tree adds over a ref, such as a branch over main.
      *
      * @param  array<int, string>  $pathspec
      * @return array<int, Patch>
@@ -62,8 +62,7 @@ class GitRepository
     }
 
     /**
-     * Lines added by every commit in a range, newest first, each patch
-     * carrying the hash of the commit that added it.
+     * Get the lines added by every commit in a range, newest first, with the commit that added each.
      *
      * A secret committed and removed two commits later is still in the
      * repository's history; this is the mode that finds it.

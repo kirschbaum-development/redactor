@@ -8,14 +8,11 @@ namespace Kirschbaum\Redactor\Support;
  * Literal values that must never appear in output.
  *
  * Every other detector infers. This one knows: the application's own
- * credentials - the Stripe secret, the database password, the signing key -
- * are in config already, and a log line containing one of them verbatim is a
- * leak whatever it looks like. Matching is exact and case-sensitive, because
- * secrets are.
- *
- * Values shorter than the minimum are refused rather than registered: a
- * three-character "secret" would match inside ordinary words and redact half
- * the log.
+ * credentials are in config already, and a log line containing one verbatim
+ * is a leak whatever it looks like. Matching is exact and case-sensitive,
+ * because secrets are. Values shorter than the minimum are refused rather
+ * than registered, since a three-character "secret" would match inside
+ * ordinary words and redact half the log.
  */
 class SecretRegistry
 {
@@ -28,6 +25,8 @@ class SecretRegistry
     private int $shortest = PHP_INT_MAX;
 
     /**
+     * Create a new secret registry instance.
+     *
      * @param  array<int, string>  $values
      */
     public function __construct(array $values = [], string $entity = 'known_secret')
@@ -38,7 +37,7 @@ class SecretRegistry
     }
 
     /**
-     * Register one value. Returns false if it was too short to be safe.
+     * Register one value, returning false if it was too short to be safe.
      */
     public function add(string $value, string $entity = 'known_secret'): bool
     {
@@ -53,25 +52,31 @@ class SecretRegistry
     }
 
     /**
-     * Whether a subject is long enough to contain any registered value.
+     * Determine if a subject is long enough to contain any registered value.
      */
     public function couldContainOne(string $subject): bool
     {
         return $this->secrets !== [] && strlen($subject) >= $this->shortest;
     }
 
+    /**
+     * Determine if the registry has no values.
+     */
     public function isEmpty(): bool
     {
         return $this->secrets === [];
     }
 
+    /**
+     * Get the number of registered values.
+     */
     public function count(): int
     {
         return count($this->secrets);
     }
 
     /**
-     * Every occurrence of every registered value in the subject.
+     * Get every occurrence of every registered value in the subject.
      *
      * @return array<int, array{offset: int, value: string, entity: string}>
      */

@@ -12,22 +12,11 @@ use Throwable;
 /**
  * Decides whether a credential may be checked, and checks it.
  *
- * Verification is the single most useful thing a secret scanner can do - it
- * turns a wall of maybes into a short list of live keys - and the single most
- * dangerous, because checking a secret means sending it to a third party. A
- * scan that quietly posted every candidate it found to half a dozen APIs would
- * be an exfiltration tool wearing a security tool's name.
- *
- * So it is off unless three independent things all say yes:
- *
- *   1. config enables it                (a deliberate, reviewable change)
- *   2. the caller passes --verify       (a per-run decision by a human)
- *   3. the verifier is on the allowlist (which providers, specifically)
- *
- * Any one of them missing means nothing leaves the machine. There is
- * deliberately no way to turn this on from the redaction path at all: redaction
- * runs unattended inside applications, and nothing unattended should be making
- * outbound calls with secrets in them.
+ * Checking a secret means sending it to a third party, so verification is off
+ * unless three independent things all say yes: config enables it, the caller
+ * passes --verify, and the verifier is on the allowlist. Any one missing means
+ * nothing leaves the machine. There is deliberately no way to turn this on
+ * from the redaction path, which runs unattended inside applications.
  */
 class SecretVerifier
 {
@@ -50,7 +39,7 @@ class SecretVerifier
     }
 
     /**
-     * Build a verifier from config, or null if config does not permit any.
+     * Create a verifier from config, or null if config does not permit any.
      *
      * @param  array<string, mixed>  $settings
      * @param  array<int, Verifier>|null  $verifiers
@@ -64,13 +53,12 @@ class SecretVerifier
         $allowed = $settings['verifiers'] ?? [];
         $allowed = is_array($allowed) ? array_values(array_filter($allowed, 'is_string')) : [];
 
-        // An empty allowlist means "none", not "all". Enabling the feature is a
-        // separate decision from choosing who to trust with the secrets.
+        // An empty allowlist means "none", not "all"; enabling is separate from choosing who to trust...
         return $allowed === [] ? null : new self($allowed, $verifiers);
     }
 
     /**
-     * The verifiers that would actually run.
+     * Get the verifiers that are permitted to run.
      *
      * @return array<int, Verifier>
      */
@@ -83,7 +71,7 @@ class SecretVerifier
     }
 
     /**
-     * Every host a run could contact, so the operator can be told up front.
+     * Get every host a run could contact, so the operator can be told up front.
      *
      * @return array<int, string>
      */
@@ -101,7 +89,7 @@ class SecretVerifier
     }
 
     /**
-     * Check one secret, or report Unknown if nothing is allowed to.
+     * Verify one secret, or report Unknown if nothing is allowed to.
      *
      * Never throws: a verification failure must degrade the finding to Unknown,
      * not abandon a scan that has already found real problems.

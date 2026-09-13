@@ -5,27 +5,22 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Detection;
 
 /**
- * Turns everything the detectors reported about one subject into the spans
- * that will actually be rewritten.
+ * The resolver that turns everything reported about one subject into the spans to rewrite.
  *
- * Detectors are deliberately naive: each reports what it sees without knowing
- * what the others saw. Resolving that in one place means the same rules apply
- * whether the competing spans came from two regexes, a regex and the entropy
- * detector, or a recogniser model - and that a detector added later slots in
- * without learning anything about its neighbours.
+ * Detectors are deliberately naive, each reporting what it sees without
+ * knowing what the others saw. Resolving that in one place means the same
+ * rules apply whatever the competing spans came from, and a detector added
+ * later slots in without learning anything about its neighbours.
  */
 class DetectionSet
 {
     /**
      * Apply the confidence floor, then resolve overlaps.
      *
-     * Of two overlapping reports the higher score wins: a Luhn-validated card
-     * outranks the bare digit run that also matched it. On an equal score the
-     * rule declared first wins - so `url_with_auth` listed ahead of `email`
-     * takes the password out of `https://user:pass@host` and leaves the host,
-     * exactly as the config comments promise - and failing that, the report
-     * that arrived first. Length is deliberately not a criterion: it would let
-     * a greedy general rule swallow the precise one beside it.
+     * Of two overlapping reports the higher score wins; on an equal score the
+     * rule declared first wins, then the report that arrived first. Length is
+     * deliberately not a criterion, since it would let a greedy general rule
+     * swallow the precise one beside it.
      *
      * @param  array<int, Detection>  $detections
      * @return array<int, Detection> non-overlapping, ordered by offset

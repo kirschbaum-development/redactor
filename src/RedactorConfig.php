@@ -23,42 +23,39 @@ readonly class RedactorConfig
     public const OBJECT_BEHAVIORS = ['preserve', 'remove', 'empty_array', 'redact'];
 
     /**
-     * What happens to a string longer than max_value_length.
+     * The behaviours for a string longer than max_value_length.
      *
-     *   truncate  keep the head, scan it, note what was cut   (default)
-     *   redact    replace the whole value, the pre-1.0 behaviour
+     * The default, truncate, keeps the head, scans it and notes what was cut;
+     * redact replaces the whole value.
      */
     public const LARGE_STRING_BEHAVIORS = ['truncate', 'redact'];
 
     /**
      * How deep the redactor will walk before it stops and replaces the rest.
      *
-     * Deep enough for any realistic log context; shallow enough that a cyclic
+     * Deep enough for any realistic log context, shallow enough that a cyclic
      * or pathologically nested payload cannot exhaust memory.
      */
     public const DEFAULT_MAX_DEPTH = 32;
 
     /**
-     * The safe-key list, compiled.
+     * The compiled safe-key matcher.
      *
-     * Held here rather than looked up per call. KeyMatcher memoises on the
-     * pattern list, which means building an implode() of every key to find the
-     * cached matcher - measured at 0.203us against 0.050us for the match it was
-     * avoiding, so the cache cost four times what it saved. Resolving it once
-     * with the profile makes it what it was always meant to be.
+     * Held here rather than looked up per call: KeyMatcher memoises on the
+     * pattern list, so finding the cached matcher meant imploding every key,
+     * measured at 0.203us against 0.050us for the match it was avoiding.
      */
     public KeyMatcher $safeKeyMatcher;
 
-    /** The blocked-key list, compiled. See $safeKeyMatcher. */
+    /** The compiled blocked-key matcher. See $safeKeyMatcher. */
     public KeyMatcher $blockedKeyMatcher;
 
     /**
-     * The pattern rules ordered by min_length, shortest first, each paired
-     * with its declared position.
+     * The pattern rules ordered by min_length, each paired with its declared position.
      *
      * Lets the regex strategy stop at the first rule too long to match the
-     * subject instead of testing every rule's minimum. Declared order still
-     * decides an equal-score overlap, through the priority on each detection.
+     * subject. Declared order still decides an equal-score overlap, through
+     * the priority on each detection.
      *
      * @var array<int, array{0: PatternRule, 1: int}>
      */
@@ -67,27 +64,25 @@ readonly class RedactorConfig
     /**
      * A short digest of everything that decides what this profile detects.
      *
-     * Two scans with the same fingerprint used the same rules, so their
-     * findings can be compared; a baseline records the fingerprint it was
-     * made under, so a rules change is visible rather than silently
-     * reinterpreting what "accepted" meant.
+     * Two scans with the same fingerprint used the same rules, so a baseline
+     * that records its fingerprint makes a rules change visible rather than
+     * silently reinterpreting what "accepted" meant.
      */
     public string $rulesetFingerprint;
 
     /**
      * A number unique to this built profile, changing on every rebuild.
      *
-     * Anything cached against a profile - the strategy chain, say - can key on
-     * it and be sure a rebuilt profile is never served a stale derivative.
+     * Anything cached against a profile can key on it and be sure a rebuilt
+     * profile is never served a stale derivative.
      */
     public int $buildId;
 
     /**
-     * Values that are never redacted, whichever detector reports them.
+     * The values that are never redacted, whichever detector reports them.
      *
-     * Checked after detection rather than instead of it, so a finding for an
-     * allowed value is simply dropped and the rules stay as strong as they
-     * were written.
+     * Checked after detection rather than instead of it, so the rules stay as
+     * strong as they were written.
      */
     public AllowList $allowlist;
 
@@ -112,36 +107,18 @@ readonly class RedactorConfig
         public array $strategies,
         public string $profile,
         public int $maxDepth = self::DEFAULT_MAX_DEPTH,
-        /**
-         * Detections scoring below this are not acted on.
-         *
-         * Lets a profile be tuned with one number instead of by weakening
-         * patterns, which is the only lever a binary matcher offers.
-         */
+        /** The score below which detections are not acted on. */
         public float $minConfidence = 0.0,
         public RedactionPolicy $policy = new RedactionPolicy,
         /** @var array<string, mixed> */
         public array $pseudonymization = [],
-        /**
-         * Path rules, compiled once per profile.
-         *
-         * Consulted before any strategy runs: a path says exactly where a value
-         * lives, which is both more precise than guessing from its key and far
-         * cheaper than scanning its contents.
-         */
+        /** The path rules, compiled once per profile and consulted before any strategy runs. */
         public PathTrie $paths = new PathTrie,
         public string $largeStringBehavior = 'truncate',
         ?AllowList $allowlist = null,
-        /**
-         * The application's own credentials, so they are redacted wherever
-         * they appear verbatim. See KnownSecretsStrategy.
-         */
+        /** The application's own credentials, redacted wherever they appear verbatim. */
         public SecretRegistry $knownSecrets = new SecretRegistry,
-        /**
-         * Named entity recognition settings. See EntityRecognitionStrategy.
-         *
-         * @var array<string, mixed>
-         */
+        /** @var array<string, mixed> The named entity recognition settings. */
         public array $recognition = [],
     ) {
         $this->safeKeyMatcher = KeyMatcher::for($this->safeKeys);
@@ -163,7 +140,7 @@ readonly class RedactorConfig
     }
 
     /**
-     * Create a RedactorConfig instance from Laravel configuration.
+     * Create a new RedactorConfig instance from the application's configuration.
      */
     public static function fromConfig(?string $profile = null): self
     {
@@ -182,12 +159,9 @@ readonly class RedactorConfig
             throw new ConfigurationException("Redaction profile [{$profile}] must be an array.");
         }
 
-        // Settings read from outside the profile are folded into it at build
-        // time, so a change to any of them must rebuild the profile too: a
-        // rotated salt that did not take effect would keep old and new logs
-        // joinable, and a rotated APP_KEY would go unredacted.
-        // Raw, unvalidated values: this is an identity check on every call,
-        // and validation happens once below when the profile is built.
+        // Settings folded in from outside the profile must rebuild it when they
+        // change, or a rotated salt would keep old and new logs joinable and a
+        // rotated APP_KEY would go unredacted; validation happens once below...
         $shared = [config('redactor.pseudonymization'), self::knownSecretSources($config['known_secrets'] ?? [])];
 
         $cached = ProfileCache::get($profile, $config, $shared);
@@ -198,8 +172,7 @@ readonly class RedactorConfig
 
         $shannonEntropy = ConfigValue::map($config['shannon_entropy'] ?? [], "profiles.{$profile}.shannon_entropy");
 
-        // Coerce the entropy sub-keys here too: they are read on every string,
-        // and env() hands them over as strings.
+        // The entropy sub-keys are read on every string and env() hands them over as strings...
         if (array_key_exists('enabled', $shannonEntropy)) {
             $shannonEntropy['enabled'] = ConfigValue::bool($shannonEntropy['enabled'], true, "profiles.{$profile}.shannon_entropy.enabled");
         }
@@ -252,6 +225,8 @@ readonly class RedactorConfig
     }
 
     /**
+     * Get a digest of the settings that decide what the profile detects.
+     *
      * @param  array<string, PatternRule>  $patterns
      * @param  array<string, mixed>  $entropy
      * @param  array<int, string>  $safeKeys
@@ -275,7 +250,7 @@ readonly class RedactorConfig
     }
 
     /**
-     * Validate the shape of the recognition block; the strategy reads the rest.
+     * Validate the shape of the recognition settings.
      *
      * @return array<string, mixed>
      */
@@ -305,11 +280,10 @@ readonly class RedactorConfig
     /**
      * Collect the profile's known secrets from literal values and config keys.
      *
-     * A config key may point at a scalar or at an array, in which case every
-     * string leaf under it is registered - `services.stripe` registers the
-     * key, the secret and the webhook secret together. Non-string leaves and
-     * values too short to be safe are skipped silently: a null secret in a
-     * local environment must not fail the profile.
+     * A config key may point at an array, in which case every string leaf
+     * under it is registered. Non-string leaves and values too short to be
+     * safe are skipped silently, since a null secret in a local environment
+     * must not fail the profile.
      */
     private static function buildKnownSecrets(mixed $settings, string $profile): SecretRegistry
     {
@@ -329,8 +303,9 @@ readonly class RedactorConfig
     }
 
     /**
-     * The current values behind the profile's known-secret config keys, so the
-     * cache can tell when one of them changes.
+     * Get the current values behind the profile's known-secret config keys.
+     *
+     * Lets the cache tell when one of them changes.
      *
      * @return array<string, mixed>
      */
@@ -351,6 +326,9 @@ readonly class RedactorConfig
         return $sources;
     }
 
+    /**
+     * Register every string leaf under the value as a known secret.
+     */
     private static function registerLeaves(SecretRegistry $registry, mixed $value): void
     {
         if (is_string($value)) {
@@ -369,9 +347,9 @@ readonly class RedactorConfig
     /**
      * Merge the global pseudonymization settings with any profile override.
      *
-     * The key is almost always global - one key per application, so surrogates
-     * correlate across every profile - while a profile may still want its own
-     * salt to break correlation deliberately, or to switch the feature off.
+     * The key is almost always global so surrogates correlate across every
+     * profile, while a profile may still set its own salt to break
+     * correlation deliberately, or switch the feature off.
      *
      * @return array<string, mixed>
      */
@@ -399,6 +377,9 @@ readonly class RedactorConfig
         return PathTrie::compile($rules);
     }
 
+    /**
+     * Validate the profile's confidence floor.
+     */
     private static function confidenceFloor(mixed $value, string $path): float
     {
         $floor = ConfigValue::float($value, 0.0, $path);
@@ -461,7 +442,7 @@ readonly class RedactorConfig
     }
 
     /**
-     * Get the list of available profiles.
+     * Get the names of the configured profiles.
      *
      * @return array<string>
      */
@@ -473,7 +454,7 @@ readonly class RedactorConfig
     }
 
     /**
-     * Check if a profile exists.
+     * Determine if a profile is configured.
      */
     public static function profileExists(string $profile): bool
     {

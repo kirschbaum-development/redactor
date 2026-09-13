@@ -7,17 +7,18 @@ namespace Kirschbaum\Redactor\Config;
 use Kirschbaum\Redactor\Exceptions\ConfigurationException;
 
 /**
- * Coercion helpers for profile configuration.
+ * The coercion helpers for profile configuration.
  *
- * Every value in config/redactor.php can arrive as a string, because Laravel's
- * env() only casts "true", "false", "null" and "empty" - numbers stay strings.
- * Validating with is_int()/is_float() therefore rejects exactly the values the
- * documented environment variables produce, so each documented knob silently
- * fell back to its default. These helpers accept the string forms and reject
- * genuinely malformed input loudly.
+ * Every config value can arrive as a string, because env() only casts "true",
+ * "false", "null" and "empty" and numbers stay strings. Validating with
+ * is_int() or is_float() would reject exactly the values the documented
+ * environment variables produce.
  */
 class ConfigValue
 {
+    /**
+     * Coerce the value to a boolean.
+     */
     public static function bool(mixed $value, bool $default, string $path): bool
     {
         if ($value === null) {
@@ -51,6 +52,9 @@ class ConfigValue
         ));
     }
 
+    /**
+     * Coerce the value to a string.
+     */
     public static function string(mixed $value, string $default, string $path): string
     {
         if ($value === null) {
@@ -73,7 +77,7 @@ class ConfigValue
     }
 
     /**
-     * A positive integer, or null when the feature is switched off.
+     * Coerce the value to a positive integer, or null when the feature is switched off.
      */
     public static function positiveIntOrNull(mixed $value, ?int $default, string $path): ?int
     {
@@ -98,11 +102,17 @@ class ConfigValue
         return $int;
     }
 
+    /**
+     * Coerce the value to a positive integer.
+     */
     public static function positiveInt(mixed $value, int $default, string $path): int
     {
         return self::positiveIntOrNull($value, $default, $path) ?? $default;
     }
 
+    /**
+     * Coerce the value to a float.
+     */
     public static function float(mixed $value, float $default, string $path): float
     {
         if ($value === null) {
@@ -125,6 +135,8 @@ class ConfigValue
     }
 
     /**
+     * Coerce the value to one of the allowed strings.
+     *
      * @param  array<int, string>  $allowed
      */
     public static function enum(mixed $value, array $allowed, string $default, string $path): string
@@ -144,6 +156,8 @@ class ConfigValue
     }
 
     /**
+     * Coerce the value to a list of strings, dropping anything else.
+     *
      * @return array<int, string>
      */
     public static function stringList(mixed $value, string $path): array
@@ -172,6 +186,8 @@ class ConfigValue
     }
 
     /**
+     * Coerce the value to a string-keyed map.
+     *
      * @return array<string, mixed>
      */
     public static function map(mixed $value, string $path): array
@@ -198,6 +214,9 @@ class ConfigValue
         return $normalised;
     }
 
+    /**
+     * Coerce the value to an integer.
+     */
     private static function toInt(mixed $value, string $path): int
     {
         if (is_int($value)) {
@@ -211,7 +230,7 @@ class ConfigValue
         if (is_string($value)) {
             $trimmed = trim($value);
 
-            // Reject "12abc" and "1.5", which (int) would silently accept.
+            // Reject "12abc" and "1.5", which (int) would silently accept...
             if (preg_match('/^-?\d+$/', $trimmed) === 1) {
                 return (int) $trimmed;
             }
@@ -224,6 +243,9 @@ class ConfigValue
         ));
     }
 
+    /**
+     * Describe the value for an error message.
+     */
     private static function describe(mixed $value): string
     {
         if (is_object($value)) {

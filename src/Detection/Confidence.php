@@ -30,6 +30,9 @@ final readonly class Confidence
         public array $signals = [],
     ) {}
 
+    /**
+     * Create a new confidence instance from a base score.
+     */
     public static function of(float $score, string $reason = 'base rule confidence'): self
     {
         $clamped = self::clamp($score);
@@ -56,12 +59,17 @@ final readonly class Confidence
         );
     }
 
+    /**
+     * Determine if the score meets the given threshold.
+     */
     public function meets(float $threshold): bool
     {
         return $this->score >= $threshold;
     }
 
     /**
+     * Get a description of each signal behind the score.
+     *
      * @return array<int, string>
      */
     public function explain(): array
@@ -69,6 +77,9 @@ final readonly class Confidence
         return array_map(fn (Signal $s) => $s->describe(), $this->signals);
     }
 
+    /**
+     * Get the human-readable label for the score.
+     */
     public function label(): string
     {
         return match (true) {
@@ -79,6 +90,9 @@ final readonly class Confidence
         };
     }
 
+    /**
+     * Clamp the score to the unit interval.
+     */
     private static function clamp(float $score): float
     {
         return max(0.0, min(1.0, $score));

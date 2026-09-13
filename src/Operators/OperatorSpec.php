@@ -19,6 +19,8 @@ use Kirschbaum\Redactor\Exceptions\ConfigurationException;
 final readonly class OperatorSpec
 {
     /**
+     * Create a new operator spec instance.
+     *
      * @param  array<string, mixed>  $options
      */
     public function __construct(
@@ -26,6 +28,11 @@ final readonly class OperatorSpec
         public array $options = [],
     ) {}
 
+    /**
+     * Parse an operator definition from its configured form.
+     *
+     * @throws ConfigurationException
+     */
     public static function parse(mixed $definition, string $path): self
     {
         if ($definition instanceof self) {
@@ -50,7 +57,7 @@ final readonly class OperatorSpec
             return new self($definition['operator'], self::stringKeyed($options));
         }
 
-        // ['partial' => ['keep' => 4]] - a single name mapped to its options.
+        // A single name mapped to its options, as in ['partial' => ['keep' => 4]]...
         $name = array_key_first($definition);
 
         if (! is_string($name)) {
@@ -66,6 +73,8 @@ final readonly class OperatorSpec
     }
 
     /**
+     * Cast every option key to a string.
+     *
      * @param  array<mixed>  $options
      * @return array<string, mixed>
      */
@@ -81,6 +90,8 @@ final readonly class OperatorSpec
     }
 
     /**
+     * Create a copy of the spec with the given defaults beneath its options.
+     *
      * @param  array<string, mixed>  $defaults
      */
     public function withDefaults(array $defaults): self

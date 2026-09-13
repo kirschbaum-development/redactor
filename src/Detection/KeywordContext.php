@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Detection;
 
 /**
- * Corroboration from what surrounds a match.
+ * The corroboration a match gets from what surrounds it.
  *
- * "token=" beside a high-entropy string is evidence, not proof - the word
- * appears in plenty of prose too - so it nudges the score rather than deciding
- * it. Shared by every detector so a keyword means the same thing whichever
- * one spotted the value, and so a recogniser added later gets it for free.
+ * "token=" beside a high-entropy string is evidence, not proof, so it nudges
+ * the score rather than deciding it. Shared by every detector so a keyword
+ * means the same thing whichever one spotted the value.
  */
 class KeywordContext
 {
@@ -20,9 +19,10 @@ class KeywordContext
     public const BOOST = 0.25;
 
     /**
-     * How far back to look. Only the text ahead of the match is considered:
-     * "token=<value>" is a label for what follows, whereas a keyword after the
-     * match usually belongs to the next field.
+     * How far back to look.
+     *
+     * Only the text ahead of the match is considered, since a keyword after
+     * the match usually belongs to the next field.
      */
     public const WINDOW = 40;
 
@@ -45,7 +45,7 @@ class KeywordContext
     }
 
     /**
-     * Whether a credential keyword sits just before the match.
+     * Determine if a credential keyword sits just before the match.
      */
     public static function nearby(string $subject, int $offset): bool
     {
@@ -65,6 +65,9 @@ class KeywordContext
         return false;
     }
 
+    /**
+     * Determine if the key itself contains a credential keyword.
+     */
     public static function keyLooksSensitive(string $key): bool
     {
         if ($key === '') {

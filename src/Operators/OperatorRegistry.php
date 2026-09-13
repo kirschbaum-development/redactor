@@ -10,8 +10,8 @@ use Kirschbaum\Redactor\Operators\Surrogates\SurrogateFactory;
 /**
  * Resolves an operator name to the thing that does the work.
  *
- * Applications register their own here - `tokenize` against a vault, `encrypt`
- * with a reversible cipher, `classify` into a bucket - and use them from config
+ * Applications register their own here, `tokenize` against a vault, `encrypt`
+ * with a reversible cipher, `classify` into a bucket, and use them from config
  * by name, without touching detection.
  */
 class OperatorRegistry
@@ -35,6 +35,9 @@ class OperatorRegistry
     /** @var array<string, Operator> */
     private array $operators;
 
+    /**
+     * Create a new operator registry instance.
+     */
     public function __construct(?SurrogateFactory $surrogates = null)
     {
         $this->operators = [
@@ -49,16 +52,27 @@ class OperatorRegistry
         ];
     }
 
+    /**
+     * Register an operator under the given name.
+     */
     public function register(string $name, Operator $operator): void
     {
         $this->operators[$name] = $operator;
     }
 
+    /**
+     * Determine if an operator is registered under the given name.
+     */
     public function has(string $name): bool
     {
         return isset($this->operators[$name]);
     }
 
+    /**
+     * Get the operator registered under the given name.
+     *
+     * @throws ConfigurationException
+     */
     public function get(string $name): Operator
     {
         return $this->operators[$name] ?? throw new ConfigurationException(sprintf(
@@ -69,6 +83,8 @@ class OperatorRegistry
     }
 
     /**
+     * Get the registered operator names.
+     *
      * @return array<int, string>
      */
     public function names(): array

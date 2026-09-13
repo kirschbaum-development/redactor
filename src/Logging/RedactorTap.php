@@ -29,7 +29,7 @@ class RedactorTap
     {
         $monolog = $logger->getLogger();
 
-        // Laravel types this as PSR-3; only Monolog takes processors.
+        // Laravel types this as PSR-3; only Monolog takes processors...
         if (! $monolog instanceof Monolog) {
             return;
         }

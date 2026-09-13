@@ -10,16 +10,10 @@ use IteratorAggregate;
 /**
  * Reads a file as overlapping windows of lines.
  *
- * Scanning by loading the whole file caps the useful file size at whatever the
- * memory limit allows, which is exactly backwards: the files most worth
- * scanning - production logs, database dumps, exported archives - are the large
- * ones. Reading in windows keeps memory flat regardless of size.
- *
- * Windows overlap because a match can straddle a boundary. A PEM block, a
- * wrapped connection string or a pretty-printed JSON credential spans several
- * lines, and a reader that cut cleanly at the window edge would miss exactly
- * the secret it was looking for. The overlap costs a little duplicate work and
- * produces duplicate findings, which the scanner drops by fingerprint.
+ * Reading in windows keeps memory flat regardless of size, and the files most
+ * worth scanning - logs, dumps, archives - are the large ones. Windows overlap
+ * because a PEM block or a wrapped connection string can straddle a boundary;
+ * the duplicate findings this produces are dropped by the scanner.
  *
  * @implements IteratorAggregate<int, array{0: int, 1: string}>
  */
@@ -37,7 +31,7 @@ class LineWindowReader implements IteratorAggregate
     ) {}
 
     /**
-     * Read in-memory text - a git patch, say - through the same windows.
+     * Create a reader over in-memory text, such as a git patch.
      */
     public static function ofString(string $content, int $windowLines = self::DEFAULT_WINDOW_LINES, int $overlapLines = self::DEFAULT_OVERLAP_LINES): self
     {
@@ -66,8 +60,7 @@ class LineWindowReader implements IteratorAggregate
             }
         }
 
-        // Overlap has to be smaller than the window, or the reader never
-        // advances and the scan runs forever on a file it cannot finish.
+        // Overlap must be smaller than the window, or the reader never advances...
         $window = max(1, $this->windowLines);
         $overlap = max(0, min($this->overlapLines, $window - 1));
 
@@ -84,15 +77,13 @@ class LineWindowReader implements IteratorAggregate
 
                 yield [$startLine, implode("\n", $buffer)];
 
-                // Carry the tail forward so the next window can see a match
-                // that began in this one.
+                // Carry the tail forward so the next window sees a match that began in this one...
                 $carried = $overlap > 0 ? array_slice($buffer, -$overlap) : [];
                 $startLine += count($buffer) - count($carried);
                 $buffer = $carried;
             }
 
-            // The final partial window, unless it holds nothing but the overlap
-            // already emitted.
+            // The final partial window, unless it holds nothing but the overlap already emitted...
             if ($buffer !== [] && ($startLine === 1 || count($buffer) > $overlap)) {
                 yield [$startLine, implode("\n", $buffer)];
             }

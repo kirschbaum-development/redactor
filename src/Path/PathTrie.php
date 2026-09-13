@@ -9,16 +9,12 @@ use Kirschbaum\Redactor\Operators\OperatorSpec;
 /**
  * Every configured path, compiled once into one structure.
  *
- * The point of compiling is that matching then costs nothing per rule. A naive
- * implementation rebuilds the current path as a string at each node and tests
- * it against every pattern - O(depth x rules) with a string concatenation per
- * node. A trie is walked in lockstep with the payload instead: descending one
- * level advances a small set of active states, so the cost tracks the number of
- * rules *currently in play*, which is almost always zero or one.
- *
- * Deep wildcards make this an NFA rather than a plain trie - `**` can both
- * absorb a segment and stand aside for the segment after it - so a cursor
- * carries a set of states, not a single one.
+ * A naive implementation rebuilds the current path as a string at each node
+ * and tests it against every pattern. A trie is walked in lockstep with the
+ * payload instead, so the cost tracks the rules currently in play, which is
+ * almost always zero or one. Deep wildcards make it an NFA rather than a
+ * plain trie, since `**` can both absorb a segment and stand aside for the
+ * next, so a cursor carries a set of states rather than a single one.
  */
 class PathTrie
 {
@@ -44,18 +40,19 @@ class PathTrie
     private bool $empty = true;
 
     /**
-     * Compiled tries, keyed by the rule set that produced them.
+     * The compiled tries, keyed by the rule set that produced them.
      *
      * The profile config is resolved on every redaction, so without this the
-     * trie would be rebuilt per call and "compiled once" would be a fiction -
-     * measured at 0.23ms per call for 200 rules, several times the cost of the
-     * redaction itself.
+     * trie would be rebuilt per call: measured at 0.23ms per call for 200
+     * rules, several times the cost of the redaction itself.
      *
      * @var array<string, self>
      */
     private static array $memo = [];
 
     /**
+     * Compile a set of path rules, reusing the trie for identical sets.
+     *
      * @param  array<array-key, OperatorSpec>  $rules  path pattern => operator
      */
     public static function compile(array $rules): self
@@ -73,9 +70,8 @@ class PathTrie
         $trie = new self;
 
         foreach ($rules as $pattern => $spec) {
-            // PHP turns a purely numeric array key into an int, so a rule
-            // targeting a list index - 'items.0' or just '0' - arrives here as
-            // an integer and has to be put back.
+            // PHP turns a purely numeric array key into an int, so a rule targeting a
+            // list index arrives here as an integer and has to be put back...
             $trie->add(PathPattern::parse((string) $pattern), $spec);
         }
 
@@ -83,7 +79,7 @@ class PathTrie
     }
 
     /**
-     * Drop the compiled-trie cache. Only needed by tests.
+     * Flush the compiled trie cache.
      */
     public static function flush(): void
     {
@@ -93,10 +89,9 @@ class PathTrie
     /**
      * Identify a rule set by its patterns and what they do.
      *
-     * Both halves matter: changing an operator without changing a pattern must
-     * still produce a different trie, or a config change would silently fail to
-     * take effect - the way a cache that cannot be invalidated turns a security
-     * setting into a no-op.
+     * Both halves matter: changing an operator without changing a pattern
+     * must still produce a different trie, or a config change would silently
+     * fail to take effect and turn a security setting into a no-op.
      *
      * @param  array<array-key, OperatorSpec>  $rules
      */
@@ -112,16 +107,25 @@ class PathTrie
         return implode("\0", $parts);
     }
 
+    /**
+     * Determine if the trie has no rules.
+     */
     public function isEmpty(): bool
     {
         return $this->empty;
     }
 
+    /**
+     * Create a cursor positioned at the root.
+     */
     public function cursor(): PathCursor
     {
         return new PathCursor($this, $this->empty ? [] : [self::ROOT]);
     }
 
+    /**
+     * Add a pattern to the trie.
+     */
     private function add(PathPattern $pattern, OperatorSpec $spec): void
     {
         $this->empty = false;
@@ -138,8 +142,7 @@ class PathTrie
 
         $existing = $this->terminal[$node];
 
-        // Same node reached by two patterns: keep the more specific one, so the
-        // winner does not depend on the order they were declared in.
+        // Two patterns reaching the same node keep the more specific one, so the winner does not depend on declaration order...
         if ($existing === null || $pattern->specificity >= $existing['specificity']) {
             $this->terminal[$node] = [
                 'spec' => $spec,
@@ -149,6 +152,9 @@ class PathTrie
         }
     }
 
+    /**
+     * Create a new node and get its id.
+     */
     private function createNode(bool $isDeep = false): int
     {
         $id = $this->nextNode++;
@@ -178,15 +184,14 @@ class PathTrie
         $next = [];
 
         foreach ($states as $state) {
-            // A `**` node absorbs this segment and stays in play for the next.
+            // A `**` node absorbs this segment and stays in play for the next...
             if ($this->isDeep[$state]) {
                 $next[$state] = $state;
             }
 
             $this->step($state, $segment, $next);
 
-            // Entering a `**` child: it can absorb this segment, or match zero
-            // segments and let what follows it match here instead.
+            // A `**` child can absorb this segment, or match zero segments and let what follows it match here instead...
             $deep = $this->deep[$state];
 
             if ($deep !== null) {
@@ -199,6 +204,8 @@ class PathTrie
     }
 
     /**
+     * Follow the literal and `*` edges from a state.
+     *
      * @param  array<int, int>  $next
      */
     private function step(int $state, string $segment, array &$next): void
@@ -217,7 +224,7 @@ class PathTrie
     }
 
     /**
-     * The winning operator among a set of states, if any of them is terminal.
+     * Get the winning operator among a set of states, if any of them is terminal.
      *
      * @param  array<int, int>  $states
      */

@@ -29,18 +29,20 @@ use Kirschbaum\Redactor\Testing\RedactorFake;
  */
 class Redactor extends Facade
 {
+    /**
+     * Get the registered name of the component.
+     */
     protected static function getFacadeAccessor(): string
     {
         return \Kirschbaum\Redactor\Redactor::class;
     }
 
     /**
-     * Replace the redactor with one that records every call, for tests.
+     * Replace the bound redactor with a fake that records every call.
      *
      * It still redacts for real. Install it before the code under test
-     * resolves the redactor - before a log channel is first used, say - and
-     * assert afterwards with assertNeverEmitted(), assertRedacted() and
-     * friends.
+     * resolves the redactor, such as before a log channel is first used,
+     * and assert afterwards with assertNeverEmitted() and friends.
      */
     public static function fake(): RedactorFake
     {

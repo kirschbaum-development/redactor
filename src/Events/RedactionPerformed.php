@@ -5,13 +5,10 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Events;
 
 /**
- * Something was redacted. What, by which rule, under which profile - never
- * the value.
+ * The event dispatched when something was redacted: what, by which rule, under which profile, never the value.
  *
- * Listen to it to chart what leaks where: which rules fire most, which
- * profiles do the work, whether a deploy changed the shape of what is being
- * caught. It carries counts and names only, so a listener that writes to
- * metrics or to a log cannot itself become the leak.
+ * It carries counts and names only, so a listener that writes to metrics or
+ * to a log cannot itself become the leak.
  */
 final readonly class RedactionPerformed
 {

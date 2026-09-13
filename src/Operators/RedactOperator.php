@@ -6,14 +6,22 @@ namespace Kirschbaum\Redactor\Operators;
 
 use Kirschbaum\Redactor\Detection\Detection;
 
-/** Replace the span with the profile's replacement string. */
+/**
+ * Replaces the span with the profile's replacement string.
+ */
 class RedactOperator implements Operator
 {
+    /**
+     * Replace the span with the replacement string.
+     */
     public function apply(Detection $detection, OperatorContext $context): string
     {
         return $context->replacement;
     }
 
+    /**
+     * Determine if the operator leaves the value as it found it.
+     */
     public function isPreserving(): bool
     {
         return false;

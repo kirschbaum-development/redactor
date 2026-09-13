@@ -12,12 +12,12 @@ use Kirschbaum\Redactor\RedactionContext;
 interface Strategy
 {
     /**
-     * Determine if this strategy should handle the value under the given key.
+     * Determine if the strategy should handle the value under the given key.
      */
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool;
 
     /**
-     * Handle the value, returning what should stand in its place.
+     * Handle the value and return what should stand in its place.
      */
     public function handle(mixed $value, string $key, RedactionContext $context): mixed;
 }

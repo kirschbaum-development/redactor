@@ -14,23 +14,26 @@ use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 /**
  * Finds the application's own credentials wherever they appear verbatim.
  *
- * Sources, in the profile's `known_secrets` block:
- *
- *   'values' => [env('STRIPE_SECRET')]           literal values
- *   'config' => ['services.stripe.secret']       config keys, read at build time
- *
- * plus anything registered at runtime with Redactor::registerSecret(). A value
- * found this way is certain: there is nothing to infer.
+ * Sources are the profile's `known_secrets` block, whose 'values' are literals
+ * and whose 'config' entries are config keys read at build time, plus anything
+ * registered at runtime with Redactor::registerSecret(). A value found this
+ * way is certain: there is nothing to infer.
  */
 class KnownSecretsStrategy implements DetectingStrategy, Detector, Strategy
 {
     public const RULE = 'known_secret';
 
+    /**
+     * Determine if the value is long enough to contain a registered secret.
+     */
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
         return is_string($value) && $context->secrets()->couldContainOne($value);
     }
 
+    /**
+     * Collect every registered secret found in the value.
+     */
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
         if (! is_string($value)) {
@@ -45,6 +48,8 @@ class KnownSecretsStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
+     * Get every occurrence of a registered secret in the subject.
+     *
      * @return array<int, Detection>
      */
     public function detect(string $subject, string $key, RedactionContext $context): array

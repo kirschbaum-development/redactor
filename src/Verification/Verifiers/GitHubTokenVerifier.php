@@ -52,7 +52,7 @@ class GitHubTokenVerifier implements Verifier
 
             return VerificationResult::unknown(sprintf('GitHub returned %d.', $response->status()));
         } catch (Throwable $e) {
-            // The message is safe to surface; the secret never appears in it.
+            // The message is safe to surface; the secret never appears in it...
             return VerificationResult::unknown('Could not reach GitHub: '.$e->getMessage());
         }
     }

@@ -25,12 +25,11 @@ class RedactionContext
     private array $findings = [];
 
     /**
-     * Objects currently on the recursion stack, used to break reference cycles.
+     * The objects currently on the recursion stack, used to break reference cycles.
      *
-     * Keyed by spl_object_id rather than held in an SplObjectStorage: the
-     * contains()/attach()/detach() trio is deprecated in PHP 8.5, and a
-     * deprecation raised inside a log tap becomes a log record, which is
-     * redacted, which raises the deprecation again.
+     * Keyed by spl_object_id rather than SplObjectStorage, whose contains() /
+     * attach() / detach() trio is deprecated in PHP 8.5: a deprecation raised
+     * inside a log tap becomes a log record, which is redacted, which raises it again.
      *
      * @var array<int, true>
      */
@@ -42,8 +41,7 @@ class RedactionContext
     private array $entropyCache = [];
 
     /**
-     * What the detecting strategies have reported about the value currently
-     * being processed, before any of it has been acted on.
+     * The detections reported for the value currently being processed, not yet acted on.
      *
      * @var array<int, Detection>
      */
@@ -67,13 +65,16 @@ class RedactionContext
 
     private ?RecognizerRegistry $defaultRecognizers = null;
 
+    /**
+     * Get the recognizer registry.
+     */
     public function recognizers(): RecognizerRegistry
     {
         return $this->recognizerRegistry ?? ($this->defaultRecognizers ??= new RecognizerRegistry);
     }
 
     /**
-     * Every known secret in play: the profile's plus any registered at runtime.
+     * Get every known secret in play, the profile's plus any registered at runtime.
      */
     public function secrets(): SecretRegistry
     {
@@ -83,8 +84,7 @@ class RedactionContext
     }
 
     /**
-     * Enter one level of nesting. Returns false when the configured max depth
-     * would be exceeded, in which case the caller must not recurse.
+     * Enter one level of nesting, returning false when the max depth would be exceeded.
      */
     public function enterDepth(): bool
     {
@@ -97,6 +97,9 @@ class RedactionContext
         return true;
     }
 
+    /**
+     * Leave one level of nesting.
+     */
     public function leaveDepth(): void
     {
         if ($this->depth > 0) {
@@ -104,14 +107,16 @@ class RedactionContext
         }
     }
 
+    /**
+     * Get the current nesting depth.
+     */
     public function currentDepth(): int
     {
         return $this->depth;
     }
 
     /**
-     * Mark an object as being processed. Returns false if it is already on the
-     * stack, which means following it again would loop forever.
+     * Mark an object as being processed, returning false if it is already on the stack.
      */
     public function enterObject(object $object): bool
     {
@@ -126,6 +131,9 @@ class RedactionContext
         return true;
     }
 
+    /**
+     * Mark an object as no longer being processed.
+     */
     public function leaveObject(object $object): void
     {
         unset($this->activeObjects[spl_object_id($object)]);
@@ -153,15 +161,14 @@ class RedactionContext
     /**
      * Apply the configured operator to a detection.
      *
-     * The single place detection turns into a decision, so every strategy gets
-     * the same precedence rules and the same never-throw behaviour.
+     * The single place a detection turns into a decision, so every strategy
+     * gets the same precedence rules and the same never-throw behaviour.
      */
     public function operate(Detection $detection, ?OperatorSpec $atLocation = null): string
     {
         $spec = $this->config->policy->operatorFor($detection, $atLocation);
 
-        // Plain redaction is the overwhelmingly common outcome and needs no
-        // operator context, pseudonymizer or registry lookup to produce.
+        // Plain redaction is the common case and needs no operator context or registry lookup...
         if ($spec->name === OperatorRegistry::REDACT && $spec->options === []) {
             return $this->config->replacement;
         }
@@ -183,10 +190,10 @@ class RedactionContext
     }
 
     /**
-     * The operator the policy chooses for a detection, without applying it.
+     * Get the operator the policy chooses for a detection, without applying it.
      *
-     * For the whole-value sites - a blocked key, a path rule - where `remove`
-     * and `nullify` change the record rather than the text and have to be
+     * For the whole-value sites, a blocked key or a path rule, where remove
+     * and nullify change the record rather than the text and have to be
      * acted on by the walk itself.
      */
     public function operatorSpecFor(Detection $detection, ?OperatorSpec $atLocation = null): OperatorSpec
@@ -195,7 +202,7 @@ class RedactionContext
     }
 
     /**
-     * Whether a detection clears the profile's confidence floor.
+     * Determine if a detection clears the profile's confidence floor.
      */
     public function accepts(Detection $detection): bool
     {
@@ -203,7 +210,7 @@ class RedactionContext
     }
 
     /**
-     * Whether the profile's allowlist says this value is never sensitive.
+     * Determine if the profile's allowlist says the value is never sensitive.
      */
     public function isAllowed(string $value): bool
     {
@@ -218,14 +225,16 @@ class RedactionContext
         $this->pending[] = $detection;
     }
 
+    /**
+     * Determine if any detections are pending.
+     */
     public function hasPendingDetections(): bool
     {
         return $this->pending !== [];
     }
 
     /**
-     * Drop what was collected, because a later strategy settled the value
-     * some other way - preserved it, or replaced it wholesale.
+     * Drop the pending detections because a later strategy settled the value some other way.
      */
     public function discardPendingDetections(): void
     {
@@ -235,9 +244,9 @@ class RedactionContext
     /**
      * Act on everything collected for a value, in one pass over it.
      *
-     * The confidence floor and overlap resolution happen here, once, for
-     * every detector alike. Offsets are trusted because every detector saw
-     * this exact subject: nothing has rewritten it in between.
+     * The confidence floor and overlap resolution happen here, once, for every
+     * detector alike. Offsets are trusted because every detector saw this
+     * exact subject and nothing has rewritten it in between.
      */
     public function resolvePendingDetections(string $subject, string $key): string
     {
@@ -255,7 +264,7 @@ class RedactionContext
         foreach ($kept as $detection) {
             if ($detection->offset < $cursor) {
                 // Cannot happen after resolve(), but a bug here would splice
-                // garbage into a log line; skipping is the safe failure.
+                // garbage into a log line, so skipping is the safe failure...
                 continue;
             }
 
@@ -268,8 +277,7 @@ class RedactionContext
                 : $this->operate($detection);
 
             if ($replacement === $detection->value) {
-                // A preserving operator: detected and reported, deliberately
-                // left alone. The report is the point.
+                // A preserving operator: detected and reported, but deliberately left alone...
                 $this->recordDetection($detection, redacted: false);
 
                 continue;
@@ -286,10 +294,10 @@ class RedactionContext
     }
 
     /**
-     * The pseudonymizer for this profile, or null when none is configured.
+     * Get the pseudonymizer for this profile, or null when none is configured.
      *
-     * Resolved once and cached: deriving a key is cheap but not free, and a
-     * misconfigured key must not raise on every value in a payload.
+     * Resolved once and cached, since a misconfigured key must not raise on
+     * every value in a payload.
      */
     public function pseudonymizer(): ?Pseudonymizer
     {
@@ -306,8 +314,8 @@ class RedactionContext
     /**
      * Record that a rule redacted something under the given key.
      *
-     * The key may be empty (a bare string passed straight to redact()), in
-     * which case only the redaction flag is set.
+     * An empty key, a bare string passed straight to redact(), sets only the
+     * redaction flag.
      */
     public function recordRedaction(
         string $key,
@@ -358,7 +366,7 @@ class RedactionContext
     }
 
     /**
-     * Every match recorded during this redaction, in the order found.
+     * Get every match recorded during this redaction, in the order found.
      *
      * @return array<int, MatchFinding>
      */
@@ -368,7 +376,7 @@ class RedactionContext
     }
 
     /**
-     * Mark that redaction occurred.
+     * Mark that a redaction occurred.
      */
     public function markRedacted(): void
     {
@@ -376,7 +384,7 @@ class RedactionContext
     }
 
     /**
-     * Check if any redaction occurred.
+     * Determine if any redaction occurred.
      */
     public function hasRedactions(): bool
     {
@@ -384,7 +392,7 @@ class RedactionContext
     }
 
     /**
-     * Get cached entropy for a string.
+     * Get the cached entropy for a string.
      */
     public function getCachedEntropy(string $string): ?float
     {
@@ -392,7 +400,7 @@ class RedactionContext
     }
 
     /**
-     * Cache entropy calculation for a string.
+     * Cache the entropy of a string.
      */
     public function cacheEntropy(string $string, float $entropy): void
     {

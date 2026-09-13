@@ -19,9 +19,9 @@ use Kirschbaum\Redactor\Support\Pcre;
  *
  * Reports detections rather than rewriting, like every other detector, so an
  * entropy hit is scored, filtered by the confidence floor and handed to the
- * configured operator exactly as a pattern match is - and so a surrogate the
- * regex detector wrote a moment ago, which has the same entropy as the value
- * it replaced, is never mistaken for a fresh secret.
+ * configured operator exactly as a pattern match is, and a surrogate the regex
+ * detector just wrote, which has the same entropy as the value it replaced, is
+ * never mistaken for a fresh secret.
  */
 class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
 {
@@ -30,17 +30,19 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     public const RULE = 'shannon_entropy';
 
     /**
-     * How sure a bare entropy hit is on its own.
+     * The confidence of a bare entropy hit on its own.
      *
-     * Randomness is evidence of a secret, not proof: a base64 image chunk or
-     * a git hash scores just as high. So an entropy detection starts at
-     * medium, climbs with how far over the threshold it lands, and reaches
-     * high only with a credential keyword beside it.
+     * Randomness is evidence of a secret, not proof: a base64 image chunk or a
+     * git hash scores just as high. A detection starts at medium, climbs with
+     * its margin over the threshold, and reaches high only with a keyword.
      */
     private const BASE_CONFIDENCE = 0.5;
 
     private const MARGIN_BOOST_CAP = 0.4;
 
+    /**
+     * Determine if the value is a string long enough to measure.
+     */
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
         $shannonConfig = $context->config->shannonEntropy;
@@ -52,6 +54,9 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
         return ! $this->tooShort($value, $shannonConfig);
     }
 
+    /**
+     * Collect every high-entropy token in the value.
+     */
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
         if (! is_string($value)) {
@@ -66,11 +71,10 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
-     * Every whitespace-delimited token whose entropy clears its threshold.
+     * Get every whitespace-delimited token whose entropy clears its threshold.
      *
-     * A value with no internal whitespace is a single token, so this
-     * degenerates to reporting the whole value - the right answer for a bare
-     * API key. A sentence with a secret embedded in it reports only the secret.
+     * A value with no internal whitespace is a single token, so a bare API key
+     * is reported whole; a sentence with a secret in it reports only the secret.
      *
      * @return array<int, Detection>
      */
@@ -80,22 +84,18 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
             return [];
         }
 
-        // Only tokens at least min_length long can qualify, and a byte count
-        // is an upper bound on a character count, so asking PCRE for `\S{n,}`
-        // rather than `\S+` is exact - and it turns a million-byte subject
-        // into a few hundred candidates instead of two hundred thousand
-        // [token, offset] pairs held in memory at once.
+        // Only tokens at least min_length long can qualify and a byte count bounds a
+        // character count, so asking PCRE for `\S{n,}` is exact and turns a million-byte
+        // subject into a few hundred candidates instead of hundreds of thousands...
         $minimum = max(1, $this->minimumLength($context->config->shannonEntropy));
 
-        // Spelled out rather than selected into a variable so the /u decision
-        // is visible at the point it matters.
+        // Spelled out rather than selected into a variable so the /u decision is visible where it matters...
         $found = $this->isAscii($subject)
             ? @preg_match_all('/\S{'.$minimum.',}/', $subject, $matches, PREG_OFFSET_CAPTURE)
             : @preg_match_all('/\S{'.$minimum.',}/u', $subject, $matches, PREG_OFFSET_CAPTURE);
 
         if ($found === false || preg_last_error() !== PREG_NO_ERROR) {
-            // The engine gave up. Fail closed rather than let a value the
-            // tokeniser could not even split go out uninspected.
+            // The engine gave up, so fail closed rather than let a value the tokeniser could not split go out uninspected...
             Pcre::matches('/\S+/u', $subject, onError: true, rule: self::RULE);
 
             return [Detection::failClosed(
@@ -153,17 +153,12 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
-     * Whether a subject is pure ASCII, and so can use the cheaper patterns.
+     * Determine if a subject is pure ASCII and can use the cheaper patterns.
      *
      * The /u modifier makes PCRE validate the whole subject as UTF-8 on every
-     * call, which for ASCII input buys nothing and costs a great deal: 40us
-     * against 12us to split a 2.2KB string, on a path that runs over every
-     * value scanned. Detecting ASCII costs about 1us, so the check pays for
-     * itself many times over on exactly the long subjects where it matters.
-     *
-     * Dropping /u for non-ASCII input would be wrong rather than merely slower
-     * - \s stops recognising Unicode whitespace, so tokens would join - which
-     * is why the choice is made per subject rather than once for the profile.
+     * call, 40us against 12us to split a 2.2KB string, on a path that runs
+     * over every value. Dropping /u for non-ASCII input would be wrong rather
+     * than slower, since \s would stop recognising Unicode whitespace.
      */
     protected function isAscii(string $value): bool
     {
@@ -171,17 +166,12 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
-     * Whether a subject is too short to contain anything worth measuring.
+     * Determine if a subject is too short to contain anything worth measuring.
      *
-     * Checked twice over, cheapest first. A byte count is an upper bound on a
-     * character count, so a subject under the minimum in bytes is certainly
-     * under it in characters - which means the cheap test can only ever skip
-     * work that was provably going to find nothing. Only what survives it pays
-     * for the encoding check a character count requires.
-     *
-     * Applied at the value level as well as per token: a value shorter than
-     * min_length cannot contain a token that long, so the whole tokenise pass
-     * can be skipped. Most values in a log payload are well under it.
+     * A byte count is an upper bound on a character count, so a subject under
+     * the minimum in bytes is certainly under it in characters, and only what
+     * survives that test pays for the encoding check. Applied per value as
+     * well as per token, since most values in a log payload are well under it.
      *
      * @param  array<string, mixed>  $shannonConfig
      */
@@ -197,7 +187,7 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
-     * The configured minimum token length, or zero when there is none.
+     * Get the configured minimum token length, or zero when there is none.
      *
      * @param  array<string, mixed>  $shannonConfig
      */
@@ -209,8 +199,7 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
-     * Split a string into characters, falling back to bytes for input that is
-     * not valid UTF-8 (binary blobs reach this during file scanning).
+     * Split a string into characters, falling back to bytes for input that is not valid UTF-8.
      *
      * @return array<int, string>
      */
@@ -226,7 +215,7 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
-     * Character count, byte count for non-UTF-8 input.
+     * Get the character count, or the byte count for non-UTF-8 input.
      */
     protected function length(string $string): int
     {
@@ -250,13 +239,12 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
-     * Charsets a token can be drawn from, most restrictive first.
+     * The charsets a token can be drawn from, most restrictive first.
      *
-     * A 40-character hex digest tops out at 4 bits of entropy per character
-     * because it only has 16 symbols to draw on, so judging it against a
-     * base64 threshold guarantees a miss. Judging base64 against a hex
-     * threshold guarantees false positives. detect-secrets solves this the
-     * same way: pick the threshold from the alphabet.
+     * A 40-character hex digest tops out at 4 bits per character because it
+     * has only 16 symbols, so judging it against a base64 threshold guarantees
+     * a miss and the reverse guarantees false positives. detect-secrets solves
+     * this the same way: pick the threshold from the alphabet.
      *
      * @var array<string, string>
      */
@@ -267,21 +255,18 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     ];
 
     /**
-     * Determine if a string should be redacted based on Shannon entropy.
+     * Determine if a token's entropy clears its threshold.
      */
     protected function shouldRedactByEntropy(string $string, RedactionContext $context): bool
     {
         $shannonConfig = $context->config->shannonEntropy;
 
-        // Only analyze strings that meet minimum length requirement.
-        // Counted in characters, not bytes, so a short multibyte token is not
-        // mistaken for a long one - but the byte count settles most cases
-        // first, without the encoding check that a character count needs.
+        // Counted in characters, not bytes, so a short multibyte token is not mistaken for a long one...
         if ($this->tooShort($string, $shannonConfig)) {
             return false;
         }
 
-        // Skip common words and patterns that might have high entropy but are not sensitive
+        // Skip configured exclusions that score high without being sensitive...
         if ($this->isCommonPattern($string, $context->config)) {
             return false;
         }
@@ -292,12 +277,11 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
-     * The entropy threshold to judge this particular token against.
+     * Get the entropy threshold to judge this particular token against.
      *
      * charset_thresholds is an opt-in refinement: when a profile configures
      * one for the token's alphabet it wins, otherwise the profile's single
-     * `threshold` applies. An explicitly configured threshold is never
-     * overridden by a value the operator cannot see.
+     * `threshold` applies. An explicit threshold is never silently overridden.
      */
     protected function thresholdFor(string $string, RedactionContext $context): float
     {
@@ -338,19 +322,16 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     /**
      * Calculate the Shannon entropy of a string, in bits per character.
      *
-     * Pass a context to reuse (and populate) its per-redaction entropy cache.
+     * Pass a context to reuse and populate its per-redaction entropy cache.
      */
     public function calculateShannonEntropy(string $string, ?RedactionContext $context = null): float
     {
-        // Check cache first
         $cachedEntropy = $context?->getCachedEntropy($string);
         if ($cachedEntropy !== null) {
             return $cachedEntropy;
         }
 
-        // Split into characters, not bytes: measuring UTF-8 by byte counts
-        // the same character's continuation bytes as separate symbols, which
-        // inflates entropy for any non-ASCII text.
+        // Measured in characters, since counting UTF-8 continuation bytes as symbols inflates entropy for non-ASCII text...
         $characters = $this->characters($string);
         $length = count($characters);
 
@@ -361,13 +342,11 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
             return $entropy;
         }
 
-        // Count character frequencies and calculate entropy in a single loop
         $frequencies = [];
         foreach ($characters as $char) {
             $frequencies[$char] = ($frequencies[$char] ?? 0) + 1;
         }
 
-        // Calculate entropy
         $entropy = 0.0;
         foreach ($frequencies as $frequency) {
             $probability = $frequency / $length;
@@ -376,15 +355,13 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
             }
         }
 
-        // Cache the result
         $context?->cacheEntropy($string, $entropy);
 
         return $entropy;
     }
 
     /**
-     * Check if a string matches a configured exclusion pattern, meaning it should
-     * not be redacted despite scoring above the entropy threshold.
+     * Determine if a string matches a configured exclusion pattern and should be left alone.
      */
     public function isCommonPattern(string $string, RedactorConfig $config): bool
     {
@@ -400,12 +377,11 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
                 continue;
             }
 
-            // onError: false. An exclusion pattern that cannot be evaluated
-            // must not excuse the value from the entropy check.
+            // onError: false, since an exclusion pattern that cannot be evaluated must not excuse the value...
             if (Pcre::matches($pattern, $string, onError: false, rule: 'exclusion_pattern')) {
-                // Special case: hex strings need additional length check
+                // A long hex string may be a digest such as SHA-256, so the hex exclusion does not excuse it...
                 if ($pattern === '/^[0-9a-f]+$/i' && strlen($string) >= 32) {
-                    continue; // Long hex strings might be sensitive (like SHA256)
+                    continue;
                 }
 
                 return true;

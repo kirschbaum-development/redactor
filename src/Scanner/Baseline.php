@@ -83,8 +83,7 @@ class Baseline
         $entries = [];
 
         foreach ($findings as $finding) {
-            // Path and rule are recorded for a human reading the diff; the
-            // fingerprint is what is actually matched against.
+            // Path and rule are for a human reading the diff; only the fingerprint is matched...
             $entries[$finding->fingerprint] = [
                 'fingerprint' => $finding->fingerprint,
                 'rule' => $finding->rule,

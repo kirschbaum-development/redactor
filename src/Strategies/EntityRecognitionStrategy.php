@@ -23,33 +23,28 @@ use Throwable;
 /**
  * Asks a named entity recogniser about free text.
  *
- * Names, addresses and organisations are the PII that no regex can express
- * and no entropy measure can see. A model can find them, at a cost three
- * orders of magnitude above the rule engine, so this strategy is gated hard:
- *
- *   - off unless the profile enables it
- *   - only on values that look like prose, between a minimum and maximum
- *     length - a JSON blob or a bare token is not something a model reads well
- *   - only the entity types the profile asks for, above its score threshold
- *   - never on the request path: a model call belongs on a queue, an export,
- *     a scan
- *
- * And it is defensive about what comes back. Recognisers report character
- * offsets; the span is converted to bytes and checked against the subject
- * before it becomes a detection, because a misaligned offset would replace
- * the wrong text. A recogniser that fails is logged, skipped, and after a
- * few failures not asked again for a while - the output is then rules-only,
- * which is what it would have been without this strategy at all.
+ * Names, addresses and organisations are the PII no regex can express and no
+ * entropy measure can see. A model can find them at a cost three orders of
+ * magnitude above the rule engine, so this runs only when the profile enables
+ * it, only on prose within a length window, and never belongs on the request
+ * path. Spans are verified against the subject before they become detections,
+ * and a failing recogniser trips a breaker and leaves the output rules-only.
  */
 class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrategy, Detector, Strategy
 {
     public const RULE = 'entity_recognition';
 
+    /**
+     * Determine if the profile enables entity recognition.
+     */
     public function appliesTo(RedactorConfig $config): bool
     {
         return ($config->recognition['enabled'] ?? false) === true;
     }
 
+    /**
+     * Determine if the value is prose the recogniser should read.
+     */
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
         if (! is_string($value)) {
@@ -71,6 +66,9 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
         return $this->looksLikeProse($value, $this->int($settings, 'min_words', 3));
     }
 
+    /**
+     * Collect every entity the recogniser finds in the value.
+     */
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
         if (! is_string($value)) {
@@ -85,6 +83,8 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
     }
 
     /**
+     * Get every entity the recogniser finds in the subject.
+     *
      * @return array<int, Detection>
      */
     public function detect(string $subject, string $key, RedactionContext $context): array
@@ -135,7 +135,7 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
     }
 
     /**
-     * Turn recognised spans into detections, verifying every offset.
+     * Convert recognised spans into detections, verifying every offset.
      *
      * @param  array<int, RecognizedSpan>  $spans
      * @param  array<string, mixed>  $settings
@@ -166,9 +166,8 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
             $byteOffset = strlen(mb_substr($subject, 0, $span->start, 'UTF-8'));
             $value = mb_substr($subject, $span->start, $span->end - $span->start, 'UTF-8');
 
-            // The recogniser tokenised its own copy of the text; if its offsets
-            // do not land on the same characters here, replacing by them would
-            // rewrite the wrong text. Skip rather than guess.
+            // The recogniser tokenised its own copy of the text, so a span whose offsets
+            // do not land on the same characters here is skipped rather than guessed at...
             if (trim($value) === '' || substr($subject, $byteOffset, strlen($value)) !== $value) {
                 $this->warnMisaligned($recognizer, $span);
 
@@ -195,6 +194,9 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
         return $detections;
     }
 
+    /**
+     * Log a span whose offsets do not align with the subject.
+     */
     private function warnMisaligned(string $recognizer, RecognizedSpan $span): void
     {
         InternalLog::warning('Entity recognition returned a span that does not align with the subject; skipped', [
@@ -206,6 +208,8 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
     }
 
     /**
+     * Resolve the configured recogniser, if it is registered.
+     *
      * @param  array<string, mixed>  $settings
      */
     private function recognizer(array $settings, RedactionContext $context): ?Recognizer
@@ -231,11 +235,10 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
     }
 
     /**
-     * Whether a value reads like text a model was trained on.
+     * Determine if a value reads like text a model was trained on.
      *
-     * A JSON document, a stack trace or a single token is not; the model
-     * would guess, and its guesses are the false positives this gate exists
-     * to avoid.
+     * A JSON document, a stack trace or a single token does not; the model
+     * would guess, and its guesses are the false positives this gate avoids.
      */
     protected function looksLikeProse(string $value, int $minWords): bool
     {
@@ -263,6 +266,8 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
     }
 
     /**
+     * Get the entity labels the profile asks for.
+     *
      * @param  array<string, mixed>  $settings
      * @return array<int, string>
      */
@@ -274,6 +279,8 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
     }
 
     /**
+     * Get the map from recogniser labels to package entities.
+     *
      * @param  array<string, mixed>  $settings
      * @return array<string, string>
      */
@@ -296,7 +303,11 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
         return $out;
     }
 
-    /** @param array<string, mixed> $settings */
+    /**
+     * Get an integer setting, or the default.
+     *
+     * @param  array<string, mixed>  $settings
+     */
     private function int(array $settings, string $key, int $default): int
     {
         $value = $settings[$key] ?? null;
@@ -304,7 +315,11 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
         return is_numeric($value) ? (int) $value : $default;
     }
 
-    /** @param array<string, mixed> $settings */
+    /**
+     * Get a float setting, or the default.
+     *
+     * @param  array<string, mixed>  $settings
+     */
     private function float(array $settings, string $key, float $default): float
     {
         $value = $settings[$key] ?? null;
@@ -312,7 +327,11 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
         return is_numeric($value) ? (float) $value : $default;
     }
 
-    /** @param array<string, mixed> $settings */
+    /**
+     * Get a non-empty string setting, or the default.
+     *
+     * @param  array<string, mixed>  $settings
+     */
     private function string(array $settings, string $key, string $default): string
     {
         $value = $settings[$key] ?? null;

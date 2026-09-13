@@ -15,11 +15,13 @@ use Throwable;
  * conversation it served: a TTL bounds how long a token can be exchanged
  * back, and the encrypter means a dumped cache still says nothing. Anyone
  * holding both the cache and APP_KEY can resolve tokens, which is the same
- * trust the application itself needs; guard those, and the tokens are safe
- * to hand to a model.
+ * trust the application itself needs.
  */
 class CacheTokenStore implements TokenStore
 {
+    /**
+     * Create a new cache token store instance.
+     */
     public function __construct(
         private readonly Repository $cache,
         private readonly StringEncrypter $encrypter,
@@ -27,6 +29,9 @@ class CacheTokenStore implements TokenStore
         private readonly string $prefix = 'redactor:token:',
     ) {}
 
+    /**
+     * Store the original value for a token.
+     */
     public function put(string $token, string $value, string $entity, ?int $ttlSeconds = null): void
     {
         $payload = $this->encrypter->encryptString($entity."\0".$value);
@@ -39,6 +44,9 @@ class CacheTokenStore implements TokenStore
         }
     }
 
+    /**
+     * Get the original value for a token, if it is known.
+     */
     public function get(string $token): ?string
     {
         $payload = $this->cache->get($this->prefix.$token);
@@ -50,7 +58,7 @@ class CacheTokenStore implements TokenStore
         try {
             $decrypted = $this->encrypter->decryptString($payload);
         } catch (Throwable) {
-            // A key rotation or a corrupt entry: the token is simply unknown.
+            // A key rotation or a corrupt entry means the token is simply unknown...
             return null;
         }
 
@@ -59,6 +67,9 @@ class CacheTokenStore implements TokenStore
         return $separator === false ? $decrypted : substr($decrypted, $separator + 1);
     }
 
+    /**
+     * Forget a token.
+     */
     public function forget(string $token): void
     {
         $this->cache->forget($this->prefix.$token);

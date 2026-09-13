@@ -29,7 +29,7 @@ enum VerificationStatus: string
     }
 
     /**
-     * How urgent this makes the finding.
+     * Get how urgent this status makes the finding.
      *
      * Unknown deliberately ranks with Active rather than Inactive: a check that
      * could not complete is not evidence of safety, and treating it as such is

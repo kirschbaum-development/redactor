@@ -5,17 +5,12 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Patterns;
 
 /**
- * Structural checks that separate a real identifier from a number of the right
- * shape.
+ * Structural checks that separate a real identifier from a number of the right shape.
  *
- * A regex can only assert the shape. '/\b(?:\d[ -]*?){13,16}\b/' matches any
- * 13-to-16 digit run - order numbers, concatenated timestamps, tracking codes -
- * so used alone it reports far more cards than exist. Every serious detector
- * runs the checksum before reporting, and so does this one when a rule asks
- * for it.
- *
- * A validator answers one question: could this string actually be the thing
- * the pattern claims it is? Failing it means the match is left alone.
+ * A regex can only assert shape: '/\b(?:\d[ -]*?){13,16}\b/' matches any 13 to
+ * 16 digit run, so used alone it reports far more cards than exist. Every
+ * serious detector runs the checksum before reporting, and so does this one
+ * when a rule asks for it. Failing a validator means the match is left alone.
  */
 class Validator
 {
@@ -28,21 +23,22 @@ class Validator
     /** @var array<int, string> */
     public const NAMES = [self::LUHN, self::IBAN, self::SSN];
 
+    /**
+     * Determine if a value passes the named validator.
+     */
     public static function passes(string $name, string $value): bool
     {
         return match ($name) {
             self::LUHN => self::luhn($value),
             self::IBAN => self::iban($value),
             self::SSN => self::ssn($value),
-            // An unknown validator cannot be evaluated, so it must not veto a
-            // match: failing open here would silently disable the rule.
+            // An unknown validator cannot be evaluated, so it must not veto a match and silently disable the rule...
             default => true,
         };
     }
 
     /**
-     * The Luhn check digit used by payment cards, IMEIs and several national
-     * identifiers.
+     * Determine if a value passes the Luhn check used by payment cards and IMEIs.
      */
     public static function luhn(string $value): bool
     {
@@ -75,7 +71,7 @@ class Validator
     }
 
     /**
-     * ISO 13616 mod-97 check.
+     * Determine if a value passes the ISO 13616 mod-97 check.
      */
     public static function iban(string $value): bool
     {
@@ -89,8 +85,7 @@ class Validator
             return false;
         }
 
-        // Move the country code and check digits to the end, then map letters
-        // to numbers (A=10 ... Z=35).
+        // Move the country code and check digits to the end, then map letters to numbers (A=10 ... Z=35)...
         $rearranged = substr($iban, 4).substr($iban, 0, 4);
 
         $numeric = '';
@@ -100,7 +95,7 @@ class Validator
                 : $character;
         }
 
-        // The value is far wider than an int, so take the modulus piecewise.
+        // The value is far wider than an int, so take the modulus piecewise...
         $remainder = 0;
         foreach (str_split($numeric, 7) as $chunk) {
             $remainder = (int) (((string) $remainder).$chunk) % 97;
@@ -110,11 +105,11 @@ class Validator
     }
 
     /**
-     * US Social Security number allocation rules.
+     * Determine if a value follows the US Social Security number allocation rules.
      *
      * Area 000, 666 and 900-999 have never been issued, and neither group 00
-     * nor serial 0000 exists. Rejecting them removes most of the dates,
-     * phone fragments and sequence numbers that match the SSN shape.
+     * nor serial 0000 exists. Rejecting them removes most of the dates, phone
+     * fragments and sequence numbers that match the SSN shape.
      */
     public static function ssn(string $value): bool
     {

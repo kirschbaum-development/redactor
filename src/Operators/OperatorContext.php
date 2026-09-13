@@ -22,11 +22,10 @@ class OperatorContext
     private bool $isResolved = false;
 
     /**
+     * Create a new operator context instance.
+     *
      * @param  array<string, mixed>  $options
-     * @param  Pseudonymizer|Closure(): ?Pseudonymizer|null  $pseudonymizer  the pseudonymizer, or a
-     *                                                                       resolver for one - deriving a
-     *                                                                       key costs an HMAC, and most
-     *                                                                       operators never need it
+     * @param  Pseudonymizer|Closure(): ?Pseudonymizer|null  $pseudonymizer  the pseudonymizer, or a resolver for one
      */
     public function __construct(
         public readonly string $replacement,
@@ -35,8 +34,9 @@ class OperatorContext
     ) {}
 
     /**
-     * The pseudonymizer, resolved on first use and only by operators that
-     * pseudonymise; a plain redaction never pays for a key derivation.
+     * Get the pseudonymizer, resolving it on first use.
+     *
+     * Only operators that pseudonymise pay for the key derivation.
      */
     public function pseudonymizer(): ?Pseudonymizer
     {
@@ -52,11 +52,17 @@ class OperatorContext
         return $this->resolved;
     }
 
+    /**
+     * Get an option value.
+     */
     public function option(string $key, mixed $default = null): mixed
     {
         return $this->options[$key] ?? $default;
     }
 
+    /**
+     * Get an integer option, or the default.
+     */
     public function intOption(string $key, int $default): int
     {
         $value = $this->options[$key] ?? null;
@@ -64,6 +70,9 @@ class OperatorContext
         return is_numeric($value) ? (int) $value : $default;
     }
 
+    /**
+     * Get a boolean option, or the default.
+     */
     public function boolOption(string $key, bool $default): bool
     {
         $value = $this->options[$key] ?? null;
@@ -71,6 +80,9 @@ class OperatorContext
         return is_bool($value) ? $value : $default;
     }
 
+    /**
+     * Get a non-empty string option, or the default.
+     */
     public function stringOption(string $key, string $default): string
     {
         $value = $this->options[$key] ?? null;
@@ -79,6 +91,8 @@ class OperatorContext
     }
 
     /**
+     * Create a copy of the context with the given options.
+     *
      * @param  array<string, mixed>  $options
      */
     public function withOptions(array $options): self

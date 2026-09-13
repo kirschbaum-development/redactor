@@ -6,14 +6,22 @@ namespace Kirschbaum\Redactor\Operators;
 
 use Kirschbaum\Redactor\Detection\Detection;
 
-/** Delete the span entirely. */
+/**
+ * Deletes the span entirely.
+ */
 class RemoveOperator implements Operator
 {
+    /**
+     * Delete the span.
+     */
     public function apply(Detection $detection, OperatorContext $context): string
     {
         return '';
     }
 
+    /**
+     * Determine if the operator leaves the value as it found it.
+     */
     public function isPreserving(): bool
     {
         return false;

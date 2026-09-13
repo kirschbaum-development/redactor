@@ -34,17 +34,9 @@ class Scanner
         protected Redactor $redactor,
         protected int $windowLines = LineWindowReader::DEFAULT_WINDOW_LINES,
         protected int $overlapLines = LineWindowReader::DEFAULT_OVERLAP_LINES,
-        /**
-         * Verification happens here, while the raw value is still in hand, and
-         * only the verdict is attached to the finding. The secret itself never
-         * reaches a ScanFinding, so it cannot escape through JSON, SARIF or a
-         * baseline file.
-         */
+        /** Verifies while the raw value is in hand; only the verdict reaches a ScanFinding, never the secret. */
         protected ?SecretVerifier $verifier = null,
-        /**
-         * Whether to look inside base64, URL-encoded and JSON-escaped spans.
-         * One layer deep, scanning only: see Decoder.
-         */
+        /** Whether to look one layer deep inside base64, URL-encoded and JSON-escaped spans. */
         protected bool $decode = true,
     ) {}
 
@@ -56,9 +48,8 @@ class Scanner
     /**
      * Scan a file, a window of lines at a time.
      *
-     * Streaming unconditionally rather than only for large files: a second code
-     * path that runs on most inputs and a first that runs on the rare large one
-     * guarantees the rarely-exercised path is the buggy one.
+     * Streaming is unconditional rather than only for large files: a code path
+     * that runs only on the rare large input is the one that ends up buggy.
      */
     public function scanFile(string $filePath, ?string $profile = null, ?string $relativeTo = null): ScanResult
     {
@@ -98,12 +89,10 @@ class Scanner
     }
 
     /**
-     * Scan the lines a change added, reporting each finding on the line it
-     * really occupies in the file and, for history, the commit that added it.
+     * Scan the lines a change added, reporting each finding at its real line and commit.
      *
-     * The added lines are scanned as one text so a secret that spans two
-     * adjacent added lines is still found; the line numbers are then mapped
-     * back through the patch.
+     * The added lines are scanned as one text so a secret spanning two adjacent
+     * added lines is still found; line numbers are then mapped back through the patch.
      */
     public function scanPatch(Patch $patch, ?string $profile = null): ScanResult
     {
@@ -148,8 +137,7 @@ class Scanner
             foreach ($located as $finding) {
                 $absolute = $finding->at($startLine + $finding->line - 1, null);
 
-                // Overlapping windows see the same span twice; identity is the
-                // rule and the place, not the order it was found in.
+                // Overlapping windows see the same span twice; identity is the rule and the place...
                 $findings[$absolute->rule.'|'.$absolute->line.'|'.$absolute->column] = $absolute;
             }
         }
@@ -184,9 +172,10 @@ class Scanner
     }
 
     /**
-     * Scan text recovered from an encoded span and report what it holds at the
-     * span's own position, with an excerpt taken from the decoded, redacted
-     * text so the report shows what was found without repeating it.
+     * Scan text recovered from an encoded span, reporting findings at the span's own position.
+     *
+     * The excerpt comes from the decoded, redacted text so the report shows
+     * what was found without repeating it.
      *
      * @return array<int, ScanFinding>
      */
@@ -256,7 +245,7 @@ class Scanner
     }
 
     /**
-     * Turn byte offsets into file positions.
+     * Turn the byte offsets of the matches into file positions.
      *
      * @param  array<int, MatchFinding>  $matches
      * @return array<int, ScanFinding>
@@ -269,9 +258,8 @@ class Scanner
 
         $lineStarts = self::lineStarts($original);
 
-        // Replacements never introduce or remove newlines, so line N of the
-        // redacted output corresponds to line N of the input - which is what
-        // lets the excerpt come from the redacted text.
+        // Replacements never add or remove newlines, so line N of the redacted output
+        // is line N of the input, which is what lets the excerpt come from it...
         $redactedLines = is_string($redacted) ? explode("\n", $redacted) : [];
         $originalLines = str_contains($original, self::ALLOW_MARKER) ? explode("\n", $original) : null;
 
@@ -303,7 +291,7 @@ class Scanner
     }
 
     /**
-     * Byte offset at which each line begins.
+     * Get the byte offset at which each line begins.
      *
      * @return array<int, int>
      */

@@ -16,22 +16,22 @@ namespace Kirschbaum\Redactor\Verification;
 interface Verifier
 {
     /**
-     * A stable name, used in config allowlists and in output.
+     * Get the verifier's stable name, used in config allowlists and output.
      */
     public function name(): string;
 
     /**
-     * The host this verifier sends the credential to.
+     * Get the host this verifier sends the credential to.
      */
     public function host(): string;
 
     /**
-     * Whether this verifier can check the given entity or rule.
+     * Determine if this verifier can check the given entity or rule.
      */
     public function supports(string $entity, string $rule): bool;
 
     /**
-     * Check one credential. Must never throw and never log the secret.
+     * Verify one credential without ever throwing or logging the secret.
      */
     public function verify(string $secret): VerificationResult;
 }

@@ -12,19 +12,19 @@ use Kirschbaum\Redactor\Support\DeterministicRandom;
  *     4111 1111 1111 1111  ->  4111 1193 7420 8846
  *
  * Length, grouping and the issuer prefix survive; the account number does not.
- * The check digit is recomputed so the result validates, which matters more
- * than it sounds: a fixture, a replayed request or a test double carrying an
- * invalid card fails at a different layer than the one under test, and the
- * resulting bug hunt is expensive.
- *
- * The BIN is kept by default. It identifies the issuer and card type - the
- * thing fraud and finance teams actually aggregate on - and is not specific to
- * a cardholder.
+ * The check digit is recomputed so the result validates, since a fixture or a
+ * replayed request carrying an invalid card fails at a different layer than
+ * the one under test. The BIN is kept by default: it identifies the issuer and
+ * card type, which fraud and finance teams aggregate on, and is not specific
+ * to a cardholder.
  */
 class CreditCardSurrogate implements SurrogateGenerator
 {
     private const DEFAULT_BIN_LENGTH = 6;
 
+    /**
+     * Determine if the value is a card number or is flagged as one.
+     */
     public function supports(string $entity, string $value): bool
     {
         if ($entity === 'credit_card') {
@@ -37,6 +37,8 @@ class CreditCardSurrogate implements SurrogateGenerator
     }
 
     /**
+     * Generate a Luhn-valid surrogate for the given card number.
+     *
      * @param  array<string, mixed>  $options
      */
     public function generate(string $value, DeterministicRandom $random, array $options = []): string
@@ -54,7 +56,7 @@ class CreditCardSurrogate implements SurrogateGenerator
 
         $generated = substr($digits, 0, $binLength);
 
-        // Everything between the BIN and the check digit is replaced.
+        // Everything between the BIN and the check digit is replaced...
         for ($i = $binLength; $i < $count - 1; $i++) {
             $generated .= $random->digit();
         }
@@ -65,12 +67,13 @@ class CreditCardSurrogate implements SurrogateGenerator
     }
 
     /**
-     * The digit that makes a Luhn sum land on a multiple of ten.
+     * Get the digit that makes a Luhn sum land on a multiple of ten.
      */
     private static function checkDigit(string $withoutCheck): string
     {
         $sum = 0;
-        $double = true; // The check digit sits in an undoubled position.
+        // The check digit sits in an undoubled position...
+        $double = true;
 
         for ($i = strlen($withoutCheck) - 1; $i >= 0; $i--) {
             $digit = (int) $withoutCheck[$i];

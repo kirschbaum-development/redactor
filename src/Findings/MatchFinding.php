@@ -15,8 +15,7 @@ use Kirschbaum\Redactor\Detection\Confidence;
  * what the scanner needs to turn a finding into file:line:column. For a
  * key-based redaction the offset spans the whole value, since the key is the
  * signal rather than any span inside it.
- */
-/**
+ *
  * @implements Arrayable<string, mixed>
  */
 final readonly class MatchFinding implements Arrayable, JsonSerializable
@@ -29,22 +28,22 @@ final readonly class MatchFinding implements Arrayable, JsonSerializable
         public string $matched = '',
         /** What kind of thing was found; defaults to the rule that found it. */
         public ?string $entity = null,
-        /**
-         * How sure the detector was, and why.
-         *
-         * Null where certainty is not a question - a blocked key or a length
-         * limit is a rule about structure, not an inference about content.
-         */
+        /** How sure the detector was and why; null where certainty is not a question, such as a blocked key. */
         public ?Confidence $confidence = null,
     ) {}
 
+    /**
+     * Get the kind of thing that was found.
+     */
     public function entity(): string
     {
         return $this->entity ?? $this->rule;
     }
 
     /**
-     * Get the finding as an array. The matched text is deliberately omitted.
+     * Get the finding as an array.
+     *
+     * The matched text is deliberately omitted.
      *
      * @return array<string, mixed>
      */
@@ -62,6 +61,8 @@ final readonly class MatchFinding implements Arrayable, JsonSerializable
     }
 
     /**
+     * Convert the finding into something JSON serializable.
+     *
      * @return array<string, mixed>
      */
     public function jsonSerialize(): array

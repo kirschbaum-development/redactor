@@ -7,21 +7,21 @@ namespace Kirschbaum\Redactor\Recognition;
 /**
  * Stops asking a recogniser that has stopped answering.
  *
- * A sidecar that is down fails every call at the full timeout. Inside a log
- * tap that means every log line waits two seconds to be told nothing, which
- * is how a redactor takes an application down. After `threshold` consecutive
- * failures the breaker opens for `cooldown` seconds and the strategy falls
- * back to rules only; one success closes it again.
- *
- * State is per process and per recogniser, which is what a PHP-FPM worker or
- * an Octane worker needs; it is deliberately not shared, because a breaker
- * that needed the cache to work would fail exactly when the cache does.
+ * A sidecar that is down fails every call at the full timeout, so inside a log
+ * tap every line would wait seconds to be told nothing. After `threshold`
+ * consecutive failures the breaker opens for `cooldown` seconds and the
+ * strategy falls back to rules only; one success closes it again. State is per
+ * process and deliberately not shared, because a breaker that needed the
+ * cache to work would fail exactly when the cache does.
  */
 class CircuitBreaker
 {
     /** @var array<string, array{failures: int, open_until: int}> */
     private static array $state = [];
 
+    /**
+     * Determine if the recogniser behind the key may be called.
+     */
     public static function allows(string $key): bool
     {
         $entry = self::$state[$key] ?? null;
@@ -29,13 +29,16 @@ class CircuitBreaker
         return $entry === null || $entry['open_until'] <= time();
     }
 
+    /**
+     * Record a success, closing the breaker.
+     */
     public static function recordSuccess(string $key): void
     {
         unset(self::$state[$key]);
     }
 
     /**
-     * Returns true when this failure opened the breaker.
+     * Record a failure and determine if it opened the breaker.
      */
     public static function recordFailure(string $key, int $threshold, int $cooldownSeconds): bool
     {
@@ -55,13 +58,16 @@ class CircuitBreaker
         return false;
     }
 
+    /**
+     * Determine if the breaker is open.
+     */
     public static function isOpen(string $key): bool
     {
         return ! self::allows($key);
     }
 
     /**
-     * Forget everything. Only needed by tests.
+     * Reset all breaker state.
      */
     public static function reset(): void
     {

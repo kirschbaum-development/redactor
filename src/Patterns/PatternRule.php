@@ -53,95 +53,43 @@ final readonly class PatternRule
         self::MODE_FULL,
     ];
 
+    /**
+     * Create a new pattern rule instance.
+     *
+     * @param  array<int, string>  $keywords
+     * @param  array<int, string>  $samples
+     * @param  array<int, string>  $counterSamples
+     */
     public function __construct(
         public string $name,
         public string $pattern,
         public string $mode = self::MODE_REPLACE,
         public int $keep = 4,
         public string $maskCharacter = '*',
-        /**
-         * Which capture group holds the secret.
-         *
-         * 0 means the whole match. Use a group when the pattern needs
-         * surrounding context to match confidently but that context is not
-         * itself sensitive - "aws_secret_access_key = <40 chars>" should keep
-         * its label and lose only the value.
-         */
+        /** The capture group holding the secret, or 0 for the whole match, so a labelled value keeps its label. */
         public int $capture = 0,
-        /**
-         * Structural check the matched text must pass to count as a finding.
-         *
-         * A regex asserts shape only; a validator asserts that the value could
-         * actually be what the pattern claims. Null means shape is enough.
-         */
+        /** The structural check the matched text must pass, or null when shape is enough. */
         public ?string $validator = null,
-        /**
-         * What kind of thing this rule finds.
-         *
-         * Drives surrogate selection and per-entity policy; defaults to the
-         * rule name, which is right most of the time ('email' finds an email).
-         */
+        /** The kind of thing this rule finds, defaulting to the rule name. */
         public ?string $entity = null,
-        /**
-         * How much to trust a bare match from this pattern, before validators
-         * and context adjust it.
-         */
+        /** How much to trust a bare match, before validators and context adjust it. */
         public float $confidence = Confidence::MEDIUM,
-        /**
-         * What to do with what it finds. Null means the profile decides.
-         */
+        /** What to do with what it finds, or null to let the profile decide. */
         public ?OperatorSpec $operator = null,
-        /**
-         * Literals at least one of which must appear in the subject before
-         * the pattern is tried at all, compared case-insensitively.
-         *
-         * A prefilter, not a context requirement: it says nothing about
-         * where the literal sits. Its job is to keep an expensive pattern
-         * off subjects that cannot match - an email rule with `['@']` skips
-         * almost every string in a log payload for the cost of one
-         * str_contains() - and, for a rule like a bare phone number, to
-         * demand a label such as `phone` somewhere in the value before a
-         * ten-digit run is believed.
-         *
-         * @var array<int, string>
-         */
+        /** Lowercased literals at least one of which must appear in the subject before the pattern is tried. */
         public array $keywords = [],
-        /**
-         * Matches this rule should let through: literals or regexes.
-         *
-         * Scoped to the rule, unlike the profile allowlist, so "this rule
-         * ignores example.com addresses" does not also excuse an example.com
-         * address that some other rule found for a different reason.
-         */
+        /** Matches this rule alone should let through, scoped to the rule unlike the profile allowlist. */
         public ?AllowList $allow = null,
-        /**
-         * The shortest text this pattern can possibly match, in bytes.
-         *
-         * A subject shorter than this is skipped without touching PCRE. Must
-         * never exceed the true minimum - a value too large makes the rule
-         * miss real matches - so when in doubt leave it at 1.
-         */
+        /** The shortest text this pattern can match, in bytes; never above the true minimum or matches are missed. */
         public int $minLength = 1,
-        /**
-         * Texts this rule must detect something in, checked by redactor:validate.
-         *
-         * A rule that carries its own examples proves itself in CI: a regex
-         * edit that silently stops matching the thing it was written for
-         * fails the deploy instead of the audit.
-         *
-         * @var array<int, string>
-         */
+        /** Texts this rule must detect something in, checked by redactor:validate. */
         public array $samples = [],
-        /**
-         * Texts this rule must not detect anything in.
-         *
-         * @var array<int, string>
-         */
+        /** Texts this rule must not detect anything in. */
         public array $counterSamples = [],
     ) {}
 
     /**
-     * The entity this rule detects.
+     * Get the entity this rule detects.
      */
     public function entity(): string
     {
@@ -149,13 +97,12 @@ final readonly class PatternRule
     }
 
     /**
-     * Whether this rule actually asked for a particular operator.
+     * Determine if this rule actually asked for a particular operator.
      *
      * `mode` defaults to replace, so operatorSpec() can always produce
-     * something - which is not the same as the rule having chosen it. Without
-     * this distinction a rule that expressed no preference would still outrank
-     * the profile's `operators.default`, making that setting unreachable for
-     * every pattern-detected value.
+     * something, which is not the same as the rule having chosen it. Without
+     * this distinction a rule with no preference would still outrank the
+     * profile's `operators.default`, making that setting unreachable.
      */
     public function hasExplicitOperator(): bool
     {
@@ -163,8 +110,7 @@ final readonly class PatternRule
     }
 
     /**
-     * The operator this rule asks for, translating the legacy `mode` when no
-     * explicit operator is set.
+     * Get the operator this rule asks for, translating the legacy `mode` when none is set.
      */
     public function operatorSpec(): OperatorSpec
     {
@@ -186,9 +132,10 @@ final readonly class PatternRule
     /**
      * Build a rule from its configured form, or return null if unusable.
      *
-     * An uncompilable pattern is dropped rather than fatal, matching the
-     * previous behaviour of validatePatterns(); a malformed *rule* (bad mode,
-     * missing pattern) is a config error and throws.
+     * An uncompilable pattern is dropped rather than fatal; a malformed rule,
+     * such as a bad mode or a missing pattern, is a config error and throws.
+     *
+     * @throws ConfigurationException
      */
     public static function fromConfig(string $name, mixed $definition, string $path): ?self
     {
@@ -204,9 +151,7 @@ final readonly class PatternRule
 
         $pattern = $definition['pattern'] ?? null;
 
-        // A dictionary rule: a list of words compiled into one alternation.
-        // Product names, internal project codenames, a customer list - things
-        // no regex could express and no model would know.
+        // A dictionary rule compiles a list of words into one alternation, for names no regex could express...
         if ($pattern === null && isset($definition['words'])) {
             $words = array_values(array_filter(
                 ConfigValue::stringList($definition['words'], $path.'.words'),
@@ -298,7 +243,7 @@ final readonly class PatternRule
     }
 
     /**
-     * Whether the matched text passes this rule's structural check.
+     * Determine if the matched text passes this rule's allow list and structural check.
      */
     public function accepts(string $match): bool
     {
@@ -310,7 +255,7 @@ final readonly class PatternRule
     }
 
     /**
-     * Whether this rule replaces the entire value rather than the match.
+     * Determine if this rule replaces the entire value rather than the match.
      */
     public function replacesWholeValue(): bool
     {
@@ -318,8 +263,7 @@ final readonly class PatternRule
     }
 
     /**
-     * Rewrite one match, substituting only the capture group when the rule
-     * names one, so the surrounding context the pattern needed survives.
+     * Rewrite one match, substituting only the capture group when the rule names one.
      *
      * @param  array<int|string, array{0: string, 1: int}>  $matches  offset-capture matches
      */
@@ -333,7 +277,7 @@ final readonly class PatternRule
 
         [$group, $groupOffset] = $matches[$this->capture];
 
-        // An optional group that did not participate reports offset -1.
+        // An optional group that did not participate reports offset -1...
         if ($groupOffset < 0 || $group === '') {
             return $this->accepts($full) ? $this->substitute($full, $replacement) : $full;
         }
@@ -350,7 +294,7 @@ final readonly class PatternRule
     }
 
     /**
-     * Produce the text that should stand in for one matched span.
+     * Get the text that stands in for one matched span.
      */
     public function substitute(string $match, string $replacement): string
     {
@@ -363,15 +307,14 @@ final readonly class PatternRule
     }
 
     /**
-     * Mask everything but the trailing characters, so a value stays
-     * recognisable to a human reading a log without being usable.
+     * Mask everything but the trailing characters.
      */
     private function partial(string $match): string
     {
         $length = mb_strlen($match);
 
         if ($length <= $this->keep) {
-            // Too short to reveal any of it without revealing all of it.
+            // Too short to reveal any of it without revealing all of it...
             return str_repeat($this->maskCharacter, max(1, $length));
         }
 

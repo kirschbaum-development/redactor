@@ -9,21 +9,14 @@ use Kirschbaum\Redactor\Redactor;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Redacts a stream chunk by chunk without ever letting a secret through split
- * across two chunks.
+ * Redacts a stream chunk by chunk without letting a secret through split across two chunks.
  *
- * A model streams tokens; a server sends events; a file is piped through.
  * Redacting each chunk on its own would miss every secret that straddles a
  * boundary, and buffering the whole stream would defeat the point of
- * streaming. So a window of the most recent bytes is held back: what is
- * emitted is always far enough behind the end of the input that no detection
- * starting in the emitted part could have continued into what has not been
- * seen yet. The cut falls on a line or word boundary, and a PEM block that
- * has opened but not closed is held whole.
- *
- * The hold-back is the latency of the stream in bytes, not time. For token
- * streams the default is a fraction of a second at typical rates; raise it
- * for content whose secrets are longer than a screen line.
+ * streaming. So a window of the most recent bytes is held back, the cut falls
+ * on a line or word boundary, and a PEM block that has opened but not closed
+ * is held whole. The hold-back is latency in bytes, not time; raise it for
+ * content whose secrets are longer than a screen line.
  */
 class StreamRedactor
 {
@@ -31,6 +24,9 @@ class StreamRedactor
 
     private string $buffer = '';
 
+    /**
+     * Create a new stream redactor instance.
+     */
     public function __construct(
         private readonly Redactor $redactor,
         private readonly ?string $profile = null,
@@ -39,7 +35,7 @@ class StreamRedactor
     ) {}
 
     /**
-     * Feed a chunk; get back whatever is now safe to emit, often nothing.
+     * Feed a chunk and get back whatever is now safe to emit.
      */
     public function push(string $chunk): string
     {
@@ -58,7 +54,7 @@ class StreamRedactor
     }
 
     /**
-     * The stream has ended: redact and return everything still held.
+     * Redact and return everything still held once the stream has ended.
      */
     public function flush(): string
     {
@@ -92,8 +88,7 @@ class StreamRedactor
     }
 
     /**
-     * Wrap a callback that echoes its output, so what it echoes is redacted
-     * on its way out. The output buffer hands over chunks of the given size.
+     * Wrap a callback that echoes its output so what it echoes is redacted on its way out.
      *
      * @return callable(): void
      */
@@ -119,7 +114,7 @@ class StreamRedactor
     }
 
     /**
-     * A streamed response whose callback's output is redacted as it streams.
+     * Create a streamed response whose callback's output is redacted as it streams.
      *
      * @param  array<string, string|array<int, string>>  $headers
      */
@@ -129,7 +124,7 @@ class StreamRedactor
     }
 
     /**
-     * Where the buffer can be cut so nothing emitted could be half a secret.
+     * Get where the buffer can be cut so nothing emitted could be half a secret.
      *
      * Returns 0 when nothing can be emitted yet.
      */
@@ -143,8 +138,7 @@ class StreamRedactor
 
         $limit = $length - $this->holdback;
 
-        // A PEM block is one secret however many lines it spans: hold it
-        // while it is open, and once closed hold it until it can go whole.
+        // A PEM block is one secret however many lines it spans, so hold it while open and until it can go whole...
         $begin = strrpos($this->buffer, '-----BEGIN');
 
         if ($begin !== false) {
@@ -166,16 +160,12 @@ class StreamRedactor
     }
 
     /**
-     * Where before $limit the buffer can be cut without splitting a secret.
+     * Get where before $limit the buffer can be cut without splitting a secret.
      *
-     * A line end is always safe: no shipped rule except the PEM block, which
-     * is handled above, matches across a newline. A word boundary is not - a
-     * spaced card number or a formatted phone number spans several - so it is
-     * used only when a whole extra window has passed with no line end at all,
-     * as in a token stream that has not produced a newline for a while. With
-     * no boundary of either kind, nothing is emitted until the unbroken run
-     * has outlived a window: at that point it cannot be a single token any
-     * detector would recognise, and holding it forever would stall the stream.
+     * A line end is always safe, since no shipped rule except the PEM block
+     * matches across a newline. A word boundary is not, so it is used only
+     * once a whole extra window has passed with no line end, and with no
+     * boundary at all an unbroken run is emitted once it has outlived a window.
      */
     private function boundaryBefore(int $limit): int
     {
@@ -197,6 +187,9 @@ class StreamRedactor
         return $limit;
     }
 
+    /**
+     * Redact a piece of text through the configured profile.
+     */
     private function redact(string $text): string
     {
         $out = $this->redactor->redactSafely($text, $this->profile);

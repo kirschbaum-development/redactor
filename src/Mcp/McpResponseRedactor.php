@@ -63,7 +63,7 @@ class McpResponseRedactor
         }
 
         if (isset($content['params']) && is_array($content['params']) && isset($content['params']['content'])) {
-            // A streamed notification carrying content, as a tool yields.
+            // A streamed notification carrying content, as a tool yields...
             $content['params'] = $this->redactResult($content['params']);
         }
 
@@ -78,7 +78,7 @@ class McpResponseRedactor
      */
     private function redactResult(array $result): array
     {
-        // tools/call and streamed tool output
+        // tools/call and streamed tool output...
         if (isset($result['content']) && is_array($result['content'])) {
             $result['content'] = array_map(fn ($item) => $this->contentItem($item), $result['content']);
         }
@@ -87,12 +87,12 @@ class McpResponseRedactor
             $result['structuredContent'] = $this->data($result['structuredContent']);
         }
 
-        // resources/read
+        // resources/read...
         if (isset($result['contents']) && is_array($result['contents'])) {
             $result['contents'] = array_map(fn ($item) => $this->contentItem($item), $result['contents']);
         }
 
-        // prompts/get
+        // prompts/get...
         if (isset($result['messages']) && is_array($result['messages'])) {
             $result['messages'] = array_map(function ($message) {
                 if (is_array($message) && isset($message['content'])) {
@@ -109,8 +109,7 @@ class McpResponseRedactor
     }
 
     /**
-     * A content block: text is redacted, an embedded resource's text is
-     * redacted, anything binary passes through.
+     * Redact a content block's text, leaving anything binary untouched.
      */
     private function contentItem(mixed $item): mixed
     {
@@ -143,8 +142,7 @@ class McpResponseRedactor
     private function data(array $data): array
     {
         try {
-            // No `_redacted` markers: structured content has a schema the
-            // model was told about, and a key it does not expect breaks it.
+            // No markers: structured content has a schema the model was told about, and an unexpected key breaks it...
             $out = $this->redactor->redactWithMetadata($data, $this->profile, mark: false)->value;
         } catch (\Throwable $e) {
             InternalLog::warning('MCP structured content could not be redacted; replaced as a precaution', [

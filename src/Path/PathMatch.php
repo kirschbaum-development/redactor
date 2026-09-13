@@ -9,12 +9,15 @@ use Kirschbaum\Redactor\Operators\OperatorSpec;
 /**
  * A path rule that fired, and which one it was.
  *
- * The source pattern travels with the match so a finding can say *why* a value
- * was rewritten - "matched request.headers.*" is actionable, "it was redacted"
+ * The source pattern travels with the match so a finding can say why a value
+ * was rewritten: "matched request.headers.*" is actionable, "it was redacted"
  * is not.
  */
 final readonly class PathMatch
 {
+    /**
+     * Create a new path match instance.
+     */
     public function __construct(
         public OperatorSpec $spec,
         public string $pattern,

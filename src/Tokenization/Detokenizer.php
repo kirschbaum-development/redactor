@@ -7,18 +7,23 @@ namespace Kirschbaum\Redactor\Tokenization;
 /**
  * Puts original values back where tokens stand.
  *
- * Walks strings, arrays and Arrayable-shaped nesting and resolves every token
- * the store knows; a token it does not know - expired, from another
- * application, invented by a model - is left exactly as it is, since
- * guessing would be worse than leaving it.
+ * Walks strings and arrays and resolves every token the store knows; a token
+ * it does not know, whether expired, from another application or invented by
+ * a model, is left exactly as it is, since guessing would be worse.
  */
 class Detokenizer
 {
+    /**
+     * Create a new detokenizer instance.
+     */
     public function __construct(
         private readonly TokenStore $store,
         private readonly string $prefix = TokenizeOperator::PREFIX,
     ) {}
 
+    /**
+     * Replace every known token in the content with its original value.
+     */
     public function detokenize(mixed $content): mixed
     {
         if (is_string($content)) {
@@ -39,7 +44,7 @@ class Detokenizer
     }
 
     /**
-     * Every token in a string, whether or not the store knows it.
+     * Get every token in a string, whether or not the store knows it.
      *
      * @return array<int, string>
      */
@@ -50,6 +55,9 @@ class Detokenizer
         return array_values(array_unique($matches[0]));
     }
 
+    /**
+     * Replace every known token in a string.
+     */
     private function replaceIn(string $text): string
     {
         if (! str_contains($text, $this->prefix.'_')) {
@@ -63,6 +71,9 @@ class Detokenizer
         return $result ?? $text;
     }
 
+    /**
+     * Get the pattern that matches a token.
+     */
     private function pattern(): string
     {
         return '/\b'.preg_quote($this->prefix, '/').'_[a-z0-9]+(?:_[a-z0-9]+)*_[a-z0-9]{'.TokenizeOperator::ID_LENGTH.'}\b/';

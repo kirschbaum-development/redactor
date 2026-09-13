@@ -75,8 +75,7 @@ class RedactorScanCommand extends Command
                 return Command::FAILURE;
             }
 
-            // Applied to the profile rather than filtered afterwards, so a
-            // low-scoring detection is never acted on in the first place.
+            // Applied to the profile rather than filtered afterwards, so a low-scoring detection is never acted on...
             config(["redactor.profiles.{$profile}.min_confidence" => (float) $minConfidence]);
         }
 
@@ -91,7 +90,7 @@ class RedactorScanCommand extends Command
             return Command::FAILURE;
         }
 
-        // Machine-readable output must not be polluted with progress chatter.
+        // Machine-readable output must not be polluted with progress chatter...
         $quiet = $outputFormat !== 'table';
 
         try {
@@ -121,8 +120,8 @@ class RedactorScanCommand extends Command
             'scan.exclude_patterns'
         );
 
-        // Config::array()/Config::integer() throw when the value arrives as a
-        // string, which is exactly what env() produces for REDACTOR_SCAN_*.
+        // Config::array() and Config::integer() throw when the value arrives as a
+        // string, which is exactly what env() produces for REDACTOR_SCAN_*...
         $maxFileSize = ConfigValue::positiveInt(
             config('redactor.scan.max_file_size'),
             10_485_760,
@@ -148,9 +147,7 @@ class RedactorScanCommand extends Command
                 return Command::FAILURE;
             }
 
-            // Say what is about to happen before it happens. Verification sends
-            // real credentials to third parties, and an operator who cannot
-            // allow that traffic should find out here, not in an egress log.
+            // Verification sends real credentials to third parties, so say so before it happens...
             if (! $quiet) {
                 $this->components->warn(sprintf(
                     'Verification is on: detected credentials will be sent to %s.',
@@ -221,7 +218,7 @@ class RedactorScanCommand extends Command
     }
 
     /**
-     * Which git mode was asked for, described for the operator, or null.
+     * Get the requested git mode, described for the operator.
      */
     protected function gitMode(): ?string
     {
@@ -245,13 +242,13 @@ class RedactorScanCommand extends Command
     }
 
     /**
-     * The patches the chosen git mode produces, minus excluded paths.
+     * Collect the patches the chosen git mode produces, minus excluded paths.
      *
      * @param  array<int, string>  $pathspec
      * @param  array<int, string>  $ignorePatterns
      * @return array<int, Patch>
      *
-     * @throws \RuntimeException when this is not a git repository or git fails
+     * @throws GitException when this is not a git repository or git fails
      */
     protected function collectPatches(string $mode, array $pathspec, array $ignorePatterns): array
     {
@@ -310,7 +307,7 @@ class RedactorScanCommand extends Command
     }
 
     /**
-     * Collect files from the given paths (files or directories).
+     * Collect the files to scan from the given paths.
      *
      * @param  array<int, string>  $paths
      * @param  array<int, string>  $ignorePatterns
@@ -324,7 +321,7 @@ class RedactorScanCommand extends Command
         bool $respectGitignore = true,
         bool $quiet = false
     ): array {
-        // Check for non-existent paths and warn user
+        // Warn about paths that do not exist...
         $validPaths = [];
         foreach ($paths as $path) {
             if (is_file($path) || is_dir($path)) {
@@ -334,7 +331,6 @@ class RedactorScanCommand extends Command
             }
         }
 
-        // Let FileCollector handle all the filtering logic
         return FileCollector::collect(
             paths: $validPaths,
             excludePatterns: $ignorePatterns,
@@ -345,7 +341,7 @@ class RedactorScanCommand extends Command
     }
 
     /**
-     * Display scan results in the specified format.
+     * Display the scan results in the given format.
      *
      * @param  Collection<int, ScanResult>  $results
      * @param  array<int, ScanFinding>  $findings
@@ -410,10 +406,8 @@ class RedactorScanCommand extends Command
             return;
         }
 
-        // Findings, not files: a list of file names with a count next to each
-        // tells you nothing you can act on.
-        // Sorted by severity so the certain findings are read first, which is
-        // the order anyone triaging actually wants.
+        // Findings, not files: a list of file names with a count next to each is nothing
+        // you can act on. Sorted by severity so the certain findings are read first...
         $rank = fn (ScanFinding $f) => match ($f->severity()) {
             'critical' => 4, 'high' => 3, 'medium' => 2, 'low' => 1, default => 0,
         };

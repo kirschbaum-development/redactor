@@ -7,11 +7,10 @@ namespace Kirschbaum\Redactor\Strategies\Contracts;
 /**
  * Marks a strategy that transforms a value in place rather than replacing it.
  *
- * The redactor stops at the first strategy that handles a value, which is
- * correct when handling means "this whole value is gone". A strategy that
- * redacts spans inside a string leaves the rest of the string standing, so the
- * remaining strategies still need a look at it: an entropy-detectable secret
- * sitting next to an email address must not survive just because the email
- * matched first.
+ * The redactor stops at the first strategy that handles a value, which is right
+ * when handling means the whole value is gone. A strategy that redacts spans
+ * inside a string leaves the rest standing, so the remaining strategies still
+ * need to see it: a secret beside an email address must not survive because
+ * the email matched first.
  */
 interface ChainableStrategy {}

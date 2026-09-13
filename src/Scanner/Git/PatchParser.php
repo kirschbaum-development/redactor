@@ -63,7 +63,7 @@ class PatchParser
         if (str_starts_with($raw, '+++ ')) {
             $target = substr($raw, 4);
 
-            // A deleted file has nothing to scan.
+            // A deleted file has nothing to scan...
             $this->path = $target === '/dev/null' ? null : self::unquote($target);
 
             return;
@@ -76,7 +76,7 @@ class PatchParser
         }
 
         if (str_starts_with($raw, '@@ ')) {
-            // @@ -old[,count] +new[,count] @@
+            // Hunk header: @@ -old[,count] +new[,count] @@...
             $this->line = preg_match('/\+(\d+)/', $raw, $m) === 1 ? (int) $m[1] : 1;
 
             return;
@@ -94,11 +94,11 @@ class PatchParser
         }
 
         if (str_starts_with($raw, ' ')) {
-            // A context line, present when the diff was not made with -U0.
+            // A context line, present when the diff was not made with -U0...
             $this->line++;
         }
 
-        // '-' lines and '\ No newline at end of file' advance nothing.
+        // '-' lines and '\ No newline at end of file' advance nothing...
     }
 
     private function flush(): void

@@ -7,19 +7,14 @@ namespace Kirschbaum\Redactor\Config;
 use Kirschbaum\Redactor\RedactorConfig;
 
 /**
- * Resolved profiles, kept alongside the raw config they were built from.
+ * The resolved profiles, kept alongside the raw config they were built from.
  *
- * RedactorConfig::fromConfig() runs on every redaction, and rebuilding a profile
- * means revalidating every pattern, recompiling the path trie and re-parsing
- * every operator spec - work whose result cannot change unless the config does.
- * Left uncached it dominated: 0.23ms per call for a profile with 200 path rules,
- * several times the cost of the redaction it was preparing for.
- *
- * Invalidation compares the raw array rather than hashing it. PHP's array
- * identity check is a fast recursive comparison in C, where serialize() plus a
- * digest would cost more than the rebuild it was meant to avoid. Any config
- * change produces a different array and rebuilds, so the failure mode where a
- * cache quietly serves a stale security setting cannot occur.
+ * Rebuilding a profile revalidates every pattern, recompiles the path trie and
+ * re-parses every operator spec, measured at 0.23ms per call for 200 path
+ * rules, several times the redaction it was preparing for. Invalidation
+ * compares the raw array rather than hashing it, since PHP's array comparison
+ * is a fast recursive check in C and any config change produces a different
+ * array, so a stale security setting can never be served.
  */
 class ProfileCache
 {
@@ -29,8 +24,9 @@ class ProfileCache
     private static int $builds = 0;
 
     /**
-     * A number no previously built profile has had. RedactorConfig is a
-     * readonly class and cannot hold the counter itself.
+     * Get a build number no previously built profile has had.
+     *
+     * RedactorConfig is readonly and cannot hold the counter itself.
      */
     public static function nextBuildId(): int
     {
@@ -38,6 +34,8 @@ class ProfileCache
     }
 
     /**
+     * Get the cached profile if it was built from the same raw config.
+     *
      * @param  array<mixed>  $raw  the profile's own config
      * @param  array<mixed>  $shared  package-level settings the profile was built with
      */
@@ -51,6 +49,8 @@ class ProfileCache
     }
 
     /**
+     * Cache the built profile against the raw config it was built from.
+     *
      * @param  array<mixed>  $raw
      * @param  array<mixed>  $shared
      */
@@ -61,6 +61,9 @@ class ProfileCache
         return $built;
     }
 
+    /**
+     * Flush every cached profile.
+     */
     public static function flush(): void
     {
         self::$entries = [];

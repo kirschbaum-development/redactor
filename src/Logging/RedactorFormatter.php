@@ -31,8 +31,7 @@ class RedactorFormatter implements FormatterInterface
         $record = $this->redact($record);
 
         if ($this->inner !== null) {
-            // Monolog 3 types FormatterInterface::format() as mixed, since a
-            // formatter may render to something other than a string.
+            // Monolog 3 types FormatterInterface::format() as mixed, since a formatter may not render a string...
             $formatted = $this->inner->format($record);
 
             return is_string($formatted) ? $formatted : (string) json_encode($formatted);
@@ -71,8 +70,7 @@ class RedactorFormatter implements FormatterInterface
             return is_string($formatted) ? $formatted : (string) json_encode($formatted);
         }
 
-        // Previously this returned format($records[0]) - every record but the
-        // first was silently dropped by any batching handler.
+        // Every record must be rendered; returning format($records[0]) drops the rest in a batching handler...
         $output = '';
 
         foreach ($records as $record) {
@@ -83,8 +81,7 @@ class RedactorFormatter implements FormatterInterface
     }
 
     /**
-     * Redact a record in place, using the same never-throw path as the
-     * processor.
+     * Redact the record using the same never-throw path as the processor.
      */
     protected function redact(LogRecord $record): LogRecord
     {

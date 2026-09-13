@@ -9,11 +9,10 @@ use Kirschbaum\Redactor\Support\DeterministicRandom;
 /**
  * Picks the most specific surrogate generator that can handle a value.
  *
- * Order is significance, not preference: the first generator that claims the
- * value wins, and CharacterClassSurrogate claims everything, so it must stay
- * last. Applications can register their own ahead of the built-ins for domain
- * types the package has never heard of - a policy number, an NHS number, an
- * internal account format.
+ * The first generator that claims the value wins, and CharacterClassSurrogate
+ * claims everything, so it must stay last. Applications can register their
+ * own ahead of the built-ins for domain types the package has never heard of:
+ * a policy number, an NHS number, an internal account format.
  */
 class SurrogateFactory
 {
@@ -21,6 +20,8 @@ class SurrogateFactory
     private array $generators;
 
     /**
+     * Create a new surrogate factory instance.
+     *
      * @param  array<int, SurrogateGenerator>  $custom
      */
     public function __construct(array $custom = [])
@@ -29,17 +30,22 @@ class SurrogateFactory
             ...$custom,
             new EmailSurrogate,
             new CreditCardSurrogate,
-            // Always last: it supports everything.
+            // Always last, since it supports everything...
             new CharacterClassSurrogate,
         ];
     }
 
+    /**
+     * Register a generator ahead of the built-in ones.
+     */
     public function register(SurrogateGenerator $generator): void
     {
         array_unshift($this->generators, $generator);
     }
 
     /**
+     * Generate a surrogate using the first generator that supports the value.
+     *
      * @param  array<string, mixed>  $options
      */
     public function generate(string $entity, string $value, DeterministicRandom $random, array $options = []): string

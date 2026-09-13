@@ -11,25 +11,31 @@ use Kirschbaum\Redactor\Exceptions\PseudonymizationKeyException;
  *
  * The same input always produces the same output, so redacted logs stay
  * joinable: you can still group by user, count distinct callers, or follow one
- * account through a trace - none of which survives replacing every value with
- * the same "[REDACTED]".
- *
- * The mapping is one-way. It is an HMAC, not encryption: there is no route back
- * from a surrogate to the original, by design. Anyone holding the key can
- * confirm a guess, which is why the key must not travel with the logs.
+ * account through a trace. The mapping is one-way: it is an HMAC, not
+ * encryption, so there is no route back from a surrogate to the original.
+ * Anyone holding the key can confirm a guess, which is why the key must not
+ * travel with the logs.
  */
 class Pseudonymizer
 {
     /**
-     * Minimum key length. Short keys make the confirm-a-guess attack cheap.
+     * The minimum key length, since short keys make the confirm-a-guess attack cheap.
      */
     private const MIN_KEY_BYTES = 16;
 
+    /**
+     * Create a new pseudonymizer instance.
+     */
     private function __construct(
         private readonly string $key,
         private readonly string $salt,
     ) {}
 
+    /**
+     * Create a pseudonymizer from an explicit key.
+     *
+     * @throws PseudonymizationKeyException
+     */
     public static function fromKey(string $key, string $salt = ''): self
     {
         if (strlen($key) < self::MIN_KEY_BYTES) {
@@ -45,7 +51,7 @@ class Pseudonymizer
     }
 
     /**
-     * Derive a key from the application key.
+     * Derive a pseudonymizer key from the application key.
      *
      * Deriving rather than reusing APP_KEY directly means a leaked surrogate
      * corpus cannot be used to attack anything else signed with that key.
@@ -63,13 +69,16 @@ class Pseudonymizer
         );
     }
 
+    /**
+     * Create a deterministic random stream for the given value.
+     */
     public function random(string $entity, string $value): DeterministicRandom
     {
         return new DeterministicRandom($this->key, $this->seed($entity, $value));
     }
 
     /**
-     * A short, stable, URL-safe identifier for a value.
+     * Get a short, stable, URL-safe identifier for a value.
      */
     public function token(string $entity, string $value, int $length = 10): string
     {
@@ -77,8 +86,7 @@ class Pseudonymizer
     }
 
     /**
-     * A full hex digest, for callers that want to correlate without any
-     * pretence that the result looks like the original.
+     * Get a full hex digest for a value, for correlating without any pretence of the original's shape.
      */
     public function digest(string $entity, string $value): string
     {
@@ -86,7 +94,8 @@ class Pseudonymizer
     }
 
     /**
-     * Normalising before hashing is what makes the pseudonym useful:
+     * Get the normalised seed for a value.
+     *
      * "Bob@Example.COM " and "bob@example.com" are the same person, and a
      * mapping that disagrees is not joinable.
      */

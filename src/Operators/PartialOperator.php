@@ -7,13 +7,16 @@ namespace Kirschbaum\Redactor\Operators;
 use Kirschbaum\Redactor\Detection\Detection;
 
 /**
- * Keep the last few characters and mask the rest.
+ * Keeps the last few characters and masks the rest.
  *
- * The tail is what lets a human confirm they are looking at the right record -
- * "the card ending 4242" - without the value being usable.
+ * The tail is what lets a human confirm they are looking at the right record,
+ * "the card ending 4242", without the value being usable.
  */
 class PartialOperator implements Operator
 {
+    /**
+     * Mask the span except for its trailing characters.
+     */
     public function apply(Detection $detection, OperatorContext $context): string
     {
         $keep = max(0, $context->intOption('keep', 4));
@@ -21,13 +24,16 @@ class PartialOperator implements Operator
         $length = mb_strlen($detection->value);
 
         if ($length <= $keep) {
-            // Too short to reveal any of it without revealing all of it.
+            // Too short to reveal any of it without revealing all of it...
             return str_repeat($char, max(1, $length));
         }
 
         return str_repeat($char, $length - $keep).mb_substr($detection->value, -$keep);
     }
 
+    /**
+     * Determine if the operator leaves the value as it found it.
+     */
     public function isPreserving(): bool
     {
         return false;

@@ -9,16 +9,18 @@ use Kirschbaum\Redactor\Support\Pseudonymizer;
 use Throwable;
 
 /**
- * Builds the pseudonymizer for a profile, or explains why it could not.
+ * The factory that builds a profile's pseudonymizer, or logs why it could not.
  *
- * Key handling is the whole security surface of pseudonymisation, so it is kept
- * in one place with one rule: if a usable key cannot be produced, return null
- * and let the operators fall back to plain redaction. Emitting an unkeyed or
- * weakly-keyed surrogate would look like it was working while being trivially
- * reversible - the worst of the available outcomes.
+ * Key handling is the whole security surface of pseudonymisation, so it has
+ * one rule: if a usable key cannot be produced, return null and let the
+ * operators fall back to plain redaction. An unkeyed or weakly-keyed
+ * surrogate would look like it was working while being trivially reversible.
  */
 class PseudonymizerFactory
 {
+    /**
+     * Create the pseudonymizer for the given profile, or return null when no usable key exists.
+     */
     public static function forProfile(RedactorConfig $config): ?Pseudonymizer
     {
         $settings = $config->pseudonymization;
@@ -27,10 +29,8 @@ class PseudonymizerFactory
             return null;
         }
 
-        // Shared across profiles unless a profile sets its own: the audit
-        // channel on `strict` and the app channel on `observability` must
-        // produce the same surrogate for the same user, or the two logs
-        // cannot be joined - which is the whole point of pseudonymising.
+        // The salt is shared across profiles unless one sets its own, since two
+        // logs must produce the same surrogate for the same user to be joined...
         $salt = $settings['salt'] ?? '';
         $salt = is_string($salt) ? $salt : '';
 

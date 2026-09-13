@@ -7,6 +7,6 @@ namespace Kirschbaum\Redactor\Exceptions;
 use InvalidArgumentException;
 
 /**
- * A profile or a rule is misconfigured. The message names the config path.
+ * The exception thrown when a profile or a rule is misconfigured; the message names the config path.
  */
 class ConfigurationException extends InvalidArgumentException implements RedactorException {}

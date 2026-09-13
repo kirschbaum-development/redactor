@@ -10,17 +10,19 @@ use Throwable;
 /**
  * Logging for the redactor's own diagnostics.
  *
- * The redactor runs inside the logging pipeline, so a naive Log::warning() from
- * within a redaction re-enters the very handler that triggered it: redact ->
- * warn -> format -> redact -> warn, until the stack or the memory limit gives
- * out. This guard drops any diagnostic raised while one is already in flight,
- * and swallows failures from the logger itself.
+ * The redactor runs inside the logging pipeline, so a naive Log::warning()
+ * from within a redaction re-enters the very handler that triggered it, until
+ * the stack or the memory limit gives out. This guard drops any diagnostic
+ * raised while one is already in flight, and swallows failures from the
+ * logger itself.
  */
 class InternalLog
 {
     private static bool $emitting = false;
 
     /**
+     * Log a warning unless one is already being emitted.
+     *
      * @param  array<string, mixed>  $context
      */
     public static function warning(string $message, array $context = []): void
@@ -34,14 +36,14 @@ class InternalLog
         try {
             Log::warning($message, $context);
         } catch (Throwable) {
-            // A broken logger must not turn into a broken application.
+            // A broken logger must not turn into a broken application...
         } finally {
             self::$emitting = false;
         }
     }
 
     /**
-     * Whether a diagnostic is currently being emitted. Exposed for tests.
+     * Determine if a diagnostic is currently being emitted.
      */
     public static function isEmitting(): bool
     {

@@ -9,7 +9,7 @@ use Monolog\LogRecord;
 use Monolog\Processor\ProcessorInterface;
 
 /**
- * The recommended way to redact Laravel logs.
+ * Redacts log records as a Monolog processor, the recommended way to redact Laravel logs.
  *
  * Redaction transforms a record's *content*, which is what a Monolog processor
  * is for. Owning the formatter instead - as ReadactFormatter does - means
@@ -34,8 +34,7 @@ class RedactorProcessor implements ProcessorInterface
 
     public function __invoke(LogRecord $record): LogRecord
     {
-        // redactSafely(), never redact(): this runs inside the logging
-        // pipeline, where a thrown exception takes the channel down with it.
+        // redactSafely(), never redact(): a throw inside the logging pipeline takes the channel down...
         $message = $this->redactor->redactSafely($record->message, $this->profile);
 
         $context = $this->redactArray($record->context);
@@ -64,9 +63,7 @@ class RedactorProcessor implements ProcessorInterface
             return $redacted;
         }
 
-        // redactSafely() failed closed and returned a marker string. Keep the
-        // record shaped as Monolog expects while still emitting nothing that
-        // was not verified safe.
+        // redactSafely() failed closed and returned a marker string; keep the record shaped as Monolog expects...
         return ['redaction' => $redacted];
     }
 }

@@ -7,17 +7,12 @@ namespace Kirschbaum\Redactor\Support;
 /**
  * A key-pattern list compiled once into the cheapest test for each shape.
  *
- * BlockedKeysStrategy previously rebuilt a preg_quote()+str_replace() regex for
- * every wildcard pattern, for every key, on every call - the single hottest
- * operation in a redaction at ~1.2 us per key against ~0.1 us for the exact
- * match strategy beside it.
- *
- * Almost every real pattern is an exact name or a plain *contains*, so those
- * become a hash lookup and a str_contains(). Only genuinely complex patterns
- * ("user_*_token") reach PCRE, and those regexes are compiled once.
- *
- * Keys and patterns are compared lowercased; RedactorConfig already lowercases
- * both lists, and match() lowercases the key it is given.
+ * Rebuilding a regex for every wildcard pattern, for every key, on every call
+ * was the hottest operation in a redaction at ~1.2us per key against ~0.1us
+ * for an exact match. Almost every real pattern is an exact name or a plain
+ * contains, so those become a hash lookup and a str_contains(); only a
+ * genuinely complex pattern like "user_*_token" reaches PCRE, compiled once.
+ * Keys and patterns are compared lowercased.
  */
 class KeyMatcher
 {
@@ -44,6 +39,8 @@ class KeyMatcher
     private bool $empty = true;
 
     /**
+     * Create a new key matcher instance.
+     *
      * @param  array<int, string>  $patterns
      */
     private function __construct(array $patterns)
@@ -66,19 +63,24 @@ class KeyMatcher
     }
 
     /**
-     * Drop the compiled-matcher cache. Only needed by tests.
+     * Flush the compiled matcher cache.
      */
     public static function flush(): void
     {
         self::$memo = [];
     }
 
+    /**
+     * Determine if the matcher has no patterns.
+     */
     public function isEmpty(): bool
     {
         return $this->empty;
     }
 
     /**
+     * Determine if the key matches any compiled pattern.
+     *
      * @param  bool  $onError  what a PCRE failure should be reported as
      */
     public function matches(string $key, bool $onError = true): bool
@@ -124,6 +126,9 @@ class KeyMatcher
         return false;
     }
 
+    /**
+     * Compile one pattern into the cheapest test for its shape.
+     */
     private function compile(string $pattern): void
     {
         if ($pattern === '') {
@@ -139,7 +144,7 @@ class KeyMatcher
         }
 
         if (trim($pattern, '*') === '') {
-            // '*', '**' and so on: everything matches.
+            // '*', '**' and so on match everything...
             $this->matchesEverything = true;
 
             return;
@@ -147,8 +152,7 @@ class KeyMatcher
 
         $core = trim($pattern, '*');
 
-        // Only the outer wildcards are special-cased; an interior '*' needs
-        // real backtracking, so it goes to PCRE.
+        // Only the outer wildcards are special-cased, since an interior '*' needs real backtracking and goes to PCRE...
         if (! str_contains($core, '*')) {
             $leading = str_starts_with($pattern, '*');
             $trailing = str_ends_with($pattern, '*');

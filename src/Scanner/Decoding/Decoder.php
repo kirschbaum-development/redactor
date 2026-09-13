@@ -8,12 +8,10 @@ namespace Kirschbaum\Redactor\Scanner\Decoding;
  * Finds encoded spans in a window and recovers the text inside them.
  *
  * A secret in a repository is often not written plainly: a connection string
- * sits in a JSON file as `https:\/\/user:pass@host`, a key is base64-encoded
- * into a Kubernetes secret, a token is URL-encoded into a query string. None
- * of the plain patterns see through that, so the scanner decodes first and
- * scans what comes out, one layer deep. Redaction of live payloads does not
- * decode: it is a cost paid on every log line for a case that scanning is
- * the right place to catch.
+ * sits in JSON as `https:\/\/user:pass@host`, a key is base64-encoded into a
+ * Kubernetes secret, a token is URL-encoded into a query string. The scanner
+ * decodes one layer deep and scans what comes out. Redaction of live payloads
+ * does not decode: that cost belongs in a scan, not on every log line.
  */
 class Decoder
 {
@@ -35,11 +33,10 @@ class Decoder
     }
 
     /**
-     * Lines with JSON string escapes, unescaped.
+     * Get the lines with JSON string escapes, unescaped.
      *
-     * `\/` is the one that matters most - json_encode() emits it by default,
-     * so every credential URL in a JSON file carries it - but `\"` and
-     * `\uXXXX` are handled the same way.
+     * `\/` matters most - json_encode() emits it by default, so every credential
+     * URL in a JSON file carries it - but `\"` and `\uXXXX` are handled the same way.
      *
      * @return array<int, DerivedSubject>
      */
@@ -58,8 +55,7 @@ class Decoder
             if (preg_match('/\\\\(?:[\/"\\\\bfnrt]|u[0-9a-fA-F]{4})/', $line) === 1) {
                 $decoded = json_decode('"'.str_replace('"', '\\"', $line).'"');
 
-                // Unescaping a backslash the line already escaped would have
-                // doubled it; undo only what json_decode could interpret.
+                // Undo only what json_decode could interpret, so an escaped backslash is not doubled...
                 if (is_string($decoded) && $decoded !== $line) {
                     $subjects[] = new DerivedSubject($decoded, $offset, $length, 'json');
                 }
@@ -72,7 +68,7 @@ class Decoder
     }
 
     /**
-     * Percent-encoded runs, decoded.
+     * Get the percent-encoded runs, decoded.
      *
      * @return array<int, DerivedSubject>
      */
@@ -100,7 +96,7 @@ class Decoder
     }
 
     /**
-     * Base64 tokens that decode to printable text.
+     * Get the base64 tokens that decode to printable text.
      *
      * @return array<int, DerivedSubject>
      */
@@ -113,7 +109,7 @@ class Decoder
         $subjects = [];
 
         foreach ($matches[0] as [$token, $offset]) {
-            // A token of only letters or only digits is a word or a number.
+            // A token of only letters or only digits is a word or a number...
             if (preg_match('/[A-Z]/', $token) !== 1 || preg_match('/[a-z]/', $token) !== 1 || preg_match('/[0-9+\/]/', $token) !== 1) {
                 continue;
             }
@@ -131,7 +127,7 @@ class Decoder
     }
 
     /**
-     * Whether decoded bytes are text worth scanning rather than a binary blob.
+     * Determine if the decoded bytes are text rather than a binary blob.
      */
     private static function isText(string $bytes): bool
     {

@@ -18,29 +18,33 @@ use Kirschbaum\Redactor\Support\Pcre;
  * Finds sensitive spans by pattern.
  *
  * The strategy detects, scores and locates; it does not rewrite. The context
- * collects what every detecting strategy reported about a value, resolves the
- * overlaps, and applies the configured operator to each surviving span in one
- * pass over the original string. That separation is what lets one profile
- * emit "[REDACTED]" and another emit a stable surrogate from exactly the same
- * detection - and what keeps that surrogate from being detected all over again
- * by whichever strategy runs next.
+ * collects what every detecting strategy reported, resolves the overlaps, and
+ * applies the configured operator to each surviving span in one pass over the
+ * original string. That is what lets one profile emit "[REDACTED]" and another
+ * a stable surrogate from the same detection, and what keeps the surrogate
+ * from being detected again by whichever strategy runs next.
  */
 class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
 {
     /**
-     * How much a passing checksum is worth.
+     * The confidence boost a passing checksum is worth.
      *
-     * A Luhn-valid 16-digit run is a card with ~90% certainty; the same digits
-     * failing Luhn are almost never one. This is the single strongest context
-     * signal available, so it moves the score furthest.
+     * A Luhn-valid 16-digit run is a card with ~90% certainty and the same
+     * digits failing Luhn almost never are, so this is the strongest signal.
      */
     private const VALIDATOR_BOOST = 0.75;
 
+    /**
+     * Determine if the value is a string and the profile has patterns.
+     */
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
         return is_string($value) && $context->config->patterns !== [];
     }
 
+    /**
+     * Collect every pattern match in the value.
+     */
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
         if (! is_string($value)) {
@@ -55,7 +59,7 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
-     * Every span any rule accepts, in the order the rules are configured.
+     * Get every span any rule accepts, in the order the rules are configured.
      *
      * Overlaps between rules are left in; the context resolves them.
      *
@@ -68,23 +72,15 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
         $length = strlen($subject);
 
         foreach ($context->config->patternsByLength as [$rule, $priority]) {
-            // The cheapest test first: a rule whose shortest possible match is
-            // longer than the whole subject cannot match it, and neither can
-            // any rule after it in this order. Most values in a log payload
-            // are a few bytes and most credential rules need twenty or more,
-            // so this retires most of the list before PCRE is involved.
+            // A rule whose shortest possible match is longer than the subject cannot
+            // match it, and neither can any rule after it in this length order...
             if ($rule->minLength > $length) {
                 break;
             }
 
-            // A rule that names keywords only runs on a subject containing one.
-            // The email rule is the single most expensive thing in a clean-text
-            // scan, and "does this contain an @" answers it in nanoseconds.
-            //
-            // Deliberately str_contains() per rule and not one combined regex:
-            // a thirty-way alternation costs PCRE more than every rule it was
-            // meant to save, since each rule's own pattern starts with a
-            // literal and fails in a few nanoseconds.
+            // A rule that names keywords only runs on a subject containing one, checked
+            // with str_contains() per rule since a thirty-way alternation costs PCRE
+            // more than every rule it was meant to save...
             if ($rule->keywords !== []) {
                 $lowered ??= strtolower($subject);
 
@@ -93,9 +89,8 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
                 }
             }
 
-            // Ask the cheap question inline. A capture-free preg_match() on a
-            // subject that does not match costs a fraction of preg_match_all()
-            // with offsets, and most rules do not match most values.
+            // A capture-free preg_match() on a non-matching subject costs a fraction of
+            // preg_match_all() with offsets, and most rules do not match most values...
             $any = @preg_match($rule->pattern, $subject);
 
             if ($any === 0) {
@@ -107,9 +102,8 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
                 : $this->detectRule($rule, $subject, $key, $priority);
 
             if ($found === null) {
-                // The engine gave up partway through. Emitting a partially
-                // inspected string would leak whatever it did not reach, so
-                // the only safe report is "all of it".
+                // The engine gave up partway through, and a partially inspected string
+                // would leak whatever it did not reach, so report all of it...
                 Pcre::matches($rule->pattern, $subject, onError: true, rule: $rule->name);
 
                 return [Detection::failClosed(
@@ -130,7 +124,7 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
-     * Every span in the subject one rule accepts, in order.
+     * Get every span in the subject one rule accepts, in order.
      *
      * Returns null if the engine failed; an empty array means a clean subject.
      *
@@ -165,8 +159,8 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
             $confidence = $this->score($rule, $subject, $offset, $key);
 
             if ($rule->replacesWholeValue()) {
-                // Legacy full mode: one match condemns the entire value. A
-                // span the width of the subject swallows every other report.
+                // Legacy full mode condemns the entire value on one match, and a span
+                // the width of the subject swallows every other report...
                 return [new Detection(
                     entity: $rule->entity(),
                     rule: $rule->name,
@@ -213,6 +207,8 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
+     * Determine if the haystack contains any of the given needles.
+     *
      * @param  array<int, string>  $needles  already lowercased
      */
     private function containsAny(string $haystack, array $needles): bool

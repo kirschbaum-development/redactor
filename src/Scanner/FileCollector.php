@@ -15,17 +15,11 @@ class FileCollector
     private const BINARY_SNIFF_BYTES = 8192;
 
     /**
-     * Collect all eligible files for scanning.
+     * Collect the files eligible for scanning.
      *
-     * @param  array<int, string>  $paths  Base paths to search (files or directories)
-     * @param  array<int, string>  $excludePatterns  Glob patterns matched against the
-     *                                               basename and the path relative to
-     *                                               each scanned directory, e.g.
-     *                                               ['*.min.js', 'vendor/*']
-     * @param  int  $maxSizeBytes  Max file size to include (default 10MB)
-     * @param  bool  $skipBinary  Skip files that look binary
-     * @param  bool  $respectGitignore  Skip files git is ignoring
-     * @return array<int, string> Real paths of matched files
+     * @param  array<int, string>  $paths
+     * @param  array<int, string>  $excludePatterns  globs matched against the basename and the path relative to each scanned directory
+     * @return array<int, string>
      */
     public static function collect(
         array $paths,
@@ -37,11 +31,9 @@ class FileCollector
         $files = [];
         $directoriesToScan = [];
 
-        // Separate individual files from directories
         foreach ($paths as $path) {
             if (is_file($path)) {
-                // An explicitly named file is scanned even if a pattern would
-                // exclude it: the caller asked for that file by name.
+                // An explicitly named file is scanned even if a pattern would exclude it...
                 if (self::isFileEligible($path, $maxSizeBytes, $skipBinary)) {
                     $realPath = realpath($path);
                     if ($realPath !== false) {
@@ -51,14 +43,12 @@ class FileCollector
             } elseif (is_dir($path)) {
                 $directoriesToScan[] = $path;
             }
-            // Non-existent paths are silently ignored (command handles warnings)
+            // Non-existent paths are ignored here; the command warns about them...
         }
 
-        // Process directories with Finder
         foreach ($directoriesToScan as $directory) {
-            // Resolve symlinks first. Symfony locates the git root by walking
-            // up the path it was given, so on macOS (/tmp -> /private/tmp) a
-            // symlinked path makes ignoreVCSIgnored() silently do nothing.
+            // Resolve symlinks first: Symfony locates the git root by walking up the given
+            // path, so a symlinked path makes ignoreVCSIgnored() silently do nothing...
             $directory = realpath($directory) ?: $directory;
 
             $finder = (new Finder)
@@ -71,9 +61,7 @@ class FileCollector
                 $finder->ignoreVCSIgnored(true);
             }
 
-            // Prune whole directories during traversal where we can. Without
-            // this a pattern like 'vendor/*' still walks every file under
-            // vendor before rejecting it one at a time.
+            // Prune whole directories during traversal, or 'vendor/*' walks every file under vendor first...
             foreach (self::directoryPrefixes($excludePatterns) as $prefix) {
                 $finder->exclude($prefix);
             }
@@ -98,13 +86,11 @@ class FileCollector
     }
 
     /**
-     * Match a file against the exclude patterns.
+     * Determine if the file matches any exclude pattern.
      *
-     * Symfony's notName() compares the *basename only*, so the shipped
-     * defaults 'vendor/*' and 'node_modules/*' could never match anything and
-     * every dependency was scanned. Patterns are tested against both the
-     * basename and the path relative to the scanned directory, so 'vendor/*'
-     * and '*.min.js' both behave as written.
+     * Patterns are tested against both the basename and the path relative to
+     * the scanned directory: Symfony's notName() compares the basename only,
+     * so 'vendor/*' would never match anything.
      *
      * @param  array<int, string>  $excludePatterns
      */
@@ -134,7 +120,7 @@ class FileCollector
     }
 
     /**
-     * Whether a repository-relative path is excluded by any pattern.
+     * Determine if the repository-relative path matches any exclude pattern.
      *
      * The same test isExcluded() applies to walked files, for paths that
      * arrive from git rather than from the filesystem.
@@ -156,7 +142,7 @@ class FileCollector
     }
 
     /**
-     * Directory prefixes that can be pruned during traversal.
+     * Get the directory prefixes that can be pruned during traversal.
      *
      * 'vendor/*' and 'node_modules/**' both mean "skip that directory".
      *
@@ -179,7 +165,7 @@ class FileCollector
     }
 
     /**
-     * Check if a file is eligible for scanning.
+     * Determine if the file is eligible for scanning.
      */
     private static function isFileEligible(string $filePath, int $maxSizeBytes, bool $skipBinary = true): bool
     {
@@ -189,8 +175,7 @@ class FileCollector
 
         $size = @filesize($filePath);
 
-        // filesize() returns false for a file that vanished between the walk
-        // and this check; treat that as ineligible rather than as size 0.
+        // filesize() returns false for a file that vanished since the walk; treat that as ineligible...
         if ($size === false || $size > $maxSizeBytes) {
             return false;
         }
@@ -203,7 +188,7 @@ class FileCollector
     }
 
     /**
-     * Whether a file looks like binary content.
+     * Determine if the file looks like binary content.
      *
      * Scanning an image or a compiled artefact produces nothing but entropy
      * false positives, and reads the whole thing into memory to do it.
@@ -223,13 +208,12 @@ class FileCollector
             return false;
         }
 
-        // A NUL byte is the standard heuristic - git uses the same one.
+        // A NUL byte is the standard heuristic - git uses the same one...
         if (str_contains($sample, "\0")) {
             return true;
         }
 
-        // Otherwise, treat content that is neither valid UTF-8 nor
-        // predominantly printable as binary.
+        // Treat content that is neither valid UTF-8 nor predominantly printable as binary...
         if (mb_check_encoding($sample, 'UTF-8')) {
             return false;
         }

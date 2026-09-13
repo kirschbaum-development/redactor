@@ -9,19 +9,12 @@ use JsonSerializable;
 use Kirschbaum\Redactor\Findings\MatchFinding;
 
 /**
- * The outcome of a redaction, with its metadata alongside the value rather
- * than injected into it.
+ * The outcome of a redaction, with its metadata alongside the value rather than injected into it.
  *
- * The `_redacted` / `_redacted_keys` markers write the redactor's bookkeeping
- * into the caller's own array, which turns a JSON list into an object and can
- * overwrite a key the caller actually uses. Prefer this:
+ * The `_redacted` and `_redacted_keys` markers write the redactor's
+ * bookkeeping into the caller's own array, which turns a JSON list into an
+ * object and can overwrite a key the caller actually uses.
  *
- *     $result = Redactor::redactWithMetadata($payload);
- *     $result->value;         // the redacted payload, untouched otherwise
- *     $result->wasRedacted;   // whether anything matched
- *     $result->redactedKeys;  // which keys were affected
- */
-/**
  * @implements Arrayable<string, mixed>
  */
 final readonly class RedactionResult implements Arrayable, JsonSerializable
@@ -53,6 +46,8 @@ final readonly class RedactionResult implements Arrayable, JsonSerializable
     }
 
     /**
+     * Convert the result into something JSON serializable.
+     *
      * @return array<string, mixed>
      */
     public function jsonSerialize(): array

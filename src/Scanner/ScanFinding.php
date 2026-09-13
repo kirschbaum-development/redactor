@@ -12,11 +12,6 @@ use Kirschbaum\Redactor\Verification\VerificationResult;
  * One located finding: which rule fired, where, and what the line looks like
  * once redacted.
  *
- * The scanner previously emitted a single opaque record per file -
- * "full_content_redacted" with a length and nothing else - so there was no way
- * to know which rule fired or where to look.
- */
-/**
  * @implements Arrayable<string, mixed>
  */
 final readonly class ScanFinding implements Arrayable, JsonSerializable
@@ -62,8 +57,7 @@ final readonly class ScanFinding implements Arrayable, JsonSerializable
     }
 
     /**
-     * The finding relocated to its real place in the file, for a scan that
-     * ran over a patch: the line it is on and the commit that added it.
+     * Relocate the finding to its real line in the file and the commit that added it.
      */
     public function at(int $line, ?string $commit): self
     {
@@ -85,7 +79,7 @@ final readonly class ScanFinding implements Arrayable, JsonSerializable
     }
 
     /**
-     * Where the finding is, as a human reads it.
+     * Get the finding's location as a human reads it.
      */
     public function location(): string
     {
@@ -95,12 +89,11 @@ final readonly class ScanFinding implements Arrayable, JsonSerializable
     }
 
     /**
-     * A severity a human can sort by.
+     * Get a severity a human can sort by.
      */
     public function severity(): string
     {
-        // A confirmed-live credential outranks anything confidence can say:
-        // certainty that it works beats an estimate that it exists.
+        // A confirmed-live credential outranks anything confidence can say...
         if ($this->verification !== null && $this->verification->status->isActive()) {
             return 'critical';
         }
@@ -127,8 +120,7 @@ final readonly class ScanFinding implements Arrayable, JsonSerializable
             'excerpt' => $this->excerpt,
             'confidence' => $this->confidence,
             'severity' => $this->severity(),
-            // Why the score is what it is, so a threshold can be chosen on
-            // evidence rather than by trial and error.
+            // Why the score is what it is, so a threshold can be chosen on evidence...
             'signals' => $this->signals,
             'verification' => $this->verification?->toArray(),
             'commit' => $this->commit,
@@ -147,7 +139,7 @@ final readonly class ScanFinding implements Arrayable, JsonSerializable
     }
 
     /**
-     * A stable identity for this finding.
+     * Get a stable identity for the finding.
      *
      * Derived from the rule, the file and the secret itself - never the line
      * number, so a finding accepted into a baseline stays accepted when the

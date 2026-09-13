@@ -13,11 +13,9 @@ use PHPUnit\Framework\Assert;
  *
  * Redaction is a runtime promise, and a promise nobody tests is one that
  * quietly stops being kept. Swap this in with Redactor::fake() and a test can
- * assert that a request's log line was redacted, that a given key was, and -
- * the one that matters most - that a known secret never appeared in anything
- * the redactor emitted, whichever profile and whichever path it took.
- *
- * It redacts for real; it just keeps the receipts.
+ * assert that a log line was redacted, that a given key was, and - the one
+ * that matters most - that a known secret never appeared in anything the
+ * redactor emitted. It redacts for real; it just keeps the receipts.
  */
 class RedactorFake extends Redactor
 {
@@ -36,7 +34,7 @@ class RedactorFake extends Redactor
     }
 
     /**
-     * Every call so far, oldest first.
+     * Get every recorded call, oldest first.
      *
      * @return array<int, array{profile: string|null, input: mixed, result: RedactionResult}>
      */
@@ -51,7 +49,7 @@ class RedactorFake extends Redactor
     }
 
     /**
-     * None of the given values appeared in anything the redactor produced.
+     * Assert that none of the given secrets appeared in anything the redactor produced.
      *
      * The strongest thing a test can say about redaction: not "this key was
      * handled" but "this secret did not get out", across every call.
@@ -77,7 +75,7 @@ class RedactorFake extends Redactor
     }
 
     /**
-     * At least one call redacted something under this key.
+     * Assert that at least one call redacted something under the given key.
      */
     public function assertRedacted(string $key): void
     {
@@ -96,7 +94,7 @@ class RedactorFake extends Redactor
     }
 
     /**
-     * At least one call produced a finding from this rule.
+     * Assert that at least one call produced a finding from the given rule.
      */
     public function assertFinding(string $rule): void
     {

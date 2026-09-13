@@ -8,10 +8,10 @@ namespace Kirschbaum\Redactor\Support;
  * A keyed, reproducible byte stream.
  *
  * Seeded from HMAC-SHA256 over (key, seed) in counter mode, so the same input
- * yields the same stream on any machine, in any process, forever - which is the
+ * yields the same stream on any machine, in any process, forever, which is the
  * whole point of a pseudonym. It is deliberately not a general-purpose CSPRNG
- * and must never be used where unpredictability matters; here predictability is
- * the requirement.
+ * and must never be used where unpredictability matters; here predictability
+ * is the requirement.
  */
 class DeterministicRandom
 {
@@ -19,11 +19,17 @@ class DeterministicRandom
 
     private int $counter = 0;
 
+    /**
+     * Create a new deterministic random instance.
+     */
     public function __construct(
         private readonly string $key,
         private readonly string $seed,
     ) {}
 
+    /**
+     * Get the next byte of the stream.
+     */
     public function byte(): int
     {
         if ($this->buffer === '') {
@@ -37,8 +43,9 @@ class DeterministicRandom
     }
 
     /**
-     * A value in [0, $bound) with rejection sampling, so the distribution is
-     * not skewed by a modulo fold.
+     * Get a value in [0, $bound).
+     *
+     * Uses rejection sampling so the distribution is not skewed by a modulo fold.
      */
     public function below(int $bound): int
     {
@@ -46,8 +53,7 @@ class DeterministicRandom
             return 0;
         }
 
-        // Draw enough bytes to cover the range, then reject anything landing in
-        // the partial final window.
+        // Draw enough bytes to cover the range, then reject anything landing in the partial final window...
         $bytes = (int) ceil(log(max($bound, 2), 256));
         $max = 256 ** $bytes;
         $limit = $max - ($max % $bound);
@@ -63,10 +69,13 @@ class DeterministicRandom
             }
         }
 
-        // Astronomically unlikely; fold rather than loop forever.
+        // Astronomically unlikely, so fold rather than loop forever...
         return $value % $bound;
     }
 
+    /**
+     * Pick one character from the alphabet.
+     */
     public function pick(string $alphabet): string
     {
         $length = strlen($alphabet);
@@ -74,11 +83,17 @@ class DeterministicRandom
         return $length === 0 ? '' : $alphabet[$this->below($length)];
     }
 
+    /**
+     * Get a decimal digit.
+     */
     public function digit(): string
     {
         return (string) $this->below(10);
     }
 
+    /**
+     * Generate a token of the given length from the alphabet.
+     */
     public function token(int $length, string $alphabet = 'abcdefghijkmnopqrstuvwxyz23456789'): string
     {
         $out = '';

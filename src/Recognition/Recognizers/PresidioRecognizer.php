@@ -14,33 +14,44 @@ use RuntimeException;
  *
  * Presidio's /analyze endpoint is the de facto contract for PII recognisers:
  * text in, a list of {entity_type, start, end, score} out. Anything that
- * speaks it - the reference analyzer with spaCy, the same with a transformer
- * recogniser, a FastAPI wrapper around a fine-tuned model - plugs in here
- * without a line of PHP.
- *
- * Runs wherever the profile says, which should never be the request path:
- * a model call costs milliseconds where the rule engine costs microseconds.
+ * speaks it, from the reference analyzer to a wrapper around a fine-tuned
+ * model, plugs in here without a line of PHP. It runs wherever the profile
+ * says, which should never be the request path: a model call costs
+ * milliseconds where the rule engine costs microseconds.
  */
 class PresidioRecognizer implements Recognizer
 {
+    /**
+     * Create a new Presidio recognizer instance.
+     */
     public function __construct(
         private readonly string $url = 'http://127.0.0.1:5002/analyze',
         private readonly float $timeout = 2.0,
     ) {}
 
+    /**
+     * Get the stable name used in config to select the recogniser.
+     */
     public function name(): string
     {
         return 'presidio';
     }
 
+    /**
+     * Create a copy of the recogniser pointed at the given endpoint.
+     */
     public function withEndpoint(string $url, float $timeout): self
     {
         return new self($url, $timeout);
     }
 
     /**
+     * Recognise entities in the given text using the Presidio analyzer.
+     *
      * @param  array<int, string>  $entities
      * @return array<int, RecognizedSpan>
+     *
+     * @throws RuntimeException
      */
     public function recognize(string $text, string $language, array $entities, float $scoreThreshold): array
     {

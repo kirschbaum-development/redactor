@@ -33,7 +33,7 @@ use Laravel\Mcp\Transport\JsonRpcResponse;
 trait RedactsResponses
 {
     /**
-     * The profile to redact with; null for the default.
+     * Get the profile to redact with, or null for the default.
      */
     protected function redactionProfile(): ?string
     {

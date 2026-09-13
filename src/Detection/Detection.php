@@ -9,17 +9,12 @@ use Kirschbaum\Redactor\Operators\OperatorSpec;
 /**
  * Something sensitive found at a known place in a known string.
  *
- * A detection says only *what was found and where*. What happens to it is an
- * Operator's decision, made later and separately. Keeping the two apart is what
- * lets the same detection be redacted in one profile, pseudonymised in another
- * and merely reported by the scanner - and what lets a verifier take the raw
- * value before anything replaces it.
- *
- * Offsets always refer to the subject as the detector received it. Detectors
- * never rewrite; the context collects every detection for a value, resolves
- * overlaps, and rewrites the original once. That is what keeps a surrogate
- * from being re-detected by the next detector, and a finding's column from
- * drifting after an earlier rule changed the string's length.
+ * A detection says only what was found and where; what happens to it is an
+ * operator's decision made later, so the same detection can be redacted in
+ * one profile and pseudonymised in another. Offsets always refer to the
+ * subject as the detector received it: detectors never rewrite, and the
+ * context rewrites the original once, so a surrogate is never re-detected
+ * and a finding's column never drifts.
  */
 final readonly class Detection
 {
@@ -28,47 +23,40 @@ final readonly class Detection
         public string $entity,
         /** The rule that found it, for reporting and baselines. */
         public string $rule,
-        /** Byte offset of the sensitive span within the subject. */
+        /** The byte offset of the sensitive span within the subject. */
         public int $offset,
         /** The sensitive text itself. */
         public string $value,
         public Confidence $confidence,
         /** The key the subject was found under, where there was one. */
         public string $key = '',
-        /**
-         * The operator the finding rule asked for, if it expressed a choice.
-         *
-         * Null means the profile decides. A rule that merely left its mode at
-         * the default has not chosen, and must not outrank operators.default.
-         */
+        /** The operator the rule explicitly chose, or null to let the profile decide. */
         public ?OperatorSpec $operator = null,
-        /**
-         * Set when the detector could not evaluate the subject at all - a PCRE
-         * failure, a tokeniser that gave up - and the only safe answer is to
-         * replace the whole value with the plain replacement string, whatever
-         * operator policy says. A surrogate of "we do not know" is meaningless.
-         */
+        /** Whether the detector failed and the whole value must be replaced, whatever operator policy says. */
         public bool $failClosed = false,
-        /**
-         * Where the finding rule sits in the profile's declared order.
-         *
-         * Settles an equal-score overlap: the rule listed first wins. Carried
-         * on the detection so detectors are free to evaluate rules in
-         * whatever order is cheapest without changing the outcome.
-         */
+        /** The rule's position in the profile's declared order, which settles equal-score overlaps. */
         public int $priority = PHP_INT_MAX,
     ) {}
 
+    /**
+     * Get the length of the sensitive span.
+     */
     public function length(): int
     {
         return strlen($this->value);
     }
 
+    /**
+     * Get the offset just past the sensitive span.
+     */
     public function end(): int
     {
         return $this->offset + $this->length();
     }
 
+    /**
+     * Create a copy of the detection with the given confidence.
+     */
     public function withConfidence(Confidence $confidence): self
     {
         return new self(
@@ -85,7 +73,7 @@ final readonly class Detection
     }
 
     /**
-     * A detection that covers the whole subject because the detector failed.
+     * Create a detection covering the whole subject because the detector failed.
      */
     public static function failClosed(string $entity, string $rule, string $subject, string $key, string $reason): self
     {
@@ -101,11 +89,7 @@ final readonly class Detection
     }
 
     /**
-     * Whether this detection covers the same ground as another.
-     *
-     * Two rules matching the same span is normal - a card number matches both
-     * `credit_card` and a generic digit-run rule - and only one of them should
-     * be allowed to rewrite it.
+     * Determine if this detection covers the same ground as another.
      */
     public function overlaps(self $other): bool
     {

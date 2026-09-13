@@ -23,10 +23,9 @@ interface Operator
     public function apply(Detection $detection, OperatorContext $context): string;
 
     /**
-     * Whether this operator leaves the value as it found it.
+     * Determine if the operator leaves the value as it found it.
      *
-     * Used to decide whether anything actually changed, which drives the
-     * redaction flag and the finding count.
+     * This decides whether anything changed, which drives the redaction flag.
      */
     public function isPreserving(): bool;
 }

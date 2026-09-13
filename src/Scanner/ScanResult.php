@@ -23,7 +23,7 @@ class ScanResult
     }
 
     /**
-     * The same result with any baseline-accepted findings removed.
+     * Get the same result with any baseline-accepted findings removed.
      *
      * @param  array<string, true>  $acceptedFingerprints
      */

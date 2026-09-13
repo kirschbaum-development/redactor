@@ -29,7 +29,7 @@ final readonly class Patch
     }
 
     /**
-     * The added lines as one text, in order, for scanning.
+     * Get the added lines as one text, in order, for scanning.
      */
     public function text(): string
     {
@@ -37,7 +37,7 @@ final readonly class Patch
     }
 
     /**
-     * The real file line for the Nth line (1-based) of text().
+     * Get the real file line for the Nth line (1-based) of text().
      */
     public function lineAt(int $textLine): int
     {
