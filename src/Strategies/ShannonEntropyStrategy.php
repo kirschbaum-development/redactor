@@ -11,6 +11,7 @@ use Kirschbaum\Redactor\Detection\KeywordContext;
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Support\Pcre;
 
 /**
@@ -22,7 +23,7 @@ use Kirschbaum\Redactor\Support\Pcre;
  * regex detector wrote a moment ago, which has the same entropy as the value
  * it replaced, is never mistaken for a fresh secret.
  */
-class ShannonEntropyStrategy implements DetectingStrategy, Detector, RedactionStrategyInterface
+class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
 {
     public const ENTITY = 'high_entropy';
 

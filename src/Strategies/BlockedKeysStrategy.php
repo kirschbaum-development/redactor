@@ -8,6 +8,7 @@ use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\RedactionContext;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 
 /**
  * Redacts a value because of the name of the key holding it.
@@ -20,7 +21,7 @@ use Kirschbaum\Redactor\RedactionContext;
  * "every email in this profile becomes a surrogate" holds without having to
  * know which strategy got there first.
  */
-class BlockedKeysStrategy implements RedactionStrategyInterface
+class BlockedKeysStrategy implements Strategy
 {
     /**
      * One certain score shared by every key-based detection.

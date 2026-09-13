@@ -6,13 +6,13 @@ namespace Tests\Feature;
 
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
-use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
 
 /**
  * Counts how many times the chain is asked about a value, and with which keys.
  */
-class CountingStrategy implements RedactionStrategyInterface
+class CountingStrategy implements Strategy
 {
     /** @var array<int, string> */
     public static array $keys = [];

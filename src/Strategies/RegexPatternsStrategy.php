@@ -11,6 +11,7 @@ use Kirschbaum\Redactor\Detection\KeywordContext;
 use Kirschbaum\Redactor\Patterns\PatternRule;
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Support\Pcre;
 
 /**
@@ -24,7 +25,7 @@ use Kirschbaum\Redactor\Support\Pcre;
  * detection - and what keeps that surrogate from being detected all over again
  * by whichever strategy runs next.
  */
-class RegexPatternsStrategy implements DetectingStrategy, Detector, RedactionStrategyInterface
+class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
 {
     /**
      * How much a passing checksum is worth.

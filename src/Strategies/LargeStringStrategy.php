@@ -6,6 +6,7 @@ namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 
 /**
  * Bounds the work done on a very long string.
@@ -20,7 +21,7 @@ use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
  * the rest of the chain so a secret in the part that survives is still found.
  * `large_string_behavior: redact` restores the old wholesale replacement.
  */
-class LargeStringStrategy implements ChainableStrategy, RedactionStrategyInterface
+class LargeStringStrategy implements ChainableStrategy, Strategy
 {
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {

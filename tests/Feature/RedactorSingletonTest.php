@@ -8,7 +8,7 @@ use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\Scanner\Scanner;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
-use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 
 function singletonProfile(array $overrides = []): array
@@ -87,7 +87,7 @@ describe('Redactor container binding', function () {
     });
 });
 
-class LateRegisteredStrategy implements RedactionStrategyInterface
+class LateRegisteredStrategy implements Strategy
 {
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {

@@ -6,9 +6,9 @@ use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
 use Kirschbaum\Redactor\Strategies\LargeStringStrategy;
-use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
@@ -231,7 +231,7 @@ describe('Redactor Content Tests', function () {
 
     test('it wraps non-array strategy results in redacted array structure', function () {
         // Create a custom strategy that returns a string when processing arrays
-        $customStrategy = new class implements RedactionStrategyInterface
+        $customStrategy = new class implements Strategy
         {
             public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
             {
@@ -285,7 +285,7 @@ describe('Redactor Content Tests', function () {
 
     test('it removes keys when strategy returns removal signal', function () {
         // Create a custom strategy that removes specific keys by returning __REDACTOR_REMOVE_OBJECT__
-        $removeStrategy = new class implements RedactionStrategyInterface
+        $removeStrategy = new class implements Strategy
         {
             public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
             {
@@ -478,7 +478,7 @@ describe('Redactor Content Tests', function () {
 
     test('it returns strategy-processed objects directly when handled by custom strategies', function () {
         // Create a custom strategy that specifically handles certain objects
-        $objectStrategy = new class implements RedactionStrategyInterface
+        $objectStrategy = new class implements Strategy
         {
             public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
             {
@@ -550,11 +550,11 @@ describe('Redactor Content Tests', function () {
 
         // Verify they are strategy instances
         foreach ($strategies as $strategy) {
-            expect($strategy)->toBeInstanceOf(RedactionStrategyInterface::class);
+            expect($strategy)->toBeInstanceOf(Strategy::class);
         }
 
         // Test with a custom profile that includes a registered custom strategy
-        $customStrategy = new class implements RedactionStrategyInterface
+        $customStrategy = new class implements Strategy
         {
             public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
             {

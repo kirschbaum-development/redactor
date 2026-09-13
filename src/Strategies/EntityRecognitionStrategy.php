@@ -16,6 +16,7 @@ use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Strategies\Contracts\ConditionalStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Throwable;
 
@@ -40,7 +41,7 @@ use Throwable;
  * few failures not asked again for a while - the output is then rules-only,
  * which is what it would have been without this strategy at all.
  */
-class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrategy, Detector, RedactionStrategyInterface
+class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrategy, Detector, Strategy
 {
     public const RULE = 'entity_recognition';
 

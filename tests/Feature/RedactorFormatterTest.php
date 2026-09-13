@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use DateTimeImmutable;
-use Kirschbaum\Redactor\Logging\ReadactFormatter;
+use Kirschbaum\Redactor\Logging\RedactorFormatter;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Monolog\Level;
 use Monolog\LogRecord;
 
-describe('ReadactFormatter Tests', function () {
+describe('RedactorFormatter Tests', function () {
     beforeEach(function () {
         // Set up basic redaction profile for testing
         config()->set('redactor.default_profile', 'logging_test');
@@ -41,7 +41,7 @@ describe('ReadactFormatter Tests', function () {
     });
 
     test('formats basic log record with string message', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
         $record = new LogRecord(
@@ -58,7 +58,7 @@ describe('ReadactFormatter Tests', function () {
     });
 
     test('redacts sensitive data in log message', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
         $record = new LogRecord(
@@ -77,7 +77,7 @@ describe('ReadactFormatter Tests', function () {
     });
 
     test('handles array message by converting to json', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
         $arrayMessage = ['action' => 'login', 'password' => 'secret123'];
@@ -99,7 +99,7 @@ describe('ReadactFormatter Tests', function () {
     });
 
     test('handles object message by converting to json', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
         $objectMessage = (object) ['action' => 'login', 'token' => 'abc123'];
@@ -121,7 +121,7 @@ describe('ReadactFormatter Tests', function () {
     });
 
     test('formats log record with context data', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
         $context = [
@@ -150,7 +150,7 @@ describe('ReadactFormatter Tests', function () {
     });
 
     test('handles empty context gracefully', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
         $record = new LogRecord(
@@ -168,7 +168,7 @@ describe('ReadactFormatter Tests', function () {
     });
 
     test('handles different log levels correctly', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
         $levels = [
@@ -208,7 +208,7 @@ describe('ReadactFormatter Tests', function () {
     });
 
     test('formatBatch formats every record, not just the first', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
         $records = [
@@ -239,7 +239,7 @@ describe('ReadactFormatter Tests', function () {
     });
 
     test('handles null context values', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
         $context = [
@@ -261,7 +261,7 @@ describe('ReadactFormatter Tests', function () {
     });
 
     test('preserves microseconds in timestamp', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.999999');
 
         $record = new LogRecord(

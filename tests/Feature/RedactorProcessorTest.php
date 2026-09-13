@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Log\Logger;
-use Kirschbaum\Redactor\Logging\ReadactFormatter;
+use Kirschbaum\Redactor\Logging\RedactorFormatter;
 use Kirschbaum\Redactor\Logging\RedactorProcessor;
 use Kirschbaum\Redactor\Logging\RedactorTap;
 use Kirschbaum\Redactor\Redactor;
@@ -141,9 +141,9 @@ describe('RedactorTap', function () {
     });
 });
 
-describe('ReadactFormatter composition', function () {
+describe('RedactorFormatter composition', function () {
     it('formats every record in a batch', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
 
         $out = $formatter->formatBatch([
             logRecord('one'),
@@ -158,7 +158,7 @@ describe('ReadactFormatter composition', function () {
     });
 
     it('delegates to an inner formatter when given one', function () {
-        $formatter = new ReadactFormatter(new JsonFormatter);
+        $formatter = new RedactorFormatter(new JsonFormatter);
 
         $out = $formatter->format(logRecord('mail bob@example.com', ['password' => 'hunter2']));
 
@@ -170,7 +170,7 @@ describe('ReadactFormatter composition', function () {
     });
 
     it('includes extra in its own output', function () {
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
 
         $out = $formatter->format(logRecord('hi', [], ['pid' => 42]));
 

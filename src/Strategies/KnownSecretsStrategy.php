@@ -9,6 +9,7 @@ use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Detection\Detector;
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 
 /**
  * Finds the application's own credentials wherever they appear verbatim.
@@ -21,7 +22,7 @@ use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
  * plus anything registered at runtime with Redactor::registerSecret(). A value
  * found this way is certain: there is nothing to infer.
  */
-class KnownSecretsStrategy implements DetectingStrategy, Detector, RedactionStrategyInterface
+class KnownSecretsStrategy implements DetectingStrategy, Detector, Strategy
 {
     public const RULE = 'known_secret';
 

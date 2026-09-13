@@ -8,8 +8,8 @@ use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Strategies\LargeStringStrategy;
-use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
@@ -547,7 +547,7 @@ describe('Strategy Management Tests', function () {
         $redactor = new Redactor;
 
         // Create a custom strategy that handles unexpected types
-        $customStrategy = new class implements RedactionStrategyInterface
+        $customStrategy = new class implements Strategy
         {
             public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
             {
@@ -641,16 +641,16 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
         expect($strategies)->toHaveCount(0);
     });
 
-    it('handles classes that exist but do not implement RedactionStrategyInterface', function () {
-        // Test the case where class exists but doesn't implement RedactionStrategyInterface
+    it('handles classes that exist but do not implement Strategy', function () {
+        // Test the case where class exists but doesn't implement Strategy
         config()->set('redactor.profiles.default.strategies', [
-            \stdClass::class, // Valid class but not a RedactionStrategyInterface
+            \stdClass::class, // Valid class but not a Strategy
         ]);
 
         $redactor = new Redactor;
         $strategies = $redactor->getStrategies('default');
 
-        // Should have no strategies since stdClass doesn't implement RedactionStrategyInterface
+        // Should have no strategies since stdClass doesn't implement Strategy
         expect($strategies)->toHaveCount(0);
     });
 
@@ -670,7 +670,7 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
             'valid_strategy' => TestValidCustomStrategy::class,
             123 => TestValidCustomStrategy::class, // Non-string name
             'invalid_class' => 'NonExistentClass', // Class doesn't exist
-            'not_strategy' => \stdClass::class, // Not a RedactionStrategyInterface
+            'not_strategy' => \stdClass::class, // Not a Strategy
             'invalid_type' => 123, // Not a string class name
         ]);
 
@@ -727,7 +727,7 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
 });
 
 // Test helper class for strategy tests
-class TestValidCustomStrategy implements RedactionStrategyInterface
+class TestValidCustomStrategy implements Strategy
 {
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {

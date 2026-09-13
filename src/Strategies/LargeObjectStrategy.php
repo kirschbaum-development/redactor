@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\RedactionContext;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 
-class LargeObjectStrategy implements RedactionStrategyInterface
+class LargeObjectStrategy implements Strategy
 {
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {

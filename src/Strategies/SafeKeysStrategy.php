@@ -6,6 +6,7 @@ namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 
 /**
  * Declares a value safe by the name of the key holding it.
@@ -18,7 +19,7 @@ use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
  * Supports the same '*' wildcards as BlockedKeysStrategy: '*_count', 'meta_*',
  * '*id*', 'user_*_id'. Matching is case-insensitive.
  */
-class SafeKeysStrategy implements PreservingStrategy, RedactionStrategyInterface
+class SafeKeysStrategy implements PreservingStrategy, Strategy
 {
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {

@@ -1,18 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kirschbaum\Redactor\Strategies;
 
-use Kirschbaum\Redactor\RedactionContext;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 
-interface RedactionStrategyInterface
-{
-    /**
-     * Check if this strategy should handle the given key-value pair.
-     */
-    public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool;
-
-    /**
-     * Handle the redaction for the given key-value pair.
-     */
-    public function handle(mixed $value, string $key, RedactionContext $context): mixed;
-}
+/**
+ * @deprecated Implement Strategies\Contracts\Strategy instead.
+ */
+interface RedactionStrategyInterface extends Strategy {}
