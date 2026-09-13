@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Container\Container;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Config;
 use Kirschbaum\Redactor\Config\ConfigValue;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Scanner\Baseline;
@@ -75,7 +75,7 @@ class RedactorScanCommand extends Command
 
             // Applied to the profile rather than filtered afterwards, so a
             // low-scoring detection is never acted on in the first place.
-            Config::set("redactor.profiles.{$profile}.min_confidence", (float) $minConfidence);
+            config(["redactor.profiles.{$profile}.min_confidence" => (float) $minConfidence]);
         }
 
         $baselinePath = $this->baselinePath();
@@ -115,26 +115,26 @@ class RedactorScanCommand extends Command
         }
 
         $ignorePatterns = ConfigValue::stringList(
-            Config::get('redactor.scan.exclude_patterns', []),
+            config('redactor.scan.exclude_patterns', []),
             'scan.exclude_patterns'
         );
 
         // Config::array()/Config::integer() throw when the value arrives as a
         // string, which is exactly what env() produces for REDACTOR_SCAN_*.
         $maxFileSize = ConfigValue::positiveInt(
-            Config::get('redactor.scan.max_file_size'),
+            config('redactor.scan.max_file_size'),
             10_485_760,
             'scan.max_file_size'
         );
 
-        $skipBinary = ConfigValue::bool(Config::get('redactor.scan.skip_binary'), true, 'scan.skip_binary');
-        $respectGitignore = ConfigValue::bool(Config::get('redactor.scan.respect_gitignore'), true, 'scan.respect_gitignore');
+        $skipBinary = ConfigValue::bool(config('redactor.scan.skip_binary'), true, 'scan.skip_binary');
+        $respectGitignore = ConfigValue::bool(config('redactor.scan.respect_gitignore'), true, 'scan.respect_gitignore');
 
-        $scanner = resolve(Scanner::class);
+        $scanner = Container::getInstance()->make(Scanner::class);
 
         if ((bool) $this->option('verify')) {
             $verifier = SecretVerifier::fromConfig(
-                ConfigValue::map(Config::get('redactor.scan.verification', []), 'scan.verification')
+                ConfigValue::map(config('redactor.scan.verification', []), 'scan.verification')
             );
 
             if ($verifier === null) {
@@ -280,7 +280,7 @@ class RedactorScanCommand extends Command
             return $option;
         }
 
-        $configured = Config::get('redactor.scan.baseline');
+        $configured = config('redactor.scan.baseline');
 
         return is_string($configured) && $configured !== '' ? $configured : null;
     }
