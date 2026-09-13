@@ -43,7 +43,9 @@
         "laravel/pint": "^1.22",
         "orchestra/testbench": "^10.3|^11.0",
         "pestphp/pest": "^3.8",
-        "timacdonald/log-fake": "^2.4"
+        "timacdonald/log-fake": "^2.4",
+        "laravel/mcp": "^1.0@beta",
+        "laravel/ai": "^0.11"
     },
     "config": {
         "allow-plugins": {
@@ -103,5 +105,9 @@
         "mutate": [
             "@php -d memory_limit=2G vendor/bin/pest --mutate --everything --covered-only"
         ]
+    },
+    "suggest": {
+        "laravel/mcp": "To redact everything an MCP server returns with the RedactsResponses trait",
+        "laravel/ai": "To redact prompts and resolve tokens in answers with the RedactPrompt middleware"
     }
 }
