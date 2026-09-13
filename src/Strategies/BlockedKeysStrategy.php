@@ -21,6 +21,14 @@ use Kirschbaum\Redactor\RedactionContext;
  */
 class BlockedKeysStrategy implements RedactionStrategyInterface
 {
+    /**
+     * One certain score shared by every key-based detection.
+     *
+     * Built once: this runs for every blocked value in every payload, and a
+     * fresh Confidence with a formatted reason per value was measurable.
+     */
+    private static ?Confidence $certain = null;
+
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
         // onError: true. An unevaluatable blocked-key pattern blocks the key.
@@ -47,7 +55,7 @@ class BlockedKeysStrategy implements RedactionStrategyInterface
             rule: 'blocked_key',
             offset: 0,
             value: (string) $value,
-            confidence: Confidence::of(Confidence::CERTAIN, sprintf('key "%s" is blocked', $key)),
+            confidence: self::$certain ??= Confidence::of(Confidence::CERTAIN, 'the key is in blocked_keys'),
             key: $key,
         );
 

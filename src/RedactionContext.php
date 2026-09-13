@@ -160,6 +160,12 @@ class RedactionContext
     {
         $spec = $this->config->policy->operatorFor($detection, $atLocation);
 
+        // Plain redaction is the overwhelmingly common outcome and needs no
+        // operator context, pseudonymizer or registry lookup to produce.
+        if ($spec->name === OperatorRegistry::REDACT && $spec->options === []) {
+            return $this->config->replacement;
+        }
+
         if (! $this->operators->has($spec->name)) {
             InternalLog::warning('Unknown redaction operator; falling back to the replacement string', [
                 'operator' => $spec->name,
