@@ -28,33 +28,50 @@ function logPayload(): array
     ];
 }
 
-/** Nanoseconds for one redaction of the standard payload. */
-function timeRedaction(string $profile, int $iterations = 500): float
+/**
+ * Nanoseconds for one redaction of the standard payload.
+ *
+ * The best of several short runs, not the mean of one long one: under a
+ * parallel test run the mean absorbs every context switch on the machine,
+ * while the fastest block is what the code actually costs.
+ */
+function timeRedaction(string $profile, int $iterations = 100, int $runs = 7): float
 {
     $redactor = app(Redactor::class);
     $payload = logPayload();
 
     $redactor->redact($payload, $profile); // warm the strategy cache
 
-    $start = hrtime(true);
-    for ($i = 0; $i < $iterations; $i++) {
-        $redactor->redact($payload, $profile);
+    $best = PHP_FLOAT_MAX;
+
+    for ($run = 0; $run < $runs; $run++) {
+        $start = hrtime(true);
+        for ($i = 0; $i < $iterations; $i++) {
+            $redactor->redact($payload, $profile);
+        }
+        $best = min($best, (hrtime(true) - $start) / $iterations);
     }
 
-    return (hrtime(true) - $start) / $iterations;
+    return $best;
 }
 
 /** Nanoseconds for a trivial loop iteration, to normalise for machine speed. */
-function calibration(int $iterations = 500_000): float
+function calibration(int $iterations = 100_000, int $runs = 5): float
 {
-    $sink = 0;
+    $best = PHP_FLOAT_MAX;
 
-    $start = hrtime(true);
-    for ($i = 0; $i < $iterations; $i++) {
-        $sink += $i % 7;
+    for ($run = 0; $run < $runs; $run++) {
+        $sink = 0;
+
+        $start = hrtime(true);
+        for ($i = 0; $i < $iterations; $i++) {
+            $sink += $i % 7;
+        }
+
+        $best = min($best, (hrtime(true) - $start) / $iterations);
     }
 
-    return (hrtime(true) - $start) / $iterations;
+    return $best;
 }
 
 describe('Redaction throughput', function () {
