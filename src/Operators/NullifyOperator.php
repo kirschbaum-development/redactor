@@ -17,7 +17,7 @@ use Kirschbaum\Redactor\Detection\Detection;
  * Inside a string there is no null to write, so a span found by a pattern is
  * deleted, as `remove` would.
  */
-final class NullifyOperator implements Operator
+class NullifyOperator implements Operator
 {
     public function apply(Detection $detection, OperatorContext $context): string
     {

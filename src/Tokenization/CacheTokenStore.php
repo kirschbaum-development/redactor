@@ -18,7 +18,7 @@ use Throwable;
  * trust the application itself needs; guard those, and the tokens are safe
  * to hand to a model.
  */
-final class CacheTokenStore implements TokenStore
+class CacheTokenStore implements TokenStore
 {
     public function __construct(
         private readonly Repository $cache,

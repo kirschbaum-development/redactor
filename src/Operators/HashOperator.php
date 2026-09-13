@@ -15,7 +15,7 @@ use Kirschbaum\Redactor\Detection\Detection;
  * joinable, and the token is obviously not real data - which is what you want
  * where a format-preserving surrogate could be mistaken for the genuine value.
  */
-final class HashOperator implements Operator
+class HashOperator implements Operator
 {
     public function apply(Detection $detection, OperatorContext $context): string
     {

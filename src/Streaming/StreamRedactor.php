@@ -25,7 +25,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * streams the default is a fraction of a second at typical rates; raise it
  * for content whose secrets are longer than a screen line.
  */
-final class StreamRedactor
+class StreamRedactor
 {
     public const DEFAULT_HOLDBACK = 1024;
 

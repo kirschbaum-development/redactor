@@ -13,7 +13,7 @@ namespace Kirschbaum\Redactor\Support;
  * and must never be used where unpredictability matters; here predictability is
  * the requirement.
  */
-final class DeterministicRandom
+class DeterministicRandom
 {
     private string $buffer = '';
 

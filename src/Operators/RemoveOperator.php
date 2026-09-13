@@ -7,7 +7,7 @@ namespace Kirschbaum\Redactor\Operators;
 use Kirschbaum\Redactor\Detection\Detection;
 
 /** Delete the span entirely. */
-final class RemoveOperator implements Operator
+class RemoveOperator implements Operator
 {
     public function apply(Detection $detection, OperatorContext $context): string
     {

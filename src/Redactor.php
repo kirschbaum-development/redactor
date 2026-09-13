@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor;
 
-use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Event;
+use Illuminate\Container\Container;
 use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Events\RedactionPerformed;
@@ -71,7 +70,7 @@ class Redactor
     public function detokenize(mixed $content): mixed
     {
         /** @var Detokenizer $detokenizer */
-        $detokenizer = app(Detokenizer::class);
+        $detokenizer = Container::getInstance()->make(Detokenizer::class);
 
         return $detokenizer->detokenize($content);
     }
@@ -158,7 +157,7 @@ class Redactor
      */
     private function eventsEnabled(): bool
     {
-        return $this->events ??= (bool) Config::get('redactor.events', true);
+        return $this->events ??= (bool) config('redactor.events', true);
     }
 
     private ?bool $events = null;
@@ -181,7 +180,7 @@ class Redactor
         }
 
         try {
-            Event::dispatch(new RedactionPerformed($profile, $result->redactedKeys, $rules, $entities, count($result->findings)));
+            event(new RedactionPerformed($profile, $result->redactedKeys, $rules, $entities, count($result->findings)));
         } catch (\Throwable $e) {
             InternalLog::warning('A RedactionPerformed listener failed', [
                 'exception_type' => get_class($e),
@@ -458,7 +457,7 @@ class Redactor
 
         $this->customStrategiesLoaded = true;
 
-        $customStrategyClasses = Config::get('redactor.custom_strategies', []);
+        $customStrategyClasses = config('redactor.custom_strategies', []);
 
         if (! is_array($customStrategyClasses)) {
             return;

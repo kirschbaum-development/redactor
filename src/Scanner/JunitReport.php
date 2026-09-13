@@ -8,7 +8,7 @@ namespace Kirschbaum\Redactor\Scanner;
  * JUnit XML, so a CI dashboard that already renders test results renders
  * scan findings too: one test case per scanned file, one failure per finding.
  */
-final class JunitReport
+class JunitReport
 {
     /**
      * @param  array<int, ScanResult>  $results

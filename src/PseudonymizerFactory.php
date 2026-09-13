@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor;
 
-use Illuminate\Support\Facades\Config;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Kirschbaum\Redactor\Support\Pseudonymizer;
 use Throwable;
@@ -18,7 +17,7 @@ use Throwable;
  * weakly-keyed surrogate would look like it was working while being trivially
  * reversible - the worst of the available outcomes.
  */
-final class PseudonymizerFactory
+class PseudonymizerFactory
 {
     public static function forProfile(RedactorConfig $config): ?Pseudonymizer
     {
@@ -42,7 +41,7 @@ final class PseudonymizerFactory
                 return Pseudonymizer::fromKey($key, $salt);
             }
 
-            $applicationKey = Config::get('app.key');
+            $applicationKey = config('app.key');
 
             if (! is_string($applicationKey) || $applicationKey === '') {
                 InternalLog::warning('Pseudonymization is unavailable: no key configured and app.key is empty', [

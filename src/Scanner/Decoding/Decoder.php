@@ -15,7 +15,7 @@ namespace Kirschbaum\Redactor\Scanner\Decoding;
  * decode: it is a cost paid on every log line for a case that scanning is
  * the right place to catch.
  */
-final class Decoder
+class Decoder
 {
     /**
      * Base64 tokens shorter than this are far more often ordinary words.

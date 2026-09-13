@@ -18,7 +18,7 @@ use RuntimeException;
  * from a surrogate to the original, by design. Anyone holding the key can
  * confirm a guess, which is why the key must not travel with the logs.
  */
-final class Pseudonymizer
+class Pseudonymizer
 {
     /**
      * Minimum key length. Short keys make the confirm-a-guess attack cheap.

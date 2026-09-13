@@ -12,7 +12,7 @@ namespace Kirschbaum\Redactor\Tokenization;
  * application, invented by a model - is left exactly as it is, since
  * guessing would be worse than leaving it.
  */
-final class Detokenizer
+class Detokenizer
 {
     public function __construct(
         private readonly TokenStore $store,

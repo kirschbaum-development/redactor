@@ -17,7 +17,7 @@ namespace Kirschbaum\Redactor\Support;
  * three-character "secret" would match inside ordinary words and redact half
  * the log.
  */
-final class SecretRegistry
+class SecretRegistry
 {
     public const MIN_LENGTH = 8;
 

@@ -12,7 +12,7 @@ namespace Kirschbaum\Redactor\Detection;
  * it. Shared by every detector so a keyword means the same thing whichever
  * one spotted the value, and so a recogniser added later gets it for free.
  */
-final class KeywordContext
+class KeywordContext
 {
     /**
      * How much a nearby keyword is worth.

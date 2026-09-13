@@ -17,7 +17,7 @@ namespace Kirschbaum\Redactor\Patterns;
  * A validator answers one question: could this string actually be the thing
  * the pattern claims it is? Failing it means the match is left alone.
  */
-final class Validator
+class Validator
 {
     public const LUHN = 'luhn';
 

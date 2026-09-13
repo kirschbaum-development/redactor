@@ -17,7 +17,7 @@ namespace Kirschbaum\Redactor\Recognition;
  * an Octane worker needs; it is deliberately not shared, because a breaker
  * that needed the cache to work would fail exactly when the cache does.
  */
-final class CircuitBreaker
+class CircuitBreaker
 {
     /** @var array<string, array{failures: int, open_until: int}> */
     private static array $state = [];

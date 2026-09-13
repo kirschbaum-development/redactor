@@ -15,7 +15,7 @@ use Throwable;
  * Balance is read-only and returns 401 for a revoked key, so the check confirms
  * the key works without touching anything.
  */
-final class StripeKeyVerifier implements Verifier
+class StripeKeyVerifier implements Verifier
 {
     public function name(): string
     {

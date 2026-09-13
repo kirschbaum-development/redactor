@@ -14,7 +14,7 @@ use Symfony\Component\Process\Process;
  * committed", "what this branch adds over main" and "everything ever
  * committed" all go through the same parser and the same scanner.
  */
-final class GitRepository
+class GitRepository
 {
     public function __construct(
         private readonly string $directory,

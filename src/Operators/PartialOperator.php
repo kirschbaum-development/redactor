@@ -12,7 +12,7 @@ use Kirschbaum\Redactor\Detection\Detection;
  * The tail is what lets a human confirm they are looking at the right record -
  * "the card ending 4242" - without the value being usable.
  */
-final class PartialOperator implements Operator
+class PartialOperator implements Operator
 {
     public function apply(Detection $detection, OperatorContext $context): string
     {

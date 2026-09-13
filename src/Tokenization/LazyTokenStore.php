@@ -13,7 +13,7 @@ use Closure;
  * own register() - and the cache and encrypter it would need for tokens may
  * not be ready yet. Nothing touches them until a `tokenize` operator runs.
  */
-final class LazyTokenStore implements TokenStore
+class LazyTokenStore implements TokenStore
 {
     private ?TokenStore $resolved = null;
 

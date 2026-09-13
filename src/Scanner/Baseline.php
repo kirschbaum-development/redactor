@@ -16,7 +16,7 @@ use JsonException;
  * path and the secret, so accepting a finding does not commit the secret to
  * the repository, and moving the code around does not resurrect it.
  */
-final class Baseline
+class Baseline
 {
     /**
      * @param  array<string, true>  $fingerprints

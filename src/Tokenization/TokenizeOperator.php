@@ -23,7 +23,7 @@ use Kirschbaum\Redactor\Operators\OperatorContext;
  * span is redacted instead; without a store there is nothing to exchange
  * back, which is the same outcome.
  */
-final class TokenizeOperator implements Operator
+class TokenizeOperator implements Operator
 {
     public const PREFIX = 'tok';
 

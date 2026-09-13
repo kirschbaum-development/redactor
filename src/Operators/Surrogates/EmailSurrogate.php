@@ -18,7 +18,7 @@ use Kirschbaum\Redactor\Support\DeterministicRandom;
  * never resolve, so a surrogate that escapes into a mail queue bounces instead
  * of reaching a stranger.
  */
-final class EmailSurrogate implements SurrogateGenerator
+class EmailSurrogate implements SurrogateGenerator
 {
     public function supports(string $entity, string $value): bool
     {

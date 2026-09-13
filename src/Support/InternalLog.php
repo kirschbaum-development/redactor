@@ -16,7 +16,7 @@ use Throwable;
  * out. This guard drops any diagnostic raised while one is already in flight,
  * and swallows failures from the logger itself.
  */
-final class InternalLog
+class InternalLog
 {
     private static bool $emitting = false;
 

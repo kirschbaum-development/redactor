@@ -22,7 +22,7 @@ use Kirschbaum\Redactor\Support\DeterministicRandom;
  * only handles the entities someone thought to write a generator for would
  * leave the long tail as "[REDACTED]".
  */
-final class CharacterClassSurrogate implements SurrogateGenerator
+class CharacterClassSurrogate implements SurrogateGenerator
 {
     private const LOWER = 'abcdefghijklmnopqrstuvwxyz';
 

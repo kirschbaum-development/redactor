@@ -15,7 +15,7 @@ use Kirschbaum\Redactor\Support\DeterministicRandom;
  * types the package has never heard of - a policy number, an NHS number, an
  * internal account format.
  */
-final class SurrogateFactory
+class SurrogateFactory
 {
     /** @var array<int, SurrogateGenerator> */
     private array $generators;

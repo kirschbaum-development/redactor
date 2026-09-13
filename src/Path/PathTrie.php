@@ -20,7 +20,7 @@ use Kirschbaum\Redactor\Operators\OperatorSpec;
  * absorb a segment and stand aside for the segment after it - so a cursor
  * carries a set of states, not a single one.
  */
-final class PathTrie
+class PathTrie
 {
     private const ROOT = 0;
 

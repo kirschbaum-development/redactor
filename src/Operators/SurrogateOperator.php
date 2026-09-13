@@ -18,7 +18,7 @@ use Kirschbaum\Redactor\Operators\Surrogates\SurrogateFactory;
  * distinct value into one, which destroys counts, joins and traces; a stable
  * surrogate preserves all three while leaking none of the original.
  */
-final class SurrogateOperator implements Operator
+class SurrogateOperator implements Operator
 {
     public function __construct(
         private readonly SurrogateFactory $surrogates = new SurrogateFactory,

@@ -16,7 +16,7 @@ namespace Kirschbaum\Redactor\Support;
  * regex when it is delimited like one. A regex that cannot be evaluated
  * allows nothing: the failure mode of an allow-list is a leak, not noise.
  */
-final class AllowList
+class AllowList
 {
     /** @var array<string, self> */
     private static array $memo = [];

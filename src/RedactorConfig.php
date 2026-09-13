@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor;
 
-use Illuminate\Support\Facades\Config;
 use Kirschbaum\Redactor\Config\ConfigValue;
 use Kirschbaum\Redactor\Config\ProfileCache;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
@@ -166,10 +165,10 @@ readonly class RedactorConfig
      */
     public static function fromConfig(?string $profile = null): self
     {
-        $defaultProfile = Config::get('redactor.default_profile', 'default');
+        $defaultProfile = config('redactor.default_profile', 'default');
         $profile = $profile ?? (is_string($defaultProfile) ? $defaultProfile : 'default');
 
-        $profiles = Config::get('redactor.profiles', []);
+        $profiles = config('redactor.profiles', []);
 
         if (! is_array($profiles) || ! isset($profiles[$profile])) {
             throw new \InvalidArgumentException("Redaction profile '".$profile."' not found in configuration.");
@@ -187,7 +186,7 @@ readonly class RedactorConfig
         // joinable, and a rotated APP_KEY would go unredacted.
         // Raw, unvalidated values: this is an identity check on every call,
         // and validation happens once below when the profile is built.
-        $shared = [Config::get('redactor.pseudonymization'), self::knownSecretSources($config['known_secrets'] ?? [])];
+        $shared = [config('redactor.pseudonymization'), self::knownSecretSources($config['known_secrets'] ?? [])];
 
         $cached = ProfileCache::get($profile, $config, $shared);
 
@@ -321,7 +320,7 @@ readonly class RedactorConfig
         }
 
         foreach (ConfigValue::stringList($map['config'] ?? [], "profiles.{$profile}.known_secrets.config") as $key) {
-            self::registerLeaves($registry, Config::get($key));
+            self::registerLeaves($registry, config($key));
         }
 
         return $registry;
@@ -343,7 +342,7 @@ readonly class RedactorConfig
 
         foreach ($settings['config'] as $key) {
             if (is_string($key)) {
-                $sources[$key] = Config::get($key);
+                $sources[$key] = config($key);
             }
         }
 
@@ -376,7 +375,7 @@ readonly class RedactorConfig
      */
     private static function pseudonymizationSettings(mixed $profileSettings, string $profile): array
     {
-        $global = ConfigValue::map(Config::get('redactor.pseudonymization', []), 'pseudonymization');
+        $global = ConfigValue::map(config('redactor.pseudonymization', []), 'pseudonymization');
         $local = ConfigValue::map($profileSettings, "profiles.{$profile}.pseudonymization");
 
         return [...$global, ...array_filter($local, fn ($v) => $v !== null)];
@@ -466,7 +465,7 @@ readonly class RedactorConfig
      */
     public static function getAvailableProfiles(): array
     {
-        $profiles = Config::get('redactor.profiles', []);
+        $profiles = config('redactor.profiles', []);
 
         return is_array($profiles) ? array_keys($profiles) : [];
     }
@@ -476,7 +475,7 @@ readonly class RedactorConfig
      */
     public static function profileExists(string $profile): bool
     {
-        $profiles = Config::get('redactor.profiles', []);
+        $profiles = config('redactor.profiles', []);
 
         return is_array($profiles) && isset($profiles[$profile]);
     }

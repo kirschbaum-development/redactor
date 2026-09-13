@@ -23,7 +23,7 @@ use IteratorAggregate;
  *
  * @implements IteratorAggregate<int, array{0: int, 1: string}>
  */
-final class LineWindowReader implements IteratorAggregate
+class LineWindowReader implements IteratorAggregate
 {
     public const DEFAULT_WINDOW_LINES = 512;
 

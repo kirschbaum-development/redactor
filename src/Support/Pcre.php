@@ -16,7 +16,7 @@ namespace Kirschbaum\Redactor\Support;
  * particular pattern, so the safe answer is chosen deliberately rather than
  * inherited from a falsy return value.
  */
-final class Pcre
+class Pcre
 {
     /**
      * @param  bool  $onError  what an engine failure should be reported as

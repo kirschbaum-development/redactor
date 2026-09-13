@@ -14,7 +14,7 @@ namespace Kirschbaum\Redactor\Detection;
  * detector, or a recogniser model - and that a detector added later slots in
  * without learning anything about its neighbours.
  */
-final class DetectionSet
+class DetectionSet
 {
     /**
      * Apply the confidence floor, then resolve overlaps.

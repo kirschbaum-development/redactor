@@ -7,7 +7,7 @@ namespace Kirschbaum\Redactor\Operators;
 use Kirschbaum\Redactor\Detection\Detection;
 
 /** Replace each character with a mask character, preserving length. */
-final class MaskOperator implements Operator
+class MaskOperator implements Operator
 {
     public function apply(Detection $detection, OperatorContext $context): string
     {

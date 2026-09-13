@@ -15,7 +15,7 @@ use Throwable;
  * /user is the cheapest call that distinguishes live from dead: it needs no
  * scopes beyond authentication and returns 401 for a revoked or expired token.
  */
-final class GitHubTokenVerifier implements Verifier
+class GitHubTokenVerifier implements Verifier
 {
     public function name(): string
     {

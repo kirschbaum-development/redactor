@@ -21,7 +21,7 @@ use RuntimeException;
  * Runs wherever the profile says, which should never be the request path:
  * a model call costs milliseconds where the rule engine costs microseconds.
  */
-final class PresidioRecognizer implements Recognizer
+class PresidioRecognizer implements Recognizer
 {
     public function __construct(
         private readonly string $url = 'http://127.0.0.1:5002/analyze',

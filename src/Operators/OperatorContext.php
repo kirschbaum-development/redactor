@@ -15,7 +15,7 @@ use Kirschbaum\Redactor\Support\Pseudonymizer;
  * payload, the profile or the container, which keeps them pure enough to test
  * in isolation and impossible to turn into a second detection layer.
  */
-final class OperatorContext
+class OperatorContext
 {
     private ?Pseudonymizer $resolved = null;
 

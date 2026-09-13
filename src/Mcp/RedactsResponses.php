@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Mcp;
 
+use Illuminate\Container\Container;
 use Kirschbaum\Redactor\Redactor;
 use Laravel\Mcp\Server\ServerContext;
 use Laravel\Mcp\Transport\JsonRpcRequest;
@@ -46,6 +47,6 @@ trait RedactsResponses
     {
         $response = parent::runMethodHandle($request, $context);
 
-        return (new McpResponseRedactor(app(Redactor::class), $this->redactionProfile()))->redact($response);
+        return (new McpResponseRedactor(Container::getInstance()->make(Redactor::class), $this->redactionProfile()))->redact($response);
     }
 }

@@ -14,7 +14,7 @@ use Kirschbaum\Redactor\Operators\Surrogates\SurrogateFactory;
  * with a reversible cipher, `classify` into a bucket - and use them from config
  * by name, without touching detection.
  */
-final class OperatorRegistry
+class OperatorRegistry
 {
     public const REDACT = 'redact';
 

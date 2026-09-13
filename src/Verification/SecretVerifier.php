@@ -29,7 +29,7 @@ use Throwable;
  * runs unattended inside applications, and nothing unattended should be making
  * outbound calls with secrets in them.
  */
-final class SecretVerifier
+class SecretVerifier
 {
     /** @var array<int, Verifier> */
     private array $verifiers;

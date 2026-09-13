@@ -21,7 +21,7 @@ use Kirschbaum\Redactor\RedactorConfig;
  * change produces a different array and rebuilds, so the failure mode where a
  * cache quietly serves a stale security setting cannot occur.
  */
-final class ProfileCache
+class ProfileCache
 {
     /** @var array<string, array{raw: array<mixed>, shared: array<mixed>, built: RedactorConfig}> */
     private static array $entries = [];

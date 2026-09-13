@@ -19,7 +19,7 @@ namespace Kirschbaum\Redactor\Support;
  * Keys and patterns are compared lowercased; RedactorConfig already lowercases
  * both lists, and match() lowercases the key it is given.
  */
-final class KeyMatcher
+class KeyMatcher
 {
     /** @var array<string, self> */
     private static array $memo = [];

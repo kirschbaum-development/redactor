@@ -13,7 +13,7 @@ use Kirschbaum\Redactor\Detection\Detection;
  * rewriting anything, and lets one path rule carve an exception out of a
  * broader rule without disabling it.
  */
-final class PreserveOperator implements Operator
+class PreserveOperator implements Operator
 {
     public function apply(Detection $detection, OperatorContext $context): string
     {

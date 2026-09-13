@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Logging;
 
+use Illuminate\Container\Container;
 use Illuminate\Log\Logger;
 use Kirschbaum\Redactor\Redactor;
 use Monolog\Logger as Monolog;
@@ -33,6 +34,6 @@ class RedactorTap
             return;
         }
 
-        $monolog->pushProcessor(new RedactorProcessor(app(Redactor::class), $profile));
+        $monolog->pushProcessor(new RedactorProcessor(Container::getInstance()->make(Redactor::class), $profile));
     }
 }

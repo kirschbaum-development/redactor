@@ -21,7 +21,7 @@ use Kirschbaum\Redactor\Support\DeterministicRandom;
  * thing fraud and finance teams actually aggregate on - and is not specific to
  * a cardholder.
  */
-final class CreditCardSurrogate implements SurrogateGenerator
+class CreditCardSurrogate implements SurrogateGenerator
 {
     private const DEFAULT_BIN_LENGTH = 6;
 

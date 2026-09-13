@@ -8,7 +8,7 @@ namespace Kirschbaum\Redactor\Scanner;
  * SARIF 2.1.0 output, so GitHub code scanning renders findings inline on the
  * pull request rather than leaving them in CI logs nobody opens.
  */
-final class SarifReport
+class SarifReport
 {
     private const SCHEMA = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json';
 

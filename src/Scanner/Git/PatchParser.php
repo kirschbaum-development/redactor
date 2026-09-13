@@ -11,7 +11,7 @@ namespace Kirschbaum\Redactor\Scanner\Git;
  * format with `commit <hash>` lines between changes. Zero context lines are
  * assumed but not required: context and removed lines are simply skipped.
  */
-final class PatchParser
+class PatchParser
 {
     /** @var array<int, Patch> */
     private array $patches = [];

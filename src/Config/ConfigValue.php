@@ -16,7 +16,7 @@ use InvalidArgumentException;
  * fell back to its default. These helpers accept the string forms and reject
  * genuinely malformed input loudly.
  */
-final class ConfigValue
+class ConfigValue
 {
     public static function bool(mixed $value, bool $default, string $path): bool
     {

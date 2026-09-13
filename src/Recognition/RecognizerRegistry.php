@@ -9,7 +9,7 @@ use Kirschbaum\Redactor\Recognition\Recognizers\PresidioRecognizer;
 /**
  * Resolves a recogniser name from config to the thing that does the work.
  */
-final class RecognizerRegistry
+class RecognizerRegistry
 {
     /** @var array<string, Recognizer> */
     private array $recognizers = [];

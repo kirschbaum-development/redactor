@@ -15,7 +15,7 @@ use Throwable;
  * Slack answers 200 either way and reports failure in the body, so the status
  * code alone would call every dead token live.
  */
-final class SlackTokenVerifier implements Verifier
+class SlackTokenVerifier implements Verifier
 {
     public function name(): string
     {

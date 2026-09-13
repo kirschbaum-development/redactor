@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Ai;
 
 use Closure;
+use Illuminate\Container\Container;
 use Kirschbaum\Redactor\Redactor;
 use Laravel\Ai\Prompts\AgentPrompt;
 use Laravel\Ai\Responses\AgentResponse;
@@ -36,7 +37,7 @@ class RedactPrompt
 
     public static function using(?string $profile, bool $detokenizeResponse = true): self
     {
-        return new self(app(Redactor::class), $profile, $detokenizeResponse);
+        return new self(Container::getInstance()->make(Redactor::class), $profile, $detokenizeResponse);
     }
 
     /**

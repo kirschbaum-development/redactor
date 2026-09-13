@@ -19,7 +19,7 @@ use Laravel\Mcp\Transport\JsonRpcResponse;
  * are left exactly as they were, so the protocol stays valid and an image
  * is not mistaken for a high-entropy secret.
  */
-final class McpResponseRedactor
+class McpResponseRedactor
 {
     public function __construct(
         private readonly Redactor $redactor,
