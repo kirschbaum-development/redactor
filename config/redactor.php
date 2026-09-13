@@ -332,6 +332,18 @@ return [
             'track_redacted_keys' => env('REDACTOR_TRACK_KEYS', false),
             'non_redactable_object_behavior' => env('REDACTOR_OBJECT_BEHAVIOR', 'preserve'),
             'max_value_length' => env('REDACTOR_MAX_VALUE_LENGTH', 5000),
+
+            /*
+            | What happens to a string over max_value_length.
+            |
+            |   truncate   keep the head, scan it, note what was cut  (default)
+            |   redact     replace the whole value
+            |
+            | The values most often over the limit in a Laravel log are stack
+            | traces and request bodies - the part the reader needed - so the
+            | default keeps what it can rather than replacing all of it.
+            */
+            'large_string_behavior' => env('REDACTOR_LARGE_STRING_BEHAVIOR', 'truncate'),
             'redact_large_objects' => env('REDACTOR_LARGE_OBJECTS', true),
             'max_object_size' => env('REDACTOR_MAX_OBJECT_SIZE', 100),
 

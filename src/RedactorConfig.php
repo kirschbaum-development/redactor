@@ -20,6 +20,14 @@ readonly class RedactorConfig
     public const OBJECT_BEHAVIORS = ['preserve', 'remove', 'empty_array', 'redact'];
 
     /**
+     * What happens to a string longer than max_value_length.
+     *
+     *   truncate  keep the head, scan it, note what was cut   (default)
+     *   redact    replace the whole value, the pre-1.0 behaviour
+     */
+    public const LARGE_STRING_BEHAVIORS = ['truncate', 'redact'];
+
+    /**
      * How deep the redactor will walk before it stops and replaces the rest.
      *
      * Deep enough for any realistic log context; shallow enough that a cyclic
@@ -80,6 +88,7 @@ readonly class RedactorConfig
          * cheaper than scanning its contents.
          */
         public PathTrie $paths = new PathTrie,
+        public string $largeStringBehavior = 'truncate',
     ) {
         $this->safeKeyMatcher = KeyMatcher::for($this->safeKeys);
         $this->blockedKeyMatcher = KeyMatcher::for($this->blockedKeys);
@@ -152,6 +161,12 @@ readonly class RedactorConfig
             policy: self::buildPolicy($config['operators'] ?? [], $profile),
             pseudonymization: self::pseudonymizationSettings($config['pseudonymization'] ?? [], $profile),
             paths: self::buildPaths($config['paths'] ?? [], $profile),
+            largeStringBehavior: ConfigValue::enum(
+                $config['large_string_behavior'] ?? 'truncate',
+                self::LARGE_STRING_BEHAVIORS,
+                'truncate',
+                "profiles.{$profile}.large_string_behavior"
+            ),
         );
 
         return ProfileCache::put($profile, $config, $built);

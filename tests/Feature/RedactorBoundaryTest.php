@@ -101,7 +101,7 @@ describe('max_value_length boundary', function () {
     it('redacts a string one character over max_value_length', function () {
         $result = app(Redactor::class)->redact(['s' => str_repeat('a', 21)], 'boundary');
 
-        expect($result['s'])->toBe('[REDACTED] (String with 21 characters)');
+        expect($result['s'])->toBe(str_repeat('a', 20).' [REDACTED] (String truncated: 21 characters, 20 kept)');
     });
 
     it('reports the real length in the marker', function () {

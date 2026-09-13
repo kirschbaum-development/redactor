@@ -241,7 +241,7 @@ describe('Redactor String Length Tests', function () {
 
         expect($result['short'])->toBe($shortString)
             ->and($result['long'])->toContain('[REDACTED]')
-            ->and($result['long'])->toContain('(String with')
+            ->and($result['long'])->toContain('(String truncated:')
             ->and($result['_redacted'])->toBeTrue();
     });
 
