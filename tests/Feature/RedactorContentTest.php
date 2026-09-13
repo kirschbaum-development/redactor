@@ -544,8 +544,8 @@ describe('Redactor Content Tests', function () {
         // Get the initial strategies from default profile
         $strategies = $redactor->getStrategies();
 
-        // Should have the 6 default strategies
-        expect($strategies)->toHaveCount(6);
+        // Should have the 7 default strategies
+        expect($strategies)->toHaveCount(7);
 
         // Verify they are strategy instances
         foreach ($strategies as $strategy) {
@@ -597,9 +597,9 @@ describe('Redactor Content Tests', function () {
         $strategiesWithCustom = $redactor->getStrategies('custom_strategy_test');
         expect($strategiesWithCustom)->toHaveCount(7);
 
-        // Profile without custom strategy should still have 6
+        // Profile without custom strategy should still have 7
         $strategiesDefault = $redactor->getStrategies();
-        expect($strategiesDefault)->toHaveCount(6);
+        expect($strategiesDefault)->toHaveCount(7);
     });
 
     test('it skips large object redaction when feature is disabled in configuration', function () {

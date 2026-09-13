@@ -17,6 +17,7 @@ use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
 use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
 use Kirschbaum\Redactor\Strategies\StrategyOutcome;
 use Kirschbaum\Redactor\Support\InternalLog;
+use Kirschbaum\Redactor\Support\SecretRegistry;
 
 class Redactor
 {
@@ -30,9 +31,24 @@ class Redactor
 
     private OperatorRegistry $operators;
 
+    private SecretRegistry $secrets;
+
     public function __construct()
     {
         $this->operators = new OperatorRegistry;
+        $this->secrets = new SecretRegistry;
+    }
+
+    /**
+     * Register a value that must never appear in output, for every profile.
+     *
+     * For credentials that only exist at runtime - a token minted after boot,
+     * a value fetched from a vault. Refused, and false returned, when the value
+     * is too short to match safely.
+     */
+    public function registerSecret(string $value, string $entity = 'known_secret'): bool
+    {
+        return $this->secrets->add($value, $entity);
     }
 
     /**
@@ -73,7 +89,7 @@ class Redactor
             return new RedactionResult($content, false);
         }
 
-        $context = new RedactionContext($config, $this->operators);
+        $context = new RedactionContext($config, $this->operators, $this->secrets);
         $strategies = $this->getStrategiesForProfile($config);
 
         $redactedContent = $this->redactRecursively($content, '', $context, $strategies, false, $config->paths->cursor());

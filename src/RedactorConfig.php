@@ -14,6 +14,7 @@ use Kirschbaum\Redactor\Path\PathTrie;
 use Kirschbaum\Redactor\Patterns\PatternRule;
 use Kirschbaum\Redactor\Support\AllowList;
 use Kirschbaum\Redactor\Support\KeyMatcher;
+use Kirschbaum\Redactor\Support\SecretRegistry;
 
 readonly class RedactorConfig
 {
@@ -100,6 +101,11 @@ readonly class RedactorConfig
         public PathTrie $paths = new PathTrie,
         public string $largeStringBehavior = 'truncate',
         ?AllowList $allowlist = null,
+        /**
+         * The application's own credentials, so they are redacted wherever
+         * they appear verbatim. See KnownSecretsStrategy.
+         */
+        public SecretRegistry $knownSecrets = new SecretRegistry,
     ) {
         $this->safeKeyMatcher = KeyMatcher::for($this->safeKeys);
         $this->blockedKeyMatcher = KeyMatcher::for($this->blockedKeys);
@@ -185,9 +191,51 @@ readonly class RedactorConfig
                 "profiles.{$profile}.large_string_behavior"
             ),
             allowlist: AllowList::for(ConfigValue::stringList($config['allowlist'] ?? [], "profiles.{$profile}.allowlist")),
+            knownSecrets: self::buildKnownSecrets($config['known_secrets'] ?? [], $profile),
         );
 
         return ProfileCache::put($profile, $config, $built, $shared);
+    }
+
+    /**
+     * Collect the profile's known secrets from literal values and config keys.
+     *
+     * A config key may point at a scalar or at an array, in which case every
+     * string leaf under it is registered - `services.stripe` registers the
+     * key, the secret and the webhook secret together. Non-string leaves and
+     * values too short to be safe are skipped silently: a null secret in a
+     * local environment must not fail the profile.
+     */
+    private static function buildKnownSecrets(mixed $settings, string $profile): SecretRegistry
+    {
+        $map = ConfigValue::map($settings, "profiles.{$profile}.known_secrets");
+
+        $registry = new SecretRegistry;
+
+        foreach (ConfigValue::stringList($map['values'] ?? [], "profiles.{$profile}.known_secrets.values") as $value) {
+            $registry->add($value);
+        }
+
+        foreach (ConfigValue::stringList($map['config'] ?? [], "profiles.{$profile}.known_secrets.config") as $key) {
+            self::registerLeaves($registry, Config::get($key));
+        }
+
+        return $registry;
+    }
+
+    private static function registerLeaves(SecretRegistry $registry, mixed $value): void
+    {
+        if (is_string($value)) {
+            $registry->add($value);
+
+            return;
+        }
+
+        if (is_array($value)) {
+            foreach ($value as $leaf) {
+                self::registerLeaves($registry, $leaf);
+            }
+        }
     }
 
     /**

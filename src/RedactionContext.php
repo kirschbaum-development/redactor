@@ -13,6 +13,7 @@ use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\Operators\OperatorSpec;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Kirschbaum\Redactor\Support\Pseudonymizer;
+use Kirschbaum\Redactor\Support\SecretRegistry;
 
 class RedactionContext
 {
@@ -53,10 +54,24 @@ class RedactionContext
 
     private bool $pseudonymizerResolved = false;
 
+    private ?SecretRegistry $secrets = null;
+
     public function __construct(
         public readonly RedactorConfig $config,
         public readonly OperatorRegistry $operators = new OperatorRegistry,
+        /** Secrets registered at runtime, merged with the profile's own. */
+        private readonly ?SecretRegistry $runtimeSecrets = null,
     ) {}
+
+    /**
+     * Every known secret in play: the profile's plus any registered at runtime.
+     */
+    public function secrets(): SecretRegistry
+    {
+        return $this->secrets ??= $this->runtimeSecrets === null
+            ? $this->config->knownSecrets
+            : $this->config->knownSecrets->merge($this->runtimeSecrets);
+    }
 
     /**
      * Enter one level of nesting. Returns false when the configured max depth

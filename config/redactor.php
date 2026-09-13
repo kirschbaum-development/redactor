@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\KnownSecretsStrategy;
 use Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
 use Kirschbaum\Redactor\Strategies\LargeStringStrategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
@@ -328,8 +329,26 @@ return [
                 BlockedKeysStrategy::class,
                 LargeObjectStrategy::class,
                 LargeStringStrategy::class,
+                KnownSecretsStrategy::class,
                 RegexPatternsStrategy::class,
                 ShannonEntropyStrategy::class,
+            ],
+
+            /*
+            | The application's own credentials, redacted wherever they appear
+            | verbatim. `values` are literals; `config` names keys whose string
+            | leaves are registered at build time - a key pointing at an array
+            | registers everything under it. Values under 8 characters are
+            | skipped, as are nulls, so an unset secret never fails the profile.
+            | Add more at runtime with Redactor::registerSecret().
+            */
+            'known_secrets' => [
+                'values' => [],
+                'config' => [
+                    'app.key',
+                    // 'services.stripe.secret',
+                    // 'database.connections.mysql.password',
+                ],
             ],
 
             /*
@@ -552,8 +571,14 @@ return [
                 BlockedKeysStrategy::class,
                 LargeObjectStrategy::class,
                 LargeStringStrategy::class,
+                KnownSecretsStrategy::class,
                 RegexPatternsStrategy::class,
                 ShannonEntropyStrategy::class,
+            ],
+
+            'known_secrets' => [
+                'values' => [],
+                'config' => ['app.key'],
             ],
 
             // Minimal safe keys for strict environments. 'message' is
@@ -656,8 +681,14 @@ return [
             | Only strategies that work well with plain text content
             */
             'strategies' => [
+                KnownSecretsStrategy::class,
                 RegexPatternsStrategy::class,
                 ShannonEntropyStrategy::class,
+            ],
+
+            'known_secrets' => [
+                'values' => [],
+                'config' => ['app.key'],
             ],
 
             // No key-based strategies for file scanning
@@ -770,8 +801,14 @@ return [
             'strategies' => [
                 SafeKeysStrategy::class,
                 BlockedKeysStrategy::class,
+                KnownSecretsStrategy::class,
                 RegexPatternsStrategy::class,
                 ShannonEntropyStrategy::class,
+            ],
+
+            'known_secrets' => [
+                'values' => [],
+                'config' => ['app.key'],
             ],
 
             'safe_keys' => [
@@ -860,8 +897,14 @@ return [
                 SafeKeysStrategy::class,
                 BlockedKeysStrategy::class,
                 // Skip large object/string checks for performance
+                KnownSecretsStrategy::class,
                 RegexPatternsStrategy::class,
                 // Disable shannon entropy for performance
+            ],
+
+            'known_secrets' => [
+                'values' => [],
+                'config' => ['app.key'],
             ],
 
             // Same rule as the default profile: identifiers and enumerations
