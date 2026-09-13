@@ -184,6 +184,30 @@ All notable changes to this project will be documented in this file.
 Hardening pass across correctness, security, performance and packaging. Each
 item below is one commit, with tests.
 
+### Changed - conventions, following Laravel's first-party packages
+
+- **Fluent entry point.** `Redactor::profile('strict')->withoutMarkers()->redact($data)`
+  and `->inspect($data)`; `Redactor::inspect()` returns the result with its
+  findings. `redactWithMetadata()` remains. The redactor and the pending
+  redaction are `Macroable` and `Conditionable`.
+- **Package exceptions.** Everything thrown implements
+  `Exceptions\RedactorException`: `ConfigurationException` and
+  `ProfileNotFoundException` (both still `InvalidArgumentException`),
+  `PseudonymizationKeyException`, `GitException`. Messages name the offending
+  value in `[brackets]`.
+- **Results are `Arrayable` and `JsonSerializable`.** `RedactionResult`,
+  `MatchFinding` and `ScanFinding`; a finding's array form omits the matched
+  text.
+- **Renamed, old names kept as deprecated aliases.** `ReadactFormatter` is
+  `RedactorFormatter`, `CustomLogTap` is `RedactorFormatterTap`,
+  `RedactionStrategyInterface` is `Strategies\Contracts\Strategy`;
+  `getAvailableProfiles()`, `profileExists()` and `getStrategies()` are
+  `profiles()`, `hasProfile()` and `strategies()`.
+- Services are no longer `final`; value objects stay `final readonly`.
+  Configuration, events and the container are reached the way first-party
+  packages reach them, and the service provider registers commands and
+  publishing in `boot()` behind `runningInConsole()`.
+
 ### Changed - behaviour you should read before upgrading
 
 - **Detections are collected and the value rewritten once.** The regex and

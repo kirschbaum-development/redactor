@@ -51,17 +51,30 @@ Redactor::redact('User bob@example.com placed order 123');
 // 'User [REDACTED] placed order 123'
 ```
 
-If you need to know whether anything matched, ask for the metadata rather than
-reading it back out of the payload:
+If you need to know whether anything matched, inspect rather than reading it
+back out of the payload:
 
 ```php
-$result = Redactor::redactWithMetadata($data);
+$result = Redactor::inspect($data);
 
 $result->value;         // the redacted payload
 $result->wasRedacted;   // bool
 $result->redactedKeys;  // ['password', 'api_key', 'email']
-$result->findings;      // rule name, offset and length for each match
+$result->findings;      // rule, entity, offset, length and score for each match
+$result->toArray();     // the same, without the matched text; also JsonSerializable
 ```
+
+A profile and its options read fluently:
+
+```php
+Redactor::profile('strict')->redact($data);
+Redactor::profile('observability')->withoutMarkers()->inspect($data);
+Redactor::profile('audit')->when($verbose, fn ($r) => $r->withMarkers())->redact($data);
+```
+
+Everything the package throws implements `Exceptions\RedactorException`; a
+missing profile is a `ProfileNotFoundException`, a bad value a
+`ConfigurationException`, both still `InvalidArgumentException`s.
 
 ## Core Concepts
 
@@ -809,15 +822,15 @@ php artisan redactor:validate
 
 #### Formatter alternative
 
-`ReadactFormatter` is still available for channels that want a self-contained
+`RedactorFormatter` is still available for channels that want a self-contained
 drop-in. It owns the output format, so prefer the tap unless you specifically
 want that. It can wrap an inner formatter rather than replace it:
 
 ```php
-use Kirschbaum\Redactor\Logging\ReadactFormatter;
+use Kirschbaum\Redactor\Logging\RedactorFormatter;
 use Monolog\Formatter\JsonFormatter;
 
-$handler->setFormatter(new ReadactFormatter(new JsonFormatter));
+$handler->setFormatter(new RedactorFormatter(new JsonFormatter));
 ```
 
 ### API Response Sanitization
@@ -916,10 +929,10 @@ $redacted = Redactor::redact(['file' => $resource]);
 Create your own redaction logic with full type safety:
 
 ```php
-use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\RedactionContext;
 
-class InternalDataStrategy implements RedactionStrategyInterface
+class InternalDataStrategy implements Strategy
 {
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
@@ -966,8 +979,8 @@ $redactor = new \Kirschbaum\Redactor\Redactor();
 $result = $redactor->redact($data, 'profile_name');
 
 // Check available profiles
-$profiles = Redactor::getAvailableProfiles();
-$exists = Redactor::profileExists('custom_profile');
+$profiles = Redactor::profiles();
+$exists = Redactor::hasProfile('custom_profile');
 ```
 
 ## HTTP Responses
