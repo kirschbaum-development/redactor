@@ -24,6 +24,9 @@ final class SecretRegistry
     /** @var array<string, string> value => entity */
     private array $secrets = [];
 
+    /** Length of the shortest registered value; a shorter subject cannot contain one. */
+    private int $shortest = PHP_INT_MAX;
+
     /**
      * @param  array<int, string>  $values
      */
@@ -44,8 +47,17 @@ final class SecretRegistry
         }
 
         $this->secrets[$value] = $entity;
+        $this->shortest = min($this->shortest, strlen($value));
 
         return true;
+    }
+
+    /**
+     * Whether a subject is long enough to contain any registered value.
+     */
+    public function couldContainOne(string $subject): bool
+    {
+        return $this->secrets !== [] && strlen($subject) >= $this->shortest;
     }
 
     public function isEmpty(): bool
@@ -88,6 +100,7 @@ final class SecretRegistry
 
         foreach ($other->secrets as $value => $entity) {
             $merged->secrets[$value] = $entity;
+            $merged->shortest = min($merged->shortest, strlen($value));
         }
 
         return $merged;

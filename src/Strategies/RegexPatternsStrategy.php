@@ -64,11 +64,26 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, RedactionStr
     {
         $detections = [];
         $lowered = null;
+        $length = strlen($subject);
 
         foreach ($context->config->patterns as $rule) {
+            // The cheapest test first: a rule whose shortest possible match is
+            // longer than the whole subject cannot match it. Most values in a
+            // log payload are a few bytes, and most credential rules need
+            // twenty or more, so this one integer compare retires most of
+            // the rule list before PCRE is involved at all.
+            if ($rule->minLength > $length) {
+                continue;
+            }
+
             // A rule that names keywords only runs on a subject containing one.
             // The email rule is the single most expensive thing in a clean-text
             // scan, and "does this contain an @" answers it in nanoseconds.
+            //
+            // Deliberately str_contains() per rule and not one combined regex:
+            // a thirty-way alternation costs PCRE more than every rule it was
+            // meant to save, since each rule's own pattern starts with a
+            // literal and fails in a few nanoseconds.
             if ($rule->keywords !== []) {
                 $lowered ??= strtolower($subject);
 
@@ -77,7 +92,18 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, RedactionStr
                 }
             }
 
-            $found = $this->detectRule($rule, $subject, $key);
+            // Ask the cheap question inline. A capture-free preg_match() on a
+            // subject that does not match costs a fraction of preg_match_all()
+            // with offsets, and most rules do not match most values.
+            $any = @preg_match($rule->pattern, $subject);
+
+            if ($any === 0) {
+                continue;
+            }
+
+            $found = $any === false || preg_last_error() !== PREG_NO_ERROR
+                ? null
+                : $this->detectRule($rule, $subject, $key);
 
             if ($found === null) {
                 // The engine gave up partway through. Emitting a partially
@@ -115,6 +141,10 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, RedactionStr
 
         if ($found === false || preg_last_error() !== PREG_NO_ERROR) {
             return null;
+        }
+
+        if ($matches === []) {
+            return [];
         }
 
         $operator = $rule->hasExplicitOperator() ? $rule->operatorSpec() : null;

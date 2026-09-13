@@ -114,6 +114,14 @@ final readonly class PatternRule
          * address that some other rule found for a different reason.
          */
         public ?AllowList $allow = null,
+        /**
+         * The shortest text this pattern can possibly match, in bytes.
+         *
+         * A subject shorter than this is skipped without touching PCRE. Must
+         * never exceed the true minimum - a value too large makes the rule
+         * miss real matches - so when in doubt leave it at 1.
+         */
+        public int $minLength = 1,
     ) {}
 
     /**
@@ -246,6 +254,8 @@ final readonly class PatternRule
 
         $allow = ConfigValue::stringList($definition['allow'] ?? [], $path.'.allow');
 
+        $minLength = ConfigValue::positiveInt($definition['min_length'] ?? 1, 1, $path.'.min_length');
+
         if ($maskCharacter === '') {
             $maskCharacter = '*';
         }
@@ -263,6 +273,7 @@ final readonly class PatternRule
             operator: $operator,
             keywords: $keywords,
             allow: $allow === [] ? null : AllowList::for($allow),
+            minLength: $minLength,
         );
     }
 

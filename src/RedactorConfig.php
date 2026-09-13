@@ -142,10 +142,9 @@ readonly class RedactorConfig
         // time, so a change to any of them must rebuild the profile too: a
         // rotated salt that did not take effect would keep old and new logs
         // joinable, and a rotated APP_KEY would go unredacted.
-        $shared = [
-            'pseudonymization' => ConfigValue::map(Config::get('redactor.pseudonymization', []), 'pseudonymization'),
-            'known_secrets' => self::knownSecretSources($config['known_secrets'] ?? []),
-        ];
+        // Raw, unvalidated values: this is an identity check on every call,
+        // and validation happens once below when the profile is built.
+        $shared = [Config::get('redactor.pseudonymization'), self::knownSecretSources($config['known_secrets'] ?? [])];
 
         $cached = ProfileCache::get($profile, $config, $shared);
 

@@ -27,7 +27,7 @@ class KnownSecretsStrategy implements DetectingStrategy, Detector, RedactionStra
 
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
-        return is_string($value) && strlen($value) >= 1 && ! $context->secrets()->isEmpty();
+        return is_string($value) && $context->secrets()->couldContainOne($value);
     }
 
     public function handle(mixed $value, string $key, RedactionContext $context): mixed

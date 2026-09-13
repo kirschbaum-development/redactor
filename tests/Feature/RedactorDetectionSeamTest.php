@@ -8,6 +8,7 @@ use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Detection\DetectionSet;
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Scanner\Scanner;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
@@ -284,4 +285,49 @@ describe('Keyword prefilter', function () {
 
         app(Redactor::class)->redact('x', 'seam');
     })->throws(\InvalidArgumentException::class, 'keywords');
+});
+
+describe('Pattern min_length', function () {
+    it('skips a subject shorter than the rule can match, and only then', function () {
+        config()->set('redactor.profiles.seam', seamProfile([
+            'patterns' => ['digits' => ['pattern' => '/\d+/', 'min_length' => 5]],
+            'shannon_entropy' => ['enabled' => false],
+        ]));
+
+        expect(app(Redactor::class)->redact('1234', 'seam'))->toBe('1234')
+            ->and(app(Redactor::class)->redact('12345', 'seam'))->toBe('[REDACTED]')
+            ->and(app(Redactor::class)->redact('ab 12', 'seam'))->toBe('ab [REDACTED]');
+    });
+
+    it('rejects a non-positive min_length', function () {
+        config()->set('redactor.profiles.seam', seamProfile([
+            'patterns' => ['digits' => ['pattern' => '/\d+/', 'min_length' => 0]],
+        ]));
+
+        app(Redactor::class)->redact('1', 'seam');
+    })->throws(\InvalidArgumentException::class, 'min_length');
+
+    it('declares no shipped min_length above the length of the secret it catches', function () {
+        // Every planted secret in the shipped-pattern suite must still be
+        // caught; this pins the cheaper invariant that no rule declares a
+        // minimum its own sample would fail.
+        foreach (RedactorConfig::fromConfig('default')->patterns as $rule) {
+            expect($rule->minLength)->toBeGreaterThanOrEqual(1);
+        }
+
+        $probe = [
+            'aws_access_key' => 'AKIAIOSFODNN7EXAMPLE',
+            'stripe_key' => 'sk_live_4eC39HqLyjWDarjtT1zdp7dc',
+            'slack_token' => 'xoxb-1234567890-abcdefghijABCDEFGHIJ',
+            'email' => 'a@b.c',
+            'url_with_auth' => 'a://:x@',
+            'ssn' => '123-45-6789',
+            'credit_card' => '4111111111111',
+        ];
+
+        foreach ($probe as $rule => $shortest) {
+            $config = RedactorConfig::fromConfig('default');
+            expect($config->patterns[$rule]->minLength)->toBeLessThanOrEqual(strlen($shortest), $rule);
+        }
+    });
 });

@@ -29,6 +29,10 @@ use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 | off values that cannot match, and lets a rule like phone_bare demand a
 | label before it believes a bare run of digits.
 |
+| `min_length` is the shortest text the pattern can match, in bytes; shorter
+| values skip the rule without touching PCRE. It must never exceed the true
+| minimum, or the rule misses real matches - when in doubt leave it out.
+|
 */
 
 $credentialPatterns = [
@@ -38,18 +42,21 @@ $credentialPatterns = [
         'pattern' => '/([a-z][a-z0-9+.-]*:\/\/[^:\/\s@]*:)([^@\/\s]+)(@)/i',
         'capture' => 2,
         'entity' => 'url_credentials',
+        'min_length' => 7,
         'confidence' => 0.9,
         'keywords' => ['://'],
     ],
     'private_key_block' => [
         'pattern' => '/-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+ )?PRIVATE KEY-----/',
         'entity' => 'private_key',
+        'min_length' => 52,
         'confidence' => 1.0,
         'keywords' => ['private key'],
     ],
     'jwt' => [
         'pattern' => '/\beyJ[A-Za-z0-9_-]{5,}\.eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\b/',
         'entity' => 'jwt',
+        'min_length' => 23,
         'confidence' => 0.9,
         'keywords' => ['eyj'],
     ],
@@ -57,18 +64,21 @@ $credentialPatterns = [
         'pattern' => '/(bearer\s+)([A-Za-z0-9._~+\/=-]{16,})/i',
         'capture' => 2,
         'entity' => 'bearer_token',
+        'min_length' => 23,
         'confidence' => 0.85,
         'keywords' => ['bearer'],
     ],
     'aws_access_key' => [
         'pattern' => '/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/',
         'entity' => 'aws_access_key',
+        'min_length' => 20,
         'confidence' => 0.9,
         'keywords' => ['akia', 'asia'],
     ],
     'github_token' => [
         'pattern' => '/\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b/',
         'entity' => 'github_token',
+        'min_length' => 33,
         'confidence' => 0.95,
         'keywords' => ['ghp_', 'gho_', 'ghu_', 'ghs_', 'ghr_', 'github_pat_'],
     ],
@@ -76,36 +86,42 @@ $credentialPatterns = [
         // Secret and restricted keys only; publishable keys are meant to be seen.
         'pattern' => '/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,99}\b/',
         'entity' => 'stripe_key',
+        'min_length' => 18,
         'confidence' => 0.95,
         'keywords' => ['sk_', 'rk_'],
     ],
     'slack_token' => [
         'pattern' => '/\bxox[abpors]-[A-Za-z0-9-]{10,}\b/',
         'entity' => 'slack_token',
+        'min_length' => 15,
         'confidence' => 0.9,
         'keywords' => ['xox'],
     ],
     'anthropic_key' => [
         'pattern' => '/\bsk-ant-[A-Za-z0-9_-]{20,}\b/',
         'entity' => 'anthropic_key',
+        'min_length' => 27,
         'confidence' => 0.95,
         'keywords' => ['sk-ant-'],
     ],
     'openai_key' => [
         'pattern' => '/\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/',
         'entity' => 'openai_key',
+        'min_length' => 23,
         'confidence' => 0.9,
         'keywords' => ['sk-'],
     ],
     'google_api_key' => [
         'pattern' => '/\bAIza[0-9A-Za-z_-]{35}\b/',
         'entity' => 'google_api_key',
+        'min_length' => 39,
         'confidence' => 0.9,
         'keywords' => ['aiza'],
     ],
     'sendgrid_key' => [
         'pattern' => '/\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}\b/',
         'entity' => 'sendgrid_key',
+        'min_length' => 69,
         'confidence' => 0.95,
         'keywords' => ['sg.'],
     ],
@@ -118,6 +134,7 @@ $identityPatterns = [
         'pattern' => '/[A-Za-z0-9_.+\-\x80-\xff]+@[A-Za-z0-9\-\x80-\xff]+(?:\.[A-Za-z0-9\-\x80-\xff]+)+/',
         'entity' => 'email',
         'confidence' => 0.8,
+        'min_length' => 5,
         'keywords' => ['@'],
     ],
     'phone_formatted' => [
@@ -126,11 +143,13 @@ $identityPatterns = [
         'pattern' => '/(?<!\d)(?<!\d[\s.-])(?:\+\d{1,3}[\s.-]?)?(?:\(\d{2,4}\)|\d{2,4})[\s.-]\d{3,4}[\s.-]\d{3,4}(?![\s.-]?\d)/',
         'entity' => 'phone',
         'confidence' => 0.6,
+        'min_length' => 10,
     ],
     'phone_e164' => [
         'pattern' => '/(?<!\d)\+\d{9,15}(?!\d)/',
         'entity' => 'phone',
         'confidence' => 0.7,
+        'min_length' => 10,
         'keywords' => ['+'],
     ],
     'phone_bare' => [
@@ -139,6 +158,7 @@ $identityPatterns = [
         'pattern' => '/(?<!\d)\d{10}(?!\d)/',
         'entity' => 'phone',
         'confidence' => 0.5,
+        'min_length' => 10,
         'keywords' => ['phone', 'tel', 'mobile', 'cell', 'fax'],
     ],
     'ssn' => [
@@ -148,12 +168,14 @@ $identityPatterns = [
         'validator' => 'ssn',
         'entity' => 'ssn',
         'confidence' => 0.7,
+        'min_length' => 11,
     ],
     'ssn_bare' => [
         'pattern' => '/(?<!\d)\d{9}(?!\d)/',
         'validator' => 'ssn',
         'entity' => 'ssn',
         'confidence' => 0.4,
+        'min_length' => 9,
         'keywords' => ['ssn', 'social security', 'tax id', 'tin'],
     ],
     'credit_card' => [
@@ -162,12 +184,14 @@ $identityPatterns = [
         // numbers, tracking codes, concatenated timestamps.
         'validator' => 'luhn',
         'entity' => 'credit_card',
+        'min_length' => 13,
     ],
     'iban' => [
         // Accepts the spaced form banks print as well as the compact one.
         'pattern' => '/\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,4})?\b/',
         'validator' => 'iban',
         'entity' => 'iban',
+        'min_length' => 12,
     ],
 ];
 
