@@ -23,6 +23,7 @@ use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Strategies\StrategyOutcome;
+use Kirschbaum\Redactor\Support\Configuration;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Kirschbaum\Redactor\Support\SecretRegistry;
 use Kirschbaum\Redactor\Tokenization\Detokenizer;
@@ -177,7 +178,7 @@ class Redactor
      */
     private function eventsEnabled(): bool
     {
-        return $this->events ??= (bool) config('redactor.events', true);
+        return $this->events ??= (bool) Configuration::get('redactor.events', true);
     }
 
     private ?bool $events = null;
@@ -466,7 +467,7 @@ class Redactor
 
         $this->customStrategiesLoaded = true;
 
-        $customStrategyClasses = config('redactor.custom_strategies', []);
+        $customStrategyClasses = Configuration::get('redactor.custom_strategies', []);
 
         if (! is_array($customStrategyClasses)) {
             return;

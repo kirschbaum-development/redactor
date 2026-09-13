@@ -14,6 +14,7 @@ use Kirschbaum\Redactor\Operators\RedactionPolicy;
 use Kirschbaum\Redactor\Path\PathTrie;
 use Kirschbaum\Redactor\Patterns\PatternRule;
 use Kirschbaum\Redactor\Support\AllowList;
+use Kirschbaum\Redactor\Support\Configuration;
 use Kirschbaum\Redactor\Support\KeyMatcher;
 use Kirschbaum\Redactor\Support\SecretRegistry;
 
@@ -144,10 +145,10 @@ readonly class RedactorConfig
      */
     public static function fromConfig(?string $profile = null): self
     {
-        $defaultProfile = config('redactor.default_profile', 'default');
+        $defaultProfile = Configuration::get('redactor.default_profile', 'default');
         $profile = $profile ?? (is_string($defaultProfile) ? $defaultProfile : 'default');
 
-        $profiles = config('redactor.profiles', []);
+        $profiles = Configuration::get('redactor.profiles', []);
 
         if (! is_array($profiles) || ! isset($profiles[$profile])) {
             throw ProfileNotFoundException::named($profile);
@@ -162,7 +163,7 @@ readonly class RedactorConfig
         // Settings folded in from outside the profile must rebuild it when they
         // change, or a rotated salt would keep old and new logs joinable and a
         // rotated APP_KEY would go unredacted; validation happens once below...
-        $shared = [config('redactor.pseudonymization'), self::knownSecretSources($config['known_secrets'] ?? [])];
+        $shared = [Configuration::get('redactor.pseudonymization'), self::knownSecretSources($config['known_secrets'] ?? [])];
 
         $cached = ProfileCache::get($profile, $config, $shared);
 
@@ -296,7 +297,7 @@ readonly class RedactorConfig
         }
 
         foreach (ConfigValue::stringList($map['config'] ?? [], "profiles.{$profile}.known_secrets.config") as $key) {
-            self::registerLeaves($registry, config($key));
+            self::registerLeaves($registry, Configuration::get($key));
         }
 
         return $registry;
@@ -319,7 +320,7 @@ readonly class RedactorConfig
 
         foreach ($settings['config'] as $key) {
             if (is_string($key)) {
-                $sources[$key] = config($key);
+                $sources[$key] = Configuration::get($key);
             }
         }
 
@@ -355,7 +356,7 @@ readonly class RedactorConfig
      */
     private static function pseudonymizationSettings(mixed $profileSettings, string $profile): array
     {
-        $global = ConfigValue::map(config('redactor.pseudonymization', []), 'pseudonymization');
+        $global = ConfigValue::map(Configuration::get('redactor.pseudonymization', []), 'pseudonymization');
         $local = ConfigValue::map($profileSettings, "profiles.{$profile}.pseudonymization");
 
         return [...$global, ...array_filter($local, fn ($v) => $v !== null)];
@@ -448,7 +449,7 @@ readonly class RedactorConfig
      */
     public static function getAvailableProfiles(): array
     {
-        $profiles = config('redactor.profiles', []);
+        $profiles = Configuration::get('redactor.profiles', []);
 
         return is_array($profiles) ? array_keys($profiles) : [];
     }
@@ -458,7 +459,7 @@ readonly class RedactorConfig
      */
     public static function profileExists(string $profile): bool
     {
-        $profiles = config('redactor.profiles', []);
+        $profiles = Configuration::get('redactor.profiles', []);
 
         return is_array($profiles) && isset($profiles[$profile]);
     }

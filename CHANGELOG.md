@@ -180,6 +180,9 @@ packaging and conventions. Each item is one commit, with tests.
   with peak memory down from 10 MB to 1 MB; a 64 KB subject with twenty
   secrets 2.8ms against 4.7ms. Scaling is linear in both dimensions. A
   profile that wants the old cost back removes the rules it does not need.
+- Hot-path configuration reads go through a repository held per container
+  instance rather than the `config()` helper, which resolves the repository
+  through the container on every call and had added 2-4us to every redaction.
 - The pseudonymizer is resolved lazily by the operators that need it. Routing
   blocked keys through operators had made every redaction with a blocked key
   derive an HMAC key it then never used.

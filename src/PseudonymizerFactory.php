@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor;
 
+use Kirschbaum\Redactor\Support\Configuration;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Kirschbaum\Redactor\Support\Pseudonymizer;
 use Throwable;
@@ -41,7 +42,7 @@ class PseudonymizerFactory
                 return Pseudonymizer::fromKey($key, $salt);
             }
 
-            $applicationKey = config('app.key');
+            $applicationKey = Configuration::get('app.key');
 
             if (! is_string($applicationKey) || $applicationKey === '') {
                 InternalLog::warning('Pseudonymization is unavailable: no key configured and app.key is empty', [
