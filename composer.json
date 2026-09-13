@@ -45,7 +45,9 @@
         "pestphp/pest": "^3.8",
         "timacdonald/log-fake": "^2.4",
         "laravel/mcp": "^1.0@beta",
-        "laravel/ai": "^0.11"
+        "laravel/ai": "^0.11",
+        "rector/rector": "^2.6",
+        "driftingly/rector-laravel": "^2.5"
     },
     "config": {
         "allow-plugins": {
@@ -87,6 +89,7 @@
         ],
         "lint": [
             "@php vendor/bin/pint --ansi",
+            "@php vendor/bin/rector process --ansi",
             "@php vendor/bin/phpstan analyse --verbose --ansi --memory-limit=1G"
         ],
         "test": [
@@ -95,6 +98,7 @@
         ],
         "preflight": [
             "@php vendor/bin/pint --test --ansi",
+            "@php vendor/bin/rector process --dry-run --ansi",
             "@php vendor/bin/phpstan analyse --no-progress --ansi --memory-limit=1G",
             "@php vendor/bin/pest --parallel"
         ],
@@ -104,6 +108,12 @@
         ],
         "mutate": [
             "@php -d memory_limit=2G vendor/bin/pest --mutate --everything --covered-only"
+        ],
+        "rector": [
+            "@php vendor/bin/rector process --ansi"
+        ],
+        "rector:check": [
+            "@php vendor/bin/rector process --dry-run --ansi"
         ]
     },
     "suggest": {
