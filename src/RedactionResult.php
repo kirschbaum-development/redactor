@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor;
 
+use Illuminate\Contracts\Support\Arrayable;
+use JsonSerializable;
 use Kirschbaum\Redactor\Findings\MatchFinding;
 
 /**
@@ -19,7 +21,10 @@ use Kirschbaum\Redactor\Findings\MatchFinding;
  *     $result->wasRedacted;   // whether anything matched
  *     $result->redactedKeys;  // which keys were affected
  */
-final readonly class RedactionResult
+/**
+ * @implements Arrayable<string, mixed>
+ */
+final readonly class RedactionResult implements Arrayable, JsonSerializable
 {
     /**
      * @param  array<int, string>  $redactedKeys
@@ -31,4 +36,27 @@ final readonly class RedactionResult
         public array $redactedKeys = [],
         public array $findings = [],
     ) {}
+
+    /**
+     * Get the result as an array.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'value' => $this->value,
+            'was_redacted' => $this->wasRedacted,
+            'redacted_keys' => $this->redactedKeys,
+            'findings' => array_map(fn (MatchFinding $finding) => $finding->toArray(), $this->findings),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
+    }
 }

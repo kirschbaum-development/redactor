@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Scanner;
 
+use Illuminate\Contracts\Support\Arrayable;
+use JsonSerializable;
 use Kirschbaum\Redactor\Verification\VerificationResult;
 
 /**
@@ -14,7 +16,10 @@ use Kirschbaum\Redactor\Verification\VerificationResult;
  * "full_content_redacted" with a length and nothing else - so there was no way
  * to know which rule fired or where to look.
  */
-final readonly class ScanFinding
+/**
+ * @implements Arrayable<string, mixed>
+ */
+final readonly class ScanFinding implements Arrayable, JsonSerializable
 {
     public function __construct(
         public string $path,
@@ -131,6 +136,14 @@ final readonly class ScanFinding
             'profile' => $this->profile,
             'fingerprint' => $this->fingerprint,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
     }
 
     /**

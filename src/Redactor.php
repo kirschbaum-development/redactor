@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor;
 
 use Illuminate\Container\Container;
+use Illuminate\Support\Traits\Conditionable;
+use Illuminate\Support\Traits\Macroable;
 use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Events\RedactionPerformed;
@@ -18,7 +20,7 @@ use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\ConditionalStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
-use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Strategies\StrategyOutcome;
 use Kirschbaum\Redactor\Support\InternalLog;
@@ -27,10 +29,13 @@ use Kirschbaum\Redactor\Tokenization\Detokenizer;
 
 class Redactor
 {
-    /** @var array<string, array<RedactionStrategyInterface>> */
+    use Conditionable;
+    use Macroable;
+
+    /** @var array<string, array<Strategy>> */
     private array $profileStrategies = [];
 
-    /** @var array<string, RedactionStrategyInterface> */
+    /** @var array<string, Strategy> */
     private array $customStrategies = [];
 
     private bool $customStrategiesLoaded = false;
@@ -101,14 +106,27 @@ class Redactor
     }
 
     /**
-     * Redact sensitive data from content using strategy pattern.
-     *
-     * @param  mixed  $content  The content to redact
-     * @param  string|null  $profile  The redaction profile to use (defaults to config default)
+     * Begin a redaction with the given profile.
+     */
+    public function profile(?string $profile): PendingRedaction
+    {
+        return new PendingRedaction($this, $profile);
+    }
+
+    /**
+     * Redact the content and return it.
      */
     public function redact(mixed $content, ?string $profile = null): mixed
     {
         return $this->redactWithMetadata($content, $profile)->value;
+    }
+
+    /**
+     * Redact the content and return it with what was found.
+     */
+    public function inspect(mixed $content, ?string $profile = null, ?bool $mark = null): RedactionResult
+    {
+        return $this->redactWithMetadata($content, $profile, $mark);
     }
 
     /**
@@ -276,7 +294,7 @@ class Redactor
     {
         $errors = [];
 
-        foreach (RedactorConfig::getAvailableProfiles() as $profile) {
+        foreach ($this->profiles() as $profile) {
             try {
                 $config = RedactorConfig::fromConfig($profile);
 
@@ -366,7 +384,7 @@ class Redactor
     /**
      * Get strategies for a specific profile.
      *
-     * @return array<RedactionStrategyInterface>
+     * @return array<Strategy>
      */
     private function getStrategiesForProfile(RedactorConfig $config): array
     {
@@ -394,7 +412,7 @@ class Redactor
     /**
      * Build strategies for a profile based on configuration.
      *
-     * @return array<RedactionStrategyInterface>
+     * @return array<Strategy>
      */
     private function buildStrategiesForProfile(RedactorConfig $config): array
     {
@@ -427,7 +445,7 @@ class Redactor
     /**
      * Create a strategy instance by class string.
      */
-    private function createStrategyInstance(string $strategyClass, RedactorConfig $config): ?RedactionStrategyInterface
+    private function createStrategyInstance(string $strategyClass, RedactorConfig $config): ?Strategy
     {
         $this->loadCustomStrategies();
 
@@ -437,7 +455,7 @@ class Redactor
         }
 
         // Create strategy instance from class string
-        if (class_exists($strategyClass) && is_subclass_of($strategyClass, RedactionStrategyInterface::class)) {
+        if (class_exists($strategyClass) && is_subclass_of($strategyClass, Strategy::class)) {
             return new $strategyClass;
         }
 
@@ -464,7 +482,7 @@ class Redactor
         }
 
         foreach ($customStrategyClasses as $name => $className) {
-            if (is_string($className) && is_string($name) && class_exists($className) && is_subclass_of($className, RedactionStrategyInterface::class)) {
+            if (is_string($className) && is_string($name) && class_exists($className) && is_subclass_of($className, Strategy::class)) {
                 $this->customStrategies[$name] = new $className;
             }
         }
@@ -473,7 +491,7 @@ class Redactor
     /**
      * Recursively redact data using strategies.
      *
-     * @param  array<RedactionStrategyInterface>  $strategies
+     * @param  array<Strategy>  $strategies
      */
     protected function redactRecursively(
         mixed $data,
@@ -588,7 +606,7 @@ class Redactor
      * Redact sensitive data from an array.
      *
      * @param  array<string, mixed>  $array
-     * @param  array<RedactionStrategyInterface>  $strategies
+     * @param  array<Strategy>  $strategies
      * @return array<string, mixed>
      */
     protected function redactArray(
@@ -701,7 +719,7 @@ class Redactor
     /**
      * Redact sensitive data from an object.
      *
-     * @param  array<RedactionStrategyInterface>  $strategies
+     * @param  array<Strategy>  $strategies
      */
     protected function redactObject(object $object, string $key, RedactionContext $context, array $strategies, ?PathCursor $cursor = null): mixed
     {
@@ -759,7 +777,7 @@ class Redactor
     /**
      * Convert an object to an array and redact it.
      *
-     * @param  array<RedactionStrategyInterface>  $strategies
+     * @param  array<Strategy>  $strategies
      */
     protected function redactObjectContents(object $object, RedactionContext $context, array $strategies, ?PathCursor $cursor = null): mixed
     {
@@ -812,7 +830,7 @@ class Redactor
     /**
      * Apply strategies to a value in priority order.
      *
-     * @param  array<RedactionStrategyInterface>  $strategies
+     * @param  array<Strategy>  $strategies
      */
     protected function applyStrategies(mixed $value, string $key, RedactionContext $context, array $strategies): ?StrategyOutcome
     {
@@ -863,7 +881,7 @@ class Redactor
     /**
      * Run the strategy chain, returning the value unchanged if none applied.
      *
-     * @param  array<RedactionStrategyInterface>  $strategies
+     * @param  array<Strategy>  $strategies
      */
     protected function applyStrategiesToValue(mixed $value, string $key, RedactionContext $context, array $strategies): mixed
     {
@@ -916,7 +934,7 @@ class Redactor
     /**
      * Register a custom strategy for use in profiles.
      */
-    public function registerCustomStrategy(string $name, RedactionStrategyInterface $strategy): void
+    public function registerCustomStrategy(string $name, Strategy $strategy): void
     {
         $this->loadCustomStrategies();
 
@@ -927,35 +945,58 @@ class Redactor
     }
 
     /**
-     * Get available redaction profiles.
+     * Get the names of the configured profiles.
      *
-     * @return array<string>
+     * @return array<int, string>
      */
-    public function getAvailableProfiles(): array
+    public function profiles(): array
     {
-        /** @var array<string> $profiles */
-        $profiles = RedactorConfig::getAvailableProfiles();
-
-        return $profiles;
+        return array_values(array_map('strval', RedactorConfig::getAvailableProfiles()));
     }
 
     /**
-     * Check if a profile exists.
+     * Determine if a profile is configured.
      */
-    public function profileExists(string $profile): bool
+    public function hasProfile(string $profile): bool
     {
         return RedactorConfig::profileExists($profile);
     }
 
     /**
-     * Get all strategies for a specific profile (for testing/debugging).
+     * Get the strategy chain a profile resolves to.
      *
-     * @return array<RedactionStrategyInterface>
+     * @return array<int, Strategy>
+     */
+    public function strategies(?string $profile = null): array
+    {
+        return array_values($this->getStrategiesForProfile(RedactorConfig::fromConfig($profile)));
+    }
+
+    /**
+     * @deprecated Use profiles().
+     *
+     * @return array<int, string>
+     */
+    public function getAvailableProfiles(): array
+    {
+        return $this->profiles();
+    }
+
+    /**
+     * @deprecated Use hasProfile().
+     */
+    public function profileExists(string $profile): bool
+    {
+        return $this->hasProfile($profile);
+    }
+
+    /**
+     * @deprecated Use strategies().
+     *
+     * @return array<int, Strategy>
      */
     public function getStrategies(?string $profile = null): array
     {
-        $config = RedactorConfig::fromConfig($profile);
-
-        return $this->getStrategiesForProfile($config);
+        return $this->strategies($profile);
     }
 }
