@@ -51,5 +51,12 @@ class RedactorServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../config/redactor.php' => config_path('redactor.php'),
         ], 'redactor-config');
+
+        // A pre-commit hook and a GitHub workflow that scan changes, for
+        // projects that want the scanner as a gate rather than a command.
+        $this->publishes([
+            __DIR__.'/../stubs/pre-commit' => base_path('.githooks/pre-commit'),
+            __DIR__.'/../stubs/redactor-scan.yml' => base_path('.github/workflows/redactor-scan.yml'),
+        ], 'redactor-ci');
     }
 }
