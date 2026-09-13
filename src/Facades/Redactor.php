@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static \Kirschbaum\Redactor\RedactionResult redactWithMetadata(mixed $content, ?string $profile = null)
  * @method static mixed redactSafely(mixed $content, ?string $profile = null)
  * @method static bool registerSecret(string $value, string $entity = 'known_secret')
+ * @method static void registerRecognizer(\Kirschbaum\Redactor\Recognition\Recognizer $recognizer)
  * @method static void registerOperator(string $name, \Kirschbaum\Redactor\Operators\Operator $operator)
  * @method static \Kirschbaum\Redactor\Operators\OperatorRegistry operators()
  * @method static array<string, string> validateProfiles()

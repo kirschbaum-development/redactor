@@ -11,6 +11,7 @@ use Kirschbaum\Redactor\Findings\MatchFinding;
 use Kirschbaum\Redactor\Operators\OperatorContext;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\Operators\OperatorSpec;
+use Kirschbaum\Redactor\Recognition\RecognizerRegistry;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Kirschbaum\Redactor\Support\Pseudonymizer;
 use Kirschbaum\Redactor\Support\SecretRegistry;
@@ -61,7 +62,15 @@ class RedactionContext
         public readonly OperatorRegistry $operators = new OperatorRegistry,
         /** Secrets registered at runtime, merged with the profile's own. */
         private readonly ?SecretRegistry $runtimeSecrets = null,
+        private readonly ?RecognizerRegistry $recognizerRegistry = null,
     ) {}
+
+    private ?RecognizerRegistry $defaultRecognizers = null;
+
+    public function recognizers(): RecognizerRegistry
+    {
+        return $this->recognizerRegistry ?? ($this->defaultRecognizers ??= new RecognizerRegistry);
+    }
 
     /**
      * Every known secret in play: the profile's plus any registered at runtime.

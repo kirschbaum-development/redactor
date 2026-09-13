@@ -11,6 +11,8 @@ use Kirschbaum\Redactor\Operators\Operator;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\Path\PathCursor;
 use Kirschbaum\Redactor\Path\PathMatch;
+use Kirschbaum\Redactor\Recognition\Recognizer;
+use Kirschbaum\Redactor\Recognition\RecognizerRegistry;
 use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
@@ -33,10 +35,26 @@ class Redactor
 
     private SecretRegistry $secrets;
 
+    private RecognizerRegistry $recognizers;
+
     public function __construct()
     {
         $this->operators = new OperatorRegistry;
         $this->secrets = new SecretRegistry;
+        $this->recognizers = new RecognizerRegistry;
+    }
+
+    /**
+     * Register a named entity recogniser, selectable from config by name.
+     */
+    public function registerRecognizer(Recognizer $recognizer): void
+    {
+        $this->recognizers->register($recognizer);
+    }
+
+    public function recognizers(): RecognizerRegistry
+    {
+        return $this->recognizers;
     }
 
     /**
@@ -89,7 +107,7 @@ class Redactor
             return new RedactionResult($content, false);
         }
 
-        $context = new RedactionContext($config, $this->operators, $this->secrets);
+        $context = new RedactionContext($config, $this->operators, $this->secrets, $this->recognizers);
         $strategies = $this->getStrategiesForProfile($config);
 
         $redactedContent = $this->redactRecursively($content, '', $context, $strategies, false, $config->paths->cursor());

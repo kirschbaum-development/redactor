@@ -106,6 +106,12 @@ readonly class RedactorConfig
          * they appear verbatim. See KnownSecretsStrategy.
          */
         public SecretRegistry $knownSecrets = new SecretRegistry,
+        /**
+         * Named entity recognition settings. See EntityRecognitionStrategy.
+         *
+         * @var array<string, mixed>
+         */
+        public array $recognition = [],
     ) {
         $this->safeKeyMatcher = KeyMatcher::for($this->safeKeys);
         $this->blockedKeyMatcher = KeyMatcher::for($this->blockedKeys);
@@ -192,9 +198,38 @@ readonly class RedactorConfig
             ),
             allowlist: AllowList::for(ConfigValue::stringList($config['allowlist'] ?? [], "profiles.{$profile}.allowlist")),
             knownSecrets: self::buildKnownSecrets($config['known_secrets'] ?? [], $profile),
+            recognition: self::recognitionSettings($config['recognition'] ?? [], $profile),
         );
 
         return ProfileCache::put($profile, $config, $built, $shared);
+    }
+
+    /**
+     * Validate the shape of the recognition block; the strategy reads the rest.
+     *
+     * @return array<string, mixed>
+     */
+    private static function recognitionSettings(mixed $settings, string $profile): array
+    {
+        $map = ConfigValue::map($settings, "profiles.{$profile}.recognition");
+
+        if (array_key_exists('enabled', $map)) {
+            $map['enabled'] = ConfigValue::bool($map['enabled'], false, "profiles.{$profile}.recognition.enabled");
+        }
+
+        foreach (['min_length', 'max_length', 'min_words', 'failure_threshold', 'cooldown'] as $key) {
+            if (array_key_exists($key, $map)) {
+                $map[$key] = ConfigValue::positiveInt($map[$key], 1, "profiles.{$profile}.recognition.{$key}");
+            }
+        }
+
+        foreach (['score_threshold', 'timeout'] as $key) {
+            if (array_key_exists($key, $map)) {
+                $map[$key] = ConfigValue::float($map[$key], 0.0, "profiles.{$profile}.recognition.{$key}");
+            }
+        }
+
+        return $map;
     }
 
     /**

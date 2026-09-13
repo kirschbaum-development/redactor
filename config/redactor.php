@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\EntityRecognitionStrategy;
 use Kirschbaum\Redactor\Strategies\KnownSecretsStrategy;
 use Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
 use Kirschbaum\Redactor\Strategies\LargeStringStrategy;
@@ -332,6 +333,43 @@ return [
                 KnownSecretsStrategy::class,
                 RegexPatternsStrategy::class,
                 ShannonEntropyStrategy::class,
+                EntityRecognitionStrategy::class, // inert until recognition.enabled
+            ],
+
+            /*
+            | Named entity recognition: names, addresses and organisations in
+            | free text, which no regex can express. Asks a recogniser that
+            | speaks Presidio's /analyze contract, so any model behind that
+            | API works. A model call costs milliseconds where the rules cost
+            | microseconds, so enable this on profiles used from queues,
+            | exports and scans - not on the request path.
+            |
+            | Gated to values that read as prose between min_length and
+            | max_length, to the labels listed, and to scores at or above the
+            | threshold. Offsets are verified against the value before a span
+            | is replaced. A failing recogniser is skipped, and after
+            | failure_threshold consecutive failures not asked again for
+            | cooldown seconds; the output is then rules-only.
+            */
+            'recognition' => [
+                'enabled' => env('REDACTOR_RECOGNITION', false),
+                'driver' => 'presidio',
+                'url' => env('REDACTOR_RECOGNITION_URL', 'http://127.0.0.1:5002/analyze'),
+                'language' => 'en',
+                'entities' => ['PERSON', 'LOCATION', 'ORGANIZATION', 'NRP'],
+                'entity_map' => [
+                    'PERSON' => 'person',
+                    'LOCATION' => 'location',
+                    'ORGANIZATION' => 'organization',
+                    'NRP' => 'nationality',
+                ],
+                'score_threshold' => 0.6,
+                'min_length' => 20,
+                'max_length' => 5000,
+                'min_words' => 3,
+                'timeout' => 2.0,
+                'failure_threshold' => 3,
+                'cooldown' => 60,
             ],
 
             /*
