@@ -9,6 +9,7 @@ use Kirschbaum\Redactor\Config\ConfigValue;
 use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\Operators\OperatorSpec;
+use Kirschbaum\Redactor\Support\AllowList;
 use Kirschbaum\Redactor\Support\Pcre;
 
 /**
@@ -105,6 +106,14 @@ final readonly class PatternRule
          * @var array<int, string>
          */
         public array $keywords = [],
+        /**
+         * Matches this rule should let through: literals or regexes.
+         *
+         * Scoped to the rule, unlike the profile allowlist, so "this rule
+         * ignores example.com addresses" does not also excuse an example.com
+         * address that some other rule found for a different reason.
+         */
+        public ?AllowList $allow = null,
     ) {}
 
     /**
@@ -171,9 +180,32 @@ final readonly class PatternRule
 
         $pattern = $definition['pattern'] ?? null;
 
+        // A dictionary rule: a list of words compiled into one alternation.
+        // Product names, internal project codenames, a customer list - things
+        // no regex could express and no model would know.
+        if ($pattern === null && isset($definition['words'])) {
+            $words = array_values(array_filter(
+                ConfigValue::stringList($definition['words'], $path.'.words'),
+                fn (string $word) => trim($word) !== ''
+            ));
+
+            if ($words === []) {
+                throw new InvalidArgumentException(sprintf(
+                    'Redactor config [%s] lists no words.',
+                    $path
+                ));
+            }
+
+            usort($words, fn (string $a, string $b) => strlen($b) <=> strlen($a));
+
+            $pattern = '/(?<![\p{L}\p{N}])(?:'
+                .implode('|', array_map(fn (string $word) => preg_quote(trim($word), '/'), $words))
+                .')(?![\p{L}\p{N}])/iu';
+        }
+
         if (! is_string($pattern)) {
             throw new InvalidArgumentException(sprintf(
-                'Redactor config [%s] must define a "pattern" string.',
+                'Redactor config [%s] must define a "pattern" string or a "words" list.',
                 $path
             ));
         }
@@ -212,6 +244,8 @@ final readonly class PatternRule
             ConfigValue::stringList($definition['keywords'] ?? [], $path.'.keywords')
         ), fn (string $keyword) => $keyword !== ''));
 
+        $allow = ConfigValue::stringList($definition['allow'] ?? [], $path.'.allow');
+
         if ($maskCharacter === '') {
             $maskCharacter = '*';
         }
@@ -228,6 +262,7 @@ final readonly class PatternRule
             confidence: $confidence,
             operator: $operator,
             keywords: $keywords,
+            allow: $allow === [] ? null : AllowList::for($allow),
         );
     }
 
@@ -236,6 +271,10 @@ final readonly class PatternRule
      */
     public function accepts(string $match): bool
     {
+        if ($this->allow !== null && $this->allow->allows($match)) {
+            return false;
+        }
+
         return $this->validator === null || Validator::passes($this->validator, $match);
     }
 

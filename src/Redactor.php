@@ -381,6 +381,10 @@ class Redactor
 
         $stringValue = (string) $value;
 
+        if ($context->isAllowed($stringValue)) {
+            return $value;
+        }
+
         $detection = new Detection(
             entity: $key,
             rule: 'path:'.$match->pattern,

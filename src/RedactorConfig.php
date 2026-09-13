@@ -12,6 +12,7 @@ use Kirschbaum\Redactor\Operators\OperatorSpec;
 use Kirschbaum\Redactor\Operators\RedactionPolicy;
 use Kirschbaum\Redactor\Path\PathTrie;
 use Kirschbaum\Redactor\Patterns\PatternRule;
+use Kirschbaum\Redactor\Support\AllowList;
 use Kirschbaum\Redactor\Support\KeyMatcher;
 
 readonly class RedactorConfig
@@ -48,6 +49,15 @@ readonly class RedactorConfig
 
     /** The blocked-key list, compiled. See $safeKeyMatcher. */
     public KeyMatcher $blockedKeyMatcher;
+
+    /**
+     * Values that are never redacted, whichever detector reports them.
+     *
+     * Checked after detection rather than instead of it, so a finding for an
+     * allowed value is simply dropped and the rules stay as strong as they
+     * were written.
+     */
+    public AllowList $allowlist;
 
     public function __construct(
         public bool $enabled,
@@ -89,9 +99,11 @@ readonly class RedactorConfig
          */
         public PathTrie $paths = new PathTrie,
         public string $largeStringBehavior = 'truncate',
+        ?AllowList $allowlist = null,
     ) {
         $this->safeKeyMatcher = KeyMatcher::for($this->safeKeys);
         $this->blockedKeyMatcher = KeyMatcher::for($this->blockedKeys);
+        $this->allowlist = $allowlist ?? AllowList::none();
     }
 
     /**
@@ -172,6 +184,7 @@ readonly class RedactorConfig
                 'truncate',
                 "profiles.{$profile}.large_string_behavior"
             ),
+            allowlist: AllowList::for(ConfigValue::stringList($config['allowlist'] ?? [], "profiles.{$profile}.allowlist")),
         );
 
         return ProfileCache::put($profile, $config, $built, $shared);

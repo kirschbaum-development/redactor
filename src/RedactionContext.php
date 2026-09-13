@@ -161,6 +161,14 @@ class RedactionContext
     }
 
     /**
+     * Whether the profile's allowlist says this value is never sensitive.
+     */
+    public function isAllowed(string $value): bool
+    {
+        return $this->config->allowlist->allows($value);
+    }
+
+    /**
      * Hold a detection until every detector has had its turn on the value.
      */
     public function collect(Detection $detection): void
@@ -206,6 +214,10 @@ class RedactionContext
             if ($detection->offset < $cursor) {
                 // Cannot happen after resolve(), but a bug here would splice
                 // garbage into a log line; skipping is the safe failure.
+                continue;
+            }
+
+            if (! $detection->failClosed && $this->isAllowed($detection->value)) {
                 continue;
             }
 

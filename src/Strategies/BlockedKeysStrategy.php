@@ -38,6 +38,10 @@ class BlockedKeysStrategy implements RedactionStrategyInterface
             return $context->config->replacement;
         }
 
+        if ($context->isAllowed((string) $value)) {
+            return $value;
+        }
+
         $detection = new Detection(
             entity: strtolower($key),
             rule: 'blocked_key',
