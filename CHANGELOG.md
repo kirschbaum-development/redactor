@@ -42,6 +42,13 @@ All notable changes to this project will be documented in this file.
   The command names every host before contacting any. The secret never reaches
   a finding, so it cannot escape through JSON, SARIF or a baseline.
 - **`observability` profile**, set up to pseudonymise rather than redact.
+- **Pattern `keywords`.** A rule can name literals that must appear in the
+  value before its pattern is tried. A prefilter for cost - `['@']` keeps the
+  email regex off almost every string in a payload - and for precision, so a
+  bare ten-digit run needs a `phone` label somewhere before it is believed.
+- **`Detector` contract.** Anything that can report `Detection`s against a
+  string - a regex, an entropy measure, a recogniser model in another process
+  - plugs into the same resolution and operator pipeline.
 
 ### Performance
 
@@ -75,6 +82,15 @@ item below is one commit, with tests.
 
 ### Changed - behaviour you should read before upgrading
 
+- **Detections are collected and the value rewritten once.** The regex and
+  entropy strategies no longer rewrite the string as they go; they report, the
+  context resolves overlaps and applies the confidence floor, and the original
+  value is rewritten in one pass. Of two overlapping reports the higher score
+  wins, then the rule listed first. Findings for a `preserve` operator are now
+  reported without marking the payload redacted.
+- **Blocked keys go through operators.** The key name is the entity, so
+  `operators.email` applies to a value under an `email` key. Findings from a
+  blocked key now carry the value they matched and a certain score.
 - **Long strings are truncated and scanned, not replaced.** A value over
   `max_value_length` keeps its head, which the remaining strategies still
   inspect, followed by `[REDACTED] (String truncated: 65536 characters, 5000
@@ -108,6 +124,16 @@ item below is one commit, with tests.
 
 ### Fixed - correctness and security
 
+- A surrogate written by the regex strategy was re-detected by the entropy
+  strategy that ran next - it has the same shape and entropy as the value it
+  replaced - and turned into `[REDACTED]`, destroying the joinability the
+  profile paid for. Detectors now all see the original value.
+- The scanner reported the wrong column for the second finding on a line: each
+  rule measured its offsets against the string the previous rule had already
+  rewritten. Offsets are now always against the original.
+- Entropy detections bypassed `operators`, `min_confidence` and confidence
+  scoring entirely, and the scanner ranked their null score as `high` - above a
+  Luhn-validated card. They now carry a score and go through the same policy.
 - On PHP 8.5 every object walked raised three `SplObjectStorage` deprecations,
   which Laravel logs - and a log record raised from inside a log tap is redacted,
   which raises them again. Active objects are now tracked by `spl_object_id`.

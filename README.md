@@ -77,10 +77,23 @@ The package uses a class-based configuration:
 6. **ShannonEntropyStrategy** - Detects high-entropy strings (API keys, tokens)
 
 Strategies run in the order the profile lists them, and the chain stops at the
-first strategy that replaces a value outright. Strategies that only rewrite part
-of a string - the regex and entropy ones - hand the result to the rest of the
-chain, so an API key sitting next to an email address is not spared because the
-email matched first.
+first strategy that replaces a value outright. The regex and entropy strategies
+are *detectors*: they report what they found and where, and change nothing.
+Once every detector has seen the value, the context resolves their reports and
+rewrites the original string once. Three things follow from that:
+
+- An API key sitting next to an email address is not spared because the email
+  matched first - both are reported, both are rewritten.
+- A surrogate written for one detection is never re-detected by the next
+  detector. It has the same shape and entropy as the value it replaced, and a
+  sequential chain would have redacted it again.
+- Every finding's offset is an offset into the value you passed, so the scanner
+  reports the right column for the second secret on a line.
+
+Where two detections overlap, the higher score wins - a Luhn-validated card
+outranks the bare digit run that also matched it. On an equal score the rule
+listed first wins, so `url_with_auth` declared ahead of `email` takes the
+password out of `https://user:pass@host` and leaves the host.
 
 Two of them are special:
 
@@ -247,6 +260,28 @@ Redactor::redact('order 2024010112000001 shipped');  // untouched - fails Luhn
 Redactor::redact('paid with 4111111111111111');      // 'paid with ************1111'
 ```
 
+### Keywords
+
+A rule can name literals at least one of which must appear somewhere in the
+value before the pattern is tried, compared case-insensitively:
+
+```php
+'email' => ['pattern' => '/[^@\s]+@[^@\s]+/', 'keywords' => ['@']],
+
+'phone_bare' => [
+    'pattern'  => '/\b\d{10}\b/',
+    'keywords' => ['phone', 'tel', 'mobile', 'cell', 'fax'],
+],
+```
+
+It does two jobs. The first is cost: the email pattern is the single most
+expensive thing in a scan of clean text, and "does this value contain an @"
+answers it for the price of one `str_contains()`, so almost every string in a
+log payload skips it. The second is precision: a bare ten-digit run is a phone
+number in a value that says `phone` and a Unix timestamp almost everywhere
+else, and a keyword lets the rule ask for the label without a regex that has to
+know where the label sits.
+
 ## Path Rules
 
 A path says exactly where a value lives. Every other rule in this package is
@@ -306,6 +341,13 @@ it is, then the rule that found it, then the profile default. Entity beats rule
 deliberately — "every email here becomes a surrogate" is a policy decision about
 data, and which regex spotted it is an implementation detail.
 
+Every detector goes through the same policy. A value found by its key uses the
+key name as its entity, so `operators.email` applies to `['email' => ...]` and
+to an address inside a message alike, and both produce the same surrogate. A
+high-entropy token has the entity `high_entropy`. A `preserve` operator reports
+the finding through `redactWithMetadata()` without marking the payload redacted,
+which is what a scan that should only report wants.
+
 Register your own with `Redactor::registerOperator('tokenize', $operator)` and
 use it from config by name.
 
@@ -364,6 +406,10 @@ a rule is to weaken its regex everywhere. Detections carry a score instead.
 The base score comes from the rule; a passing checksum and a credential keyword
 beside the match raise it. So the same pattern is filtered out as noise on its
 own and reported when something corroborates it — without editing the pattern.
+
+Entropy detections are scored the same way: medium on their own, higher the
+further the token sits above its threshold, and higher again beside a keyword.
+A value found by its key is certain. `min_confidence` applies to all of them.
 
 Every finding explains itself:
 
