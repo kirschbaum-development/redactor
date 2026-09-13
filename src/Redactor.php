@@ -12,6 +12,7 @@ use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\Path\PathCursor;
 use Kirschbaum\Redactor\Path\PathMatch;
 use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
 use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
 use Kirschbaum\Redactor\Strategies\StrategyOutcome;
@@ -393,7 +394,7 @@ class Redactor
 
         $context->recordDetection($detection);
 
-        return $context->operate($detection, null, $spec);
+        return $context->operate($detection, $spec);
     }
 
     /**
@@ -649,6 +650,13 @@ class Redactor
                 continue;
             }
 
+            // Detecting strategies only report; their reports are acted on
+            // together, once, before anything that would change the string
+            // they were made against gets to run.
+            if (! $strategy instanceof DetectingStrategy && is_string($value) && $context->hasPendingDetections()) {
+                $value = $context->resolvePendingDetections($value, $key);
+            }
+
             $value = $strategy->handle($value, $key, $context);
             $handled = true;
 
@@ -657,6 +665,8 @@ class Redactor
             // has to mean the same thing for a scalar and for the array under
             // it, or it means nothing predictable at all.
             if ($strategy instanceof PreservingStrategy) {
+                $context->discardPendingDetections();
+
                 return new StrategyOutcome($value, preserved: true);
             }
 
@@ -664,8 +674,14 @@ class Redactor
             // A chainable one only rewrote part of a string, so the remaining
             // strategies still need to inspect what is left standing.
             if (! $strategy instanceof ChainableStrategy) {
+                $context->discardPendingDetections();
+
                 return new StrategyOutcome($value);
             }
+        }
+
+        if (is_string($value) && $context->hasPendingDetections()) {
+            $value = $context->resolvePendingDetections($value, $key);
         }
 
         return $handled ? new StrategyOutcome($value) : null;

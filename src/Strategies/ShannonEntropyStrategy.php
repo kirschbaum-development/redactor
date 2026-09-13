@@ -4,13 +4,42 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Strategies;
 
+use Kirschbaum\Redactor\Detection\Confidence;
+use Kirschbaum\Redactor\Detection\Detection;
+use Kirschbaum\Redactor\Detection\Detector;
+use Kirschbaum\Redactor\Detection\KeywordContext;
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\RedactorConfig;
-use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
 use Kirschbaum\Redactor\Support\Pcre;
 
-class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInterface
+/**
+ * Finds tokens that look random enough to be a credential.
+ *
+ * Reports detections rather than rewriting, like every other detector, so an
+ * entropy hit is scored, filtered by the confidence floor and handed to the
+ * configured operator exactly as a pattern match is - and so a surrogate the
+ * regex detector wrote a moment ago, which has the same entropy as the value
+ * it replaced, is never mistaken for a fresh secret.
+ */
+class ShannonEntropyStrategy implements DetectingStrategy, Detector, RedactionStrategyInterface
 {
+    public const ENTITY = 'high_entropy';
+
+    public const RULE = 'shannon_entropy';
+
+    /**
+     * How sure a bare entropy hit is on its own.
+     *
+     * Randomness is evidence of a secret, not proof: a base64 image chunk or
+     * a git hash scores just as high. So an entropy detection starts at
+     * medium, climbs with how far over the threshold it lands, and reaches
+     * high only with a credential keyword beside it.
+     */
+    private const BASE_CONFIDENCE = 0.5;
+
+    private const MARGIN_BOOST_CAP = 0.4;
+
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
         $shannonConfig = $context->config->shannonEntropy;
@@ -19,17 +48,7 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
             return false;
         }
 
-        if ($this->tooShort($value, $shannonConfig)) {
-            return false;
-        }
-
-        foreach ($this->tokenize($value) as $token) {
-            if ($this->shouldRedactByEntropy($token, $context)) {
-                return true;
-            }
-        }
-
-        return false;
+        return ! $this->tooShort($value, $shannonConfig);
     }
 
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
@@ -38,65 +57,91 @@ class ShannonEntropyStrategy implements ChainableStrategy, RedactionStrategyInte
             return $value;
         }
 
-        if ($this->tooShort($value, $context->config->shannonEntropy)) {
-            return $value;
+        foreach ($this->detect($value, $key, $context) as $detection) {
+            $context->collect($detection);
         }
 
-        $replacement = $context->config->replacement;
+        return $value;
+    }
 
-        /** @var array<int, array{offset: int, length: int, matched: string}> $hits */
-        $hits = [];
-
-        // A value with no internal whitespace is a single token, so this
-        // degenerates to replacing the whole value - the pre-existing
-        // behaviour for API keys and the like. A sentence with a secret
-        // embedded in it loses only the secret.
-        //
-        // PREG_OFFSET_CAPTURE turns each match into a [text, offset] pair; the
-        // pair is unpacked defensively rather than assumed, because the shape
-        // depends on a flag a future edit could drop.
-        $rewrite = function (array $matches) use ($context, $replacement, &$hits): string {
-            $match = $matches[0] ?? null;
-
-            $token = is_array($match) && is_string($match[0] ?? null) ? $match[0] : '';
-            $offset = is_array($match) && is_int($match[1] ?? null) ? $match[1] : 0;
-
-            if ($token === '' || ! $this->shouldRedactByEntropy($token, $context)) {
-                return $token;
-            }
-
-            $hits[] = [
-                'offset' => $offset,
-                'length' => strlen($token),
-                'matched' => $token,
-            ];
-
-            return $replacement;
-        };
+    /**
+     * Every whitespace-delimited token whose entropy clears its threshold.
+     *
+     * A value with no internal whitespace is a single token, so this
+     * degenerates to reporting the whole value - the right answer for a bare
+     * API key. A sentence with a secret embedded in it reports only the secret.
+     *
+     * @return array<int, Detection>
+     */
+    public function detect(string $subject, string $key, RedactionContext $context): array
+    {
+        if ($this->tooShort($subject, $context->config->shannonEntropy)) {
+            return [];
+        }
 
         // Spelled out rather than selected into a variable so the /u decision
         // is visible at the point it matters.
-        $result = $this->isAscii($value)
-            ? preg_replace_callback('/\S+/', $rewrite, $value, -1, $count, PREG_OFFSET_CAPTURE)
-            : preg_replace_callback('/\S+/u', $rewrite, $value, -1, $count, PREG_OFFSET_CAPTURE);
+        $found = $this->isAscii($subject)
+            ? @preg_match_all('/\S+/', $subject, $matches, PREG_OFFSET_CAPTURE)
+            : @preg_match_all('/\S+/u', $subject, $matches, PREG_OFFSET_CAPTURE);
 
-        if ($result === null) {
-            // The engine gave up. Fail closed rather than emit a partially
-            // substituted string.
-            $context->recordRedaction($key, 'shannon_entropy', 0, strlen($value));
+        if ($found === false || preg_last_error() !== PREG_NO_ERROR) {
+            // The engine gave up. Fail closed rather than let a value the
+            // tokeniser could not even split go out uninspected.
+            Pcre::matches('/\S+/u', $subject, onError: true, rule: self::RULE);
 
-            return $replacement;
+            return [Detection::failClosed(
+                self::ENTITY,
+                self::RULE,
+                $subject,
+                $key,
+                'the value could not be tokenised; failing closed'
+            )];
         }
 
-        if ($hits === []) {
-            return $value;
+        $detections = [];
+
+        foreach ($matches[0] as [$token, $offset]) {
+            $token = (string) $token;
+            $offset = (int) $offset;
+
+            if ($token === '' || ! $this->shouldRedactByEntropy($token, $context)) {
+                continue;
+            }
+
+            $detections[] = new Detection(
+                entity: self::ENTITY,
+                rule: self::RULE,
+                offset: $offset,
+                value: $token,
+                confidence: $this->score($token, $subject, $offset, $key, $context),
+                key: $key,
+            );
         }
 
-        foreach ($hits as $hit) {
-            $context->recordRedaction($key, 'shannon_entropy', $hit['offset'], $hit['length'], $hit['matched']);
+        return $detections;
+    }
+
+    /**
+     * Score a token by how far its entropy clears the threshold, plus context.
+     */
+    protected function score(string $token, string $subject, int $offset, string $key, RedactionContext $context): Confidence
+    {
+        $entropy = $this->calculateShannonEntropy($token, $context);
+        $threshold = $this->thresholdFor($token, $context);
+
+        $confidence = Confidence::of(
+            self::BASE_CONFIDENCE,
+            sprintf('entropy %.2f bits/char over the %.2f threshold', $entropy, $threshold)
+        );
+
+        $margin = min(self::MARGIN_BOOST_CAP, max(0.0, ($entropy - $threshold) / 2));
+
+        if ($margin > 0.0) {
+            $confidence = $confidence->with('margin', $margin, 'well clear of the threshold');
         }
 
-        return $result;
+        return KeywordContext::boost($confidence, $subject, $offset, $key);
     }
 
     /**

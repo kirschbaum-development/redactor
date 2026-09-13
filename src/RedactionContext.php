@@ -6,11 +6,11 @@ namespace Kirschbaum\Redactor;
 
 use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
+use Kirschbaum\Redactor\Detection\DetectionSet;
 use Kirschbaum\Redactor\Findings\MatchFinding;
 use Kirschbaum\Redactor\Operators\OperatorContext;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\Operators\OperatorSpec;
-use Kirschbaum\Redactor\Patterns\PatternRule;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Kirschbaum\Redactor\Support\Pseudonymizer;
 
@@ -38,6 +38,14 @@ class RedactionContext
 
     /** @var array<string, float> */
     private array $entropyCache = [];
+
+    /**
+     * What the detecting strategies have reported about the value currently
+     * being processed, before any of it has been acted on.
+     *
+     * @var array<int, Detection>
+     */
+    private array $pending = [];
 
     public bool $wasRedacted = false;
 
@@ -124,9 +132,9 @@ class RedactionContext
      * The single place detection turns into a decision, so every strategy gets
      * the same precedence rules and the same never-throw behaviour.
      */
-    public function operate(Detection $detection, ?PatternRule $rule = null, ?OperatorSpec $atLocation = null): string
+    public function operate(Detection $detection, ?OperatorSpec $atLocation = null): string
     {
-        $spec = $this->config->policy->operatorFor($detection, $rule, $atLocation);
+        $spec = $this->config->policy->operatorFor($detection, $atLocation);
 
         if (! $this->operators->has($spec->name)) {
             InternalLog::warning('Unknown redaction operator; falling back to the replacement string', [
@@ -150,6 +158,77 @@ class RedactionContext
     public function accepts(Detection $detection): bool
     {
         return $detection->confidence->meets($this->config->minConfidence);
+    }
+
+    /**
+     * Hold a detection until every detector has had its turn on the value.
+     */
+    public function collect(Detection $detection): void
+    {
+        $this->pending[] = $detection;
+    }
+
+    public function hasPendingDetections(): bool
+    {
+        return $this->pending !== [];
+    }
+
+    /**
+     * Drop what was collected, because a later strategy settled the value
+     * some other way - preserved it, or replaced it wholesale.
+     */
+    public function discardPendingDetections(): void
+    {
+        $this->pending = [];
+    }
+
+    /**
+     * Act on everything collected for a value, in one pass over it.
+     *
+     * The confidence floor and overlap resolution happen here, once, for
+     * every detector alike. Offsets are trusted because every detector saw
+     * this exact subject: nothing has rewritten it in between.
+     */
+    public function resolvePendingDetections(string $subject, string $key): string
+    {
+        $kept = DetectionSet::resolve($this->pending, $this->config->minConfidence);
+        $this->pending = [];
+
+        if ($kept === []) {
+            return $subject;
+        }
+
+        $out = '';
+        $cursor = 0;
+        $changed = false;
+
+        foreach ($kept as $detection) {
+            if ($detection->offset < $cursor) {
+                // Cannot happen after resolve(), but a bug here would splice
+                // garbage into a log line; skipping is the safe failure.
+                continue;
+            }
+
+            $replacement = $detection->failClosed
+                ? $this->config->replacement
+                : $this->operate($detection);
+
+            if ($replacement === $detection->value) {
+                // A preserving operator: detected and reported, deliberately
+                // left alone. The report is the point.
+                $this->recordDetection($detection, redacted: false);
+
+                continue;
+            }
+
+            $out .= substr($subject, $cursor, $detection->offset - $cursor).$replacement;
+            $cursor = $detection->end();
+            $changed = true;
+
+            $this->recordDetection($detection);
+        }
+
+        return $changed ? $out.substr($subject, $cursor) : $subject;
     }
 
     /**
@@ -184,11 +263,14 @@ class RedactionContext
         string $matched = '',
         ?string $entity = null,
         ?Confidence $confidence = null,
+        bool $redacted = true,
     ): void {
-        $this->wasRedacted = true;
+        if ($redacted) {
+            $this->wasRedacted = true;
 
-        if ($key !== '') {
-            $this->redactedKeys[] = $key;
+            if ($key !== '') {
+                $this->redactedKeys[] = $key;
+            }
         }
 
         if ($rule !== null) {
@@ -207,7 +289,7 @@ class RedactionContext
     /**
      * Record a detection, carrying its entity and score through to the report.
      */
-    public function recordDetection(Detection $detection): void
+    public function recordDetection(Detection $detection, bool $redacted = true): void
     {
         $this->recordRedaction(
             key: $detection->key,
@@ -217,6 +299,7 @@ class RedactionContext
             matched: $detection->value,
             entity: $detection->entity,
             confidence: $detection->confidence,
+            redacted: $redacted,
         );
     }
 

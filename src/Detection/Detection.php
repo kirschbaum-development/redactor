@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Detection;
 
+use Kirschbaum\Redactor\Operators\OperatorSpec;
+
 /**
  * Something sensitive found at a known place in a known string.
  *
@@ -12,6 +14,12 @@ namespace Kirschbaum\Redactor\Detection;
  * lets the same detection be redacted in one profile, pseudonymised in another
  * and merely reported by the scanner - and what lets a verifier take the raw
  * value before anything replaces it.
+ *
+ * Offsets always refer to the subject as the detector received it. Detectors
+ * never rewrite; the context collects every detection for a value, resolves
+ * overlaps, and rewrites the original once. That is what keeps a surrogate
+ * from being re-detected by the next detector, and a finding's column from
+ * drifting after an earlier rule changed the string's length.
  */
 final readonly class Detection
 {
@@ -27,6 +35,20 @@ final readonly class Detection
         public Confidence $confidence,
         /** The key the subject was found under, where there was one. */
         public string $key = '',
+        /**
+         * The operator the finding rule asked for, if it expressed a choice.
+         *
+         * Null means the profile decides. A rule that merely left its mode at
+         * the default has not chosen, and must not outrank operators.default.
+         */
+        public ?OperatorSpec $operator = null,
+        /**
+         * Set when the detector could not evaluate the subject at all - a PCRE
+         * failure, a tokeniser that gave up - and the only safe answer is to
+         * replace the whole value with the plain replacement string, whatever
+         * operator policy says. A surrogate of "we do not know" is meaningless.
+         */
+        public bool $failClosed = false,
     ) {}
 
     public function length(): int
@@ -48,6 +70,24 @@ final readonly class Detection
             value: $this->value,
             confidence: $confidence,
             key: $this->key,
+            operator: $this->operator,
+            failClosed: $this->failClosed,
+        );
+    }
+
+    /**
+     * A detection that covers the whole subject because the detector failed.
+     */
+    public static function failClosed(string $entity, string $rule, string $subject, string $key, string $reason): self
+    {
+        return new self(
+            entity: $entity,
+            rule: $rule,
+            offset: 0,
+            value: $subject,
+            confidence: Confidence::of(Confidence::CERTAIN, $reason),
+            key: $key,
+            failClosed: true,
         );
     }
 

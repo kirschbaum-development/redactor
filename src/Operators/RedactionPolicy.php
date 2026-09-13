@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Operators;
 
 use Kirschbaum\Redactor\Detection\Detection;
-use Kirschbaum\Redactor\Patterns\PatternRule;
 
 /**
  * Decides what happens to a detection.
@@ -32,7 +31,7 @@ final readonly class RedactionPolicy
         private OperatorSpec $default = new OperatorSpec(OperatorRegistry::REDACT),
     ) {}
 
-    public function operatorFor(Detection $detection, ?PatternRule $rule = null, ?OperatorSpec $atLocation = null): OperatorSpec
+    public function operatorFor(Detection $detection, ?OperatorSpec $atLocation = null): OperatorSpec
     {
         if ($atLocation !== null) {
             return $atLocation;
@@ -44,17 +43,14 @@ final readonly class RedactionPolicy
 
         // Only a rule that actually chose an operator outranks the profile
         // default. A rule that simply left `mode` alone has expressed no
-        // preference, and treating its default as a choice would make
-        // `operators.default` unreachable for anything found by a pattern.
-        if ($rule !== null && $rule->hasExplicitOperator()) {
-            return $rule->operatorSpec();
+        // preference - the detection then carries no operator - and treating
+        // its default as a choice would make `operators.default` unreachable
+        // for anything found by a pattern.
+        if ($detection->operator !== null) {
+            return $detection->operator;
         }
 
-        if (isset($this->byEntity['default'])) {
-            return $this->byEntity['default'];
-        }
-
-        return $rule?->operatorSpec() ?? $this->default;
+        return $this->byEntity['default'] ?? $this->default;
     }
 
     public function defaultSpec(): OperatorSpec

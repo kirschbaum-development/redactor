@@ -77,14 +77,20 @@ describe('Entropy skips what it cannot match', function () {
 
         $shortCost = fastest(function () use ($strategy, $short, $context) {
             foreach ($short as $v) {
-                $strategy->shouldHandle($v, 'k', $context);
+                if ($strategy->shouldHandle($v, 'k', $context)) {
+                    $strategy->handle($v, 'k', $context);
+                }
             }
+            $context->discardPendingDetections();
         }, 20_000);
 
         $longCost = fastest(function () use ($strategy, $long, $context) {
             foreach ($long as $v) {
-                $strategy->shouldHandle($v, 'k', $context);
+                if ($strategy->shouldHandle($v, 'k', $context)) {
+                    $strategy->handle($v, 'k', $context);
+                }
             }
+            $context->discardPendingDetections();
         }, 20_000);
 
         // Six short values must cost less than one value that clears the gate.

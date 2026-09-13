@@ -6,21 +6,25 @@ namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
+use Kirschbaum\Redactor\Detection\Detector;
+use Kirschbaum\Redactor\Detection\KeywordContext;
 use Kirschbaum\Redactor\Patterns\PatternRule;
 use Kirschbaum\Redactor\RedactionContext;
-use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
 use Kirschbaum\Redactor\Support\Pcre;
 
 /**
- * Finds sensitive spans by pattern and hands each one to an operator.
+ * Finds sensitive spans by pattern.
  *
- * The strategy no longer decides what replacement looks like. It detects, scores
- * and locates; the operator configured for that entity decides whether the span
- * is redacted, masked, pseudonymised or left alone. That separation is what lets
- * one profile emit "[REDACTED]" and another emit a stable surrogate from exactly
- * the same detection.
+ * The strategy detects, scores and locates; it does not rewrite. The context
+ * collects what every detecting strategy reported about a value, resolves the
+ * overlaps, and applies the configured operator to each surviving span in one
+ * pass over the original string. That separation is what lets one profile
+ * emit "[REDACTED]" and another emit a stable surrogate from exactly the same
+ * detection - and what keeps that surrogate from being detected all over again
+ * by whichever strategy runs next.
  */
-class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInterface
+class RegexPatternsStrategy implements DetectingStrategy, Detector, RedactionStrategyInterface
 {
     /**
      * How much a passing checksum is worth.
@@ -31,44 +35,9 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
      */
     private const VALIDATOR_BOOST = 0.75;
 
-    /**
-     * How much a nearby keyword is worth.
-     *
-     * "token=" beside a high-entropy string is corroboration, not proof - the
-     * word appears in plenty of prose too - so it nudges rather than decides.
-     */
-    private const KEYWORD_BOOST = 0.25;
-
-    private const KEYWORD_WINDOW = 40;
-
-    /** @var array<int, string> */
-    private const KEYWORDS = [
-        'secret', 'token', 'password', 'passwd', 'apikey', 'api_key', 'api-key',
-        'credential', 'private', 'auth', 'bearer', 'key', 'card', 'cvv', 'ssn',
-    ];
-
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
-        if (! is_string($value) || $context->config->patterns === []) {
-            return false;
-        }
-
-        // Deliberately the cheapest question that can be asked: does any rule
-        // match at all. This runs against every string in every payload, so
-        // building detections and scoring them here - only to build them again
-        // in handle() - doubled the cost of the hot path for no benefit.
-        //
-        // A rule with a validator can say yes here and find nothing in handle(),
-        // which is correct: handle() returns the value untouched and reports no
-        // redaction. Being occasionally too eager is cheap; being expensive on
-        // every value is not.
-        foreach ($context->config->patterns as $rule) {
-            if (Pcre::matches($rule->pattern, $value, onError: true, rule: $rule->name)) {
-                return true;
-            }
-        }
-
-        return false;
+        return is_string($value) && $context->config->patterns !== [];
     }
 
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
@@ -77,100 +46,78 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
             return $value;
         }
 
-        $result = $value;
+        foreach ($this->detect($value, $key, $context) as $detection) {
+            $context->collect($detection);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Every span any rule accepts, in the order the rules are configured.
+     *
+     * Overlaps between rules are left in; the context resolves them.
+     *
+     * @return array<int, Detection>
+     */
+    public function detect(string $subject, string $key, RedactionContext $context): array
+    {
+        $detections = [];
+        $lowered = null;
 
         foreach ($context->config->patterns as $rule) {
-            $applied = $this->applyRule($rule, $result, $key, $context);
+            // A rule that names keywords only runs on a subject containing one.
+            // The email rule is the single most expensive thing in a clean-text
+            // scan, and "does this contain an @" answers it in nanoseconds.
+            if ($rule->keywords !== []) {
+                $lowered ??= strtolower($subject);
 
-            if ($applied === null) {
-                // The engine failed partway through. Emitting a partially
-                // substituted string would leak whatever it did not reach.
-                $context->recordRedaction($key, $rule->name, 0, strlen($result));
-
-                return $context->config->replacement;
+                if (! $this->containsAny($lowered, $rule->keywords)) {
+                    continue;
+                }
             }
 
-            $result = $applied;
+            $found = $this->detectRule($rule, $subject, $key);
+
+            if ($found === null) {
+                // The engine gave up partway through. Emitting a partially
+                // inspected string would leak whatever it did not reach, so
+                // the only safe report is "all of it".
+                Pcre::matches($rule->pattern, $subject, onError: true, rule: $rule->name);
+
+                return [Detection::failClosed(
+                    $rule->entity(),
+                    $rule->name,
+                    $subject,
+                    $key,
+                    sprintf('pattern "%s" could not be evaluated; failing closed', $rule->name)
+                )];
+            }
+
+            foreach ($found as $detection) {
+                $detections[] = $detection;
+            }
         }
 
-        return $result;
+        return $detections;
     }
 
     /**
-     * Rewrite every accepted detection for one rule in a single pass.
-     *
-     * Assembled left to right by appending the gap before each detection and
-     * then its replacement, rather than splicing each span into the subject.
-     * substr_replace builds a whole new string per replacement, so a value with
-     * several matches copies it several times; appending copies it once.
-     *
-     * preg_match_all returns matches in order and non-overlapping, which is
-     * what makes one pass possible.
-     *
-     * Returns null when PCRE gave up, so the caller can fail closed.
-     */
-    private function applyRule(PatternRule $rule, string $subject, string $key, RedactionContext $context): ?string
-    {
-        $detections = $this->detect($rule, $subject, $key, $context);
-
-        if ($detections === null) {
-            return null;
-        }
-
-        if ($detections === []) {
-            return $subject;
-        }
-
-        if ($rule->replacesWholeValue()) {
-            $first = $detections[0];
-            $context->recordDetection($first);
-
-            return $context->operate($first, $rule);
-        }
-
-        $out = '';
-        $cursor = 0;
-        $changed = false;
-
-        foreach ($detections as $detection) {
-            $replacement = $context->operate($detection, $rule);
-
-            if ($replacement === $detection->value) {
-                // A preserving operator: detected, deliberately left alone.
-                continue;
-            }
-
-            $out .= substr($subject, $cursor, $detection->offset - $cursor).$replacement;
-            $cursor = $detection->end();
-            $changed = true;
-
-            $context->recordDetection($detection);
-        }
-
-        if (! $changed) {
-            return $subject;
-        }
-
-        return $out.substr($subject, $cursor);
-    }
-
-    /**
-     * Every span in the subject this rule accepts, in order.
+     * Every span in the subject one rule accepts, in order.
      *
      * Returns null if the engine failed; an empty array means a clean subject.
      *
      * @return array<int, Detection>|null
      */
-    private function detect(PatternRule $rule, string $subject, string $key, RedactionContext $context): ?array
+    private function detectRule(PatternRule $rule, string $subject, string $key): ?array
     {
         $found = @preg_match_all($rule->pattern, $subject, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
 
         if ($found === false || preg_last_error() !== PREG_NO_ERROR) {
-            Pcre::matches($rule->pattern, $subject, onError: true, rule: $rule->name);
-
             return null;
         }
 
+        $operator = $rule->hasExplicitOperator() ? $rule->operatorSpec() : null;
         $detections = [];
 
         foreach ($matches as $set) {
@@ -184,18 +131,31 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
                 continue;
             }
 
-            $detection = new Detection(
+            $confidence = $this->score($rule, $subject, $offset, $key);
+
+            if ($rule->replacesWholeValue()) {
+                // Legacy full mode: one match condemns the entire value. A
+                // span the width of the subject swallows every other report.
+                return [new Detection(
+                    entity: $rule->entity(),
+                    rule: $rule->name,
+                    offset: 0,
+                    value: $subject,
+                    confidence: $confidence,
+                    key: $key,
+                    operator: $operator,
+                )];
+            }
+
+            $detections[] = new Detection(
                 entity: $rule->entity(),
                 rule: $rule->name,
                 offset: $offset,
                 value: $text,
-                confidence: $this->score($rule, $text, $subject, $offset, $key),
+                confidence: $confidence,
                 key: $key,
+                operator: $operator,
             );
-
-            if ($context->accepts($detection)) {
-                $detections[] = $detection;
-            }
         }
 
         return $detections;
@@ -204,7 +164,7 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
     /**
      * Score a match from the rule's base confidence plus what surrounds it.
      */
-    private function score(PatternRule $rule, string $text, string $subject, int $offset, string $key): Confidence
+    private function score(PatternRule $rule, string $subject, int $offset, string $key): Confidence
     {
         $confidence = Confidence::of($rule->confidence, sprintf('pattern "%s" matched', $rule->name));
 
@@ -216,52 +176,16 @@ class RegexPatternsStrategy implements ChainableStrategy, RedactionStrategyInter
             );
         }
 
-        if ($this->hasNearbyKeyword($subject, $offset) || $this->keyLooksSensitive($key)) {
-            $confidence = $confidence->with(
-                'context',
-                self::KEYWORD_BOOST,
-                'a credential keyword appears alongside the match'
-            );
-        }
-
-        return $confidence;
+        return KeywordContext::boost($confidence, $subject, $offset, $key);
     }
 
     /**
-     * Whether a credential keyword sits just before the match.
-     *
-     * Only the text ahead of the match is considered: "token=<value>" is a
-     * label for what follows, whereas a keyword after the match usually belongs
-     * to the next field.
+     * @param  array<int, string>  $needles  already lowercased
      */
-    private function hasNearbyKeyword(string $subject, int $offset): bool
+    private function containsAny(string $haystack, array $needles): bool
     {
-        $start = max(0, $offset - self::KEYWORD_WINDOW);
-        $window = strtolower(substr($subject, $start, $offset - $start));
-
-        if ($window === '') {
-            return false;
-        }
-
-        foreach (self::KEYWORDS as $keyword) {
-            if (str_contains($window, $keyword)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function keyLooksSensitive(string $key): bool
-    {
-        if ($key === '') {
-            return false;
-        }
-
-        $lower = strtolower($key);
-
-        foreach (self::KEYWORDS as $keyword) {
-            if (str_contains($lower, $keyword)) {
+        foreach ($needles as $needle) {
+            if (str_contains($haystack, $needle)) {
                 return true;
             }
         }

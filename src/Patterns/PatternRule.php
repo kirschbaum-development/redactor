@@ -90,6 +90,21 @@ final readonly class PatternRule
          * What to do with what it finds. Null means the profile decides.
          */
         public ?OperatorSpec $operator = null,
+        /**
+         * Literals at least one of which must appear in the subject before
+         * the pattern is tried at all, compared case-insensitively.
+         *
+         * A prefilter, not a context requirement: it says nothing about
+         * where the literal sits. Its job is to keep an expensive pattern
+         * off subjects that cannot match - an email rule with `['@']` skips
+         * almost every string in a log payload for the cost of one
+         * str_contains() - and, for a rule like a bare phone number, to
+         * demand a label such as `phone` somewhere in the value before a
+         * ten-digit run is believed.
+         *
+         * @var array<int, string>
+         */
+        public array $keywords = [],
     ) {}
 
     /**
@@ -192,6 +207,11 @@ final readonly class PatternRule
             ? 0
             : ConfigValue::positiveInt($capture, 0, $path.'.capture');
 
+        $keywords = array_values(array_filter(array_map(
+            'strtolower',
+            ConfigValue::stringList($definition['keywords'] ?? [], $path.'.keywords')
+        ), fn (string $keyword) => $keyword !== ''));
+
         if ($maskCharacter === '') {
             $maskCharacter = '*';
         }
@@ -207,6 +227,7 @@ final readonly class PatternRule
             entity: $entity,
             confidence: $confidence,
             operator: $operator,
+            keywords: $keywords,
         );
     }
 
