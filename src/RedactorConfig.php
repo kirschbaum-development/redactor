@@ -114,7 +114,12 @@ readonly class RedactorConfig
             throw new \InvalidArgumentException("Invalid configuration for profile '".$profile."'.");
         }
 
-        $cached = ProfileCache::get($profile, $config);
+        // The global pseudonymization block is folded into every profile, so
+        // a change to it must rebuild the profile too - a rotated salt that
+        // did not take effect would keep old and new logs joinable.
+        $shared = ConfigValue::map(Config::get('redactor.pseudonymization', []), 'pseudonymization');
+
+        $cached = ProfileCache::get($profile, $config, $shared);
 
         if ($cached !== null) {
             return $cached;
@@ -169,7 +174,7 @@ readonly class RedactorConfig
             ),
         );
 
-        return ProfileCache::put($profile, $config, $built);
+        return ProfileCache::put($profile, $config, $built, $shared);
     }
 
     /**
@@ -186,7 +191,7 @@ readonly class RedactorConfig
         $global = ConfigValue::map(Config::get('redactor.pseudonymization', []), 'pseudonymization');
         $local = ConfigValue::map($profileSettings, "profiles.{$profile}.pseudonymization");
 
-        return [...$global, ...$local];
+        return [...$global, ...array_filter($local, fn ($v) => $v !== null)];
     }
 
     /**

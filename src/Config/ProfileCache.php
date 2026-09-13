@@ -23,25 +23,29 @@ use Kirschbaum\Redactor\RedactorConfig;
  */
 final class ProfileCache
 {
-    /** @var array<string, array{raw: array<mixed>, built: RedactorConfig}> */
+    /** @var array<string, array{raw: array<mixed>, shared: array<mixed>, built: RedactorConfig}> */
     private static array $entries = [];
 
     /**
-     * @param  array<mixed>  $raw
+     * @param  array<mixed>  $raw  the profile's own config
+     * @param  array<mixed>  $shared  package-level settings the profile was built with
      */
-    public static function get(string $profile, array $raw): ?RedactorConfig
+    public static function get(string $profile, array $raw, array $shared = []): ?RedactorConfig
     {
         $entry = self::$entries[$profile] ?? null;
 
-        return $entry !== null && $entry['raw'] === $raw ? $entry['built'] : null;
+        return $entry !== null && $entry['raw'] === $raw && $entry['shared'] === $shared
+            ? $entry['built']
+            : null;
     }
 
     /**
      * @param  array<mixed>  $raw
+     * @param  array<mixed>  $shared
      */
-    public static function put(string $profile, array $raw, RedactorConfig $built): RedactorConfig
+    public static function put(string $profile, array $raw, RedactorConfig $built, array $shared = []): RedactorConfig
     {
-        self::$entries[$profile] = ['raw' => $raw, 'built' => $built];
+        self::$entries[$profile] = ['raw' => $raw, 'shared' => $shared, 'built' => $built];
 
         return $built;
     }

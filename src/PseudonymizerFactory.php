@@ -28,8 +28,12 @@ final class PseudonymizerFactory
             return null;
         }
 
-        $salt = $settings['salt'] ?? $config->profile;
-        $salt = is_string($salt) ? $salt : $config->profile;
+        // Shared across profiles unless a profile sets its own: the audit
+        // channel on `strict` and the app channel on `observability` must
+        // produce the same surrogate for the same user, or the two logs
+        // cannot be joined - which is the whole point of pseudonymising.
+        $salt = $settings['salt'] ?? '';
+        $salt = is_string($salt) ? $salt : '';
 
         try {
             $key = $settings['key'] ?? null;
