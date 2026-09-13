@@ -33,6 +33,8 @@ final readonly class ScanFinding
         public ?VerificationResult $verification = null,
         /** The commit that added the line, when scanning git history. */
         public ?string $commit = null,
+        /** base64, url or json when the secret was found inside an encoded span. */
+        public ?string $encoding = null,
     ) {}
 
     public function withVerification(VerificationResult $result): self
@@ -50,6 +52,7 @@ final readonly class ScanFinding
             signals: $this->signals,
             verification: $result,
             commit: $this->commit,
+            encoding: $this->encoding,
         );
     }
 
@@ -72,6 +75,7 @@ final readonly class ScanFinding
             signals: $this->signals,
             verification: $this->verification,
             commit: $commit,
+            encoding: $this->encoding,
         );
     }
 
@@ -123,6 +127,7 @@ final readonly class ScanFinding
             'signals' => $this->signals,
             'verification' => $this->verification?->toArray(),
             'commit' => $this->commit,
+            'encoding' => $this->encoding,
             'profile' => $this->profile,
             'fingerprint' => $this->fingerprint,
         ];

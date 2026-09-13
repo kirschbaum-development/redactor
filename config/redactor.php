@@ -247,6 +247,14 @@ return [
         'overlap_lines' => env('REDACTOR_SCAN_OVERLAP_LINES', 4),
 
         /*
+        | Look inside base64, URL-encoded and JSON-escaped spans, one layer
+        | deep. A credential URL in a JSON file reads `https:\/\/user:pass@`,
+        | which no plain pattern matches; a key in a Kubernetes secret is
+        | base64. Findings say which encoding hid them.
+        */
+        'decode' => env('REDACTOR_SCAN_DECODE', true),
+
+        /*
         |----------------------------------------------------------------------
         | Credential verification
         |----------------------------------------------------------------------

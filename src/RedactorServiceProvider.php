@@ -38,6 +38,8 @@ class RedactorServiceProvider extends ServiceProvider
                 LineWindowReader::DEFAULT_OVERLAP_LINES,
                 'scan.overlap_lines'
             ) ?? 0,
+            null,
+            ConfigValue::bool(Config::get('redactor.scan.decode'), true, 'scan.decode'),
         ));
 
         $this->commands([

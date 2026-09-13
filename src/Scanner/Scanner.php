@@ -6,6 +6,8 @@ namespace Kirschbaum\Redactor\Scanner;
 
 use Kirschbaum\Redactor\Findings\MatchFinding;
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\Scanner\Decoding\Decoder;
+use Kirschbaum\Redactor\Scanner\Decoding\DerivedSubject;
 use Kirschbaum\Redactor\Scanner\Git\Patch;
 use Kirschbaum\Redactor\Verification\SecretVerifier;
 use Kirschbaum\Redactor\Verification\VerificationResult;
@@ -39,11 +41,16 @@ class Scanner
          * baseline file.
          */
         protected ?SecretVerifier $verifier = null,
+        /**
+         * Whether to look inside base64, URL-encoded and JSON-escaped spans.
+         * One layer deep, scanning only: see Decoder.
+         */
+        protected bool $decode = true,
     ) {}
 
     public function withVerifier(?SecretVerifier $verifier): self
     {
-        return new self($this->redactor, $this->windowLines, $this->overlapLines, $verifier);
+        return new self($this->redactor, $this->windowLines, $this->overlapLines, $verifier, $this->decode);
     }
 
     /**
@@ -126,29 +133,20 @@ class Scanner
         foreach ($reader as [$startLine, $window]) {
             $result = $this->redactor->redactWithMetadata($window, $profile);
 
-            if ($result->findings === []) {
-                continue;
+            $located = $result->findings === []
+                ? []
+                : $this->located($window, $result->value, $result->findings, $reportedPath, $profileName);
+
+            if ($this->decode) {
+                foreach (Decoder::derive($window) as $derived) {
+                    foreach ($this->locatedInDerived($derived, $window, $reportedPath, $profile, $profileName) as $finding) {
+                        $located[] = $finding;
+                    }
+                }
             }
 
-            $verdicts = $this->verifyAll($result->findings);
-
-            foreach ($this->locate($window, $result->value, $result->findings, $reportedPath, $profileName) as $index => $finding) {
-                $absolute = new ScanFinding(
-                    path: $finding->path,
-                    rule: $finding->rule,
-                    line: $startLine + $finding->line - 1,
-                    column: $finding->column,
-                    excerpt: $finding->excerpt,
-                    profile: $finding->profile,
-                    fingerprint: $finding->fingerprint,
-                    entity: $finding->entity,
-                    confidence: $finding->confidence,
-                    signals: $finding->signals,
-                );
-
-                if (isset($verdicts[$index])) {
-                    $absolute = $absolute->withVerification($verdicts[$index]);
-                }
+            foreach ($located as $finding) {
+                $absolute = $finding->at($startLine + $finding->line - 1, null);
 
                 // Overlapping windows see the same span twice; identity is the
                 // rule and the place, not the order it was found in.
@@ -165,6 +163,68 @@ class Scanner
             findings: $ordered,
             profile: $profileName
         );
+    }
+
+    /**
+     * Locate and verify one window's matches.
+     *
+     * @param  array<int, MatchFinding>  $matches
+     * @return array<int, ScanFinding>
+     */
+    private function located(string $window, mixed $redacted, array $matches, string $path, string $profileName): array
+    {
+        $verdicts = $this->verifyAll($matches);
+        $findings = [];
+
+        foreach ($this->locate($window, $redacted, $matches, $path, $profileName) as $index => $finding) {
+            $findings[] = isset($verdicts[$index]) ? $finding->withVerification($verdicts[$index]) : $finding;
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Scan text recovered from an encoded span and report what it holds at the
+     * span's own position, with an excerpt taken from the decoded, redacted
+     * text so the report shows what was found without repeating it.
+     *
+     * @return array<int, ScanFinding>
+     */
+    private function locatedInDerived(DerivedSubject $derived, string $window, string $path, ?string $profile, string $profileName): array
+    {
+        $result = $this->redactor->redactWithMetadata($derived->text, $profile);
+
+        if ($result->findings === []) {
+            return [];
+        }
+
+        $lineStarts = self::lineStarts($window);
+        $line = self::lineForOffset($lineStarts, $derived->offset);
+        $column = $derived->offset - $lineStarts[$line - 1] + 1;
+        $verdicts = $this->verifyAll($result->findings);
+        $redacted = is_string($result->value) ? $result->value : '';
+
+        $findings = [];
+
+        foreach ($result->findings as $index => $match) {
+            $finding = new ScanFinding(
+                path: $path,
+                rule: $match->rule,
+                line: $line,
+                column: $column,
+                excerpt: sprintf('[%s] %s', $derived->encoding, self::excerpt(strtok($redacted, "\n") ?: '')),
+                profile: $profileName,
+                fingerprint: ScanFinding::fingerprint($match->rule, $path, $match->matched),
+                entity: $match->entity(),
+                confidence: $match->confidence?->score,
+                signals: $match->confidence?->explain() ?? [],
+                encoding: $derived->encoding,
+            );
+
+            $findings[] = isset($verdicts[$index]) ? $finding->withVerification($verdicts[$index]) : $finding;
+        }
+
+        return $findings;
     }
 
     /**
