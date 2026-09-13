@@ -66,6 +66,14 @@ All notable changes to this project will be documented in this file.
 - **Dictionary rules.** A pattern can be a `words` list - codenames, customer
   names, anything no regex expresses - compiled into one whole-word,
   case-insensitive alternation, longest first.
+- **Known secrets.** `known_secrets.values` and `known_secrets.config` register
+  the application's own credentials - `app.key` by default - so they are
+  redacted wherever they appear verbatim, in every profile; the config form
+  registers every string under an array key. `Redactor::registerSecret()` adds
+  one at runtime. Values under eight characters are refused.
+- **`redactor:allow` on a line** suppresses the scanner's findings for that
+  line, for the fixture or the documented example that a baseline would also
+  accept but without the reason living in a JSON file.
 - **`Detector` contract.** Anything that can report `Detection`s against a
   string - a regex, an entropy measure, a recogniser model in another process
   - plugs into the same resolution and operator pipeline.

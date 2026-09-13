@@ -73,8 +73,9 @@ The package uses a class-based configuration:
 2. **BlockedKeysStrategy** - Always redacts blocked keys like `password`, `secret`
 3. **LargeObjectStrategy** - Redacts objects/arrays exceeding size limits
 4. **LargeStringStrategy** - Truncates strings exceeding length limits, scanning the head it keeps
-5. **RegexPatternsStrategy** - Custom regex patterns for emails, credit cards, etc.
-6. **ShannonEntropyStrategy** - Detects high-entropy strings (API keys, tokens)
+5. **KnownSecretsStrategy** - Redacts the application's own credentials wherever they appear verbatim
+6. **RegexPatternsStrategy** - Custom regex patterns for emails, credit cards, etc.
+7. **ShannonEntropyStrategy** - Detects high-entropy strings (API keys, tokens)
 
 Strategies run in the order the profile lists them, and the chain stops at the
 first strategy that replaces a value outright. The regex and entropy strategies
@@ -317,6 +318,32 @@ A rule can carry its own exceptions, scoped to that rule alone:
 
 ```php
 'email' => ['pattern' => EMAIL, 'allow' => ['/@example\.com$/']],
+```
+
+## Known Secrets
+
+Every other detector infers. This one knows: the application's own credentials
+are already in config, and a log line containing one of them verbatim is a leak
+whatever it looks like.
+
+```php
+'known_secrets' => [
+    'values' => [env('LEGACY_SIGNING_KEY')],
+    'config' => [
+        'app.key',                                // shipped default
+        'services.stripe.secret',
+        'database.connections.mysql.password',
+        'services.acme',                          // an array: every string under it
+    ],
+],
+```
+
+Matching is exact and case-sensitive. Values under eight characters and nulls
+are skipped, so an unset secret in a local environment never fails the profile.
+A credential that only exists at runtime is registered the same way:
+
+```php
+Redactor::registerSecret($vault->read('signing-key'));
 ```
 
 ## Path Rules
@@ -963,6 +990,16 @@ request:
 - uses: github/codeql-action/upload-sarif@v3
   with:
     sarif_file: redactor.sarif
+```
+
+### Suppressing a finding in place
+
+A fixture, a documented example, a sandbox credential: mark the line and the
+scanner skips it, with the reason next to the code rather than in a baseline
+file.
+
+```php
+$stripe = 'sk_test_4eC39HqLyjWDarjtT1zdp7dc'; // redactor:allow - Stripe's public test key
 ```
 
 ### Baselines
