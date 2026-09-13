@@ -95,6 +95,11 @@ All notable changes to this project will be documented in this file.
 - **`redact` middleware.** `->middleware('redact:profile')` redacts a
   response before it is sent: JSON as data, text as text, files untouched,
   never writing `_redacted` markers into a payload, failing closed to a 500.
+- **Streaming redaction.** `Streaming\StreamRedactor` redacts chunk by chunk
+  with a hold-back window, so a secret split across two chunks is still caught;
+  `through()` for iterables of chunks, `wrap()` for echoing callbacks,
+  `response()` for a streamed response. The `redact` middleware applies it to
+  streamed responses automatically.
 - **`nullify` operator.** Replaces a value with null so a typed field keeps
   its type and its key; inside a string it deletes the span.
 - **`Redactor::fake()`** for application test suites: a redactor that still

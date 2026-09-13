@@ -971,6 +971,29 @@ The middleware fails closed: a response that cannot be redacted becomes a 500
 with none of the original body, not the original body. Run `redactor:validate`
 at deploy time so that never happens in production.
 
+### Streams
+
+A streamed response - server-sent events, a model's tokens, a file piped
+through - is redacted as it streams. The middleware wraps the callback; for
+anything else, wrap the chunks yourself:
+
+```php
+use Kirschbaum\Redactor\Streaming\StreamRedactor;
+
+$stream = new StreamRedactor(app(Redactor::class), 'observability');
+
+foreach ($stream->through($llm->tokens()) as $safe) {
+    echo $safe;                       // emitted only once it cannot be half a secret
+}
+
+return $stream->response(fn () => $this->export($rows));   // a StreamedResponse
+```
+
+The last kilobyte of input (configurable) is held back until more arrives, so a
+secret split across two chunks is still caught, and the cut always falls on a
+line end - or, when a stream goes a whole window without one, a word boundary.
+An open PEM block is held whole. The cost is latency in bytes, not time.
+
 ## Where Else To Use It
 
 The Monolog tap covers the log channel. The same call covers everything else
