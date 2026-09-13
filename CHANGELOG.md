@@ -95,6 +95,11 @@ All notable changes to this project will be documented in this file.
 - **`redact` middleware.** `->middleware('redact:profile')` redacts a
   response before it is sent: JSON as data, text as text, files untouched,
   never writing `_redacted` markers into a payload, failing closed to a 500.
+- **MCP and AI adapters.** `Mcp\RedactsResponses` on a Laravel MCP server
+  redacts tool results, structured content, resource reads, prompt messages,
+  streamed output and errors over any transport; `Ai\RedactPrompt` middleware
+  redacts a prompt before the provider and resolves tokens in the answer. Both
+  SDKs are suggested, not required.
 - **`RedactionPerformed` event** with the profile, keys and counts per rule
   and entity, never a value; a throwing listener cannot break redaction.
 - **Reversible tokens.** The `tokenize` operator replaces a value with a

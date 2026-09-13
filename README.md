@@ -1018,6 +1018,53 @@ secret split across two chunks is still caught, and the cut always falls on a
 line end - or, when a stream goes a whole window without one, a word boundary.
 An open PEM block is held whole. The cost is latency in bytes, not time.
 
+## MCP Servers
+
+An MCP server hands data straight to a model. With Laravel's MCP package,
+one trait redacts everything the server returns, over HTTP or stdio: tool
+results, structured content, resource reads, prompt messages, streamed tool
+output and error messages. Binary content and the protocol envelope are left
+alone.
+
+```php
+use Kirschbaum\Redactor\Mcp\RedactsResponses;
+
+class SupportServer extends Server
+{
+    use RedactsResponses;
+
+    protected function redactionProfile(): ?string
+    {
+        return 'observability';    // or a profile that tokenises, see below
+    }
+}
+```
+
+It sits where the server builds its responses, so the package's own test
+helpers exercise it: `SupportServer::tool(LookupCustomer::class)->assertDontSee($email)`.
+
+## AI Agents
+
+With Laravel's AI package, the `RedactPrompt` middleware redacts a prompt
+before the provider sees it and resolves tokens in the answer on the way back:
+
+```php
+use Kirschbaum\Redactor\Ai\RedactPrompt;
+
+class SupportAgent extends Agent implements HasMiddleware
+{
+    public function middleware(): array
+    {
+        return [RedactPrompt::using('ai')];
+    }
+}
+```
+
+With a profile whose operators tokenise, the model reasons about
+`tok_email_k4m9rp2xzq` and the application receives the real address back in
+the response text. With a profile that redacts outright, the model never sees
+the value. Pass `detokenizeResponse: false` to keep tokens in the answer.
+
 ## Events
 
 Every redaction that changed something dispatches `RedactionPerformed` with
