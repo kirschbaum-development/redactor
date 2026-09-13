@@ -74,6 +74,16 @@ All notable changes to this project will be documented in this file.
 - **`redactor:allow` on a line** suppresses the scanner's findings for that
   line, for the fixture or the documented example that a baseline would also
   accept but without the reason living in a JSON file.
+- **Entity recognition.** `EntityRecognitionStrategy` asks a named entity
+  recogniser about free text and feeds what it finds - people, places,
+  organisations - through the same overlap resolution, confidence floor and
+  operators as every other detector. The built-in driver speaks Presidio's
+  `/analyze` contract; `Redactor::registerRecognizer()` adds others. Gated to
+  prose-shaped values within a length band, to the labels asked for and the
+  score threshold set; every span's character offsets are converted and
+  verified against the value before replacement; failures degrade to
+  rules-only and a circuit breaker stops a dead sidecar being asked on every
+  log line. Present in the shipped profiles and inert until enabled.
 - **`Detector` contract.** Anything that can report `Detection`s against a
   string - a regex, an entropy measure, a recogniser model in another process
   - plugs into the same resolution and operator pipeline.

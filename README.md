@@ -76,6 +76,7 @@ The package uses a class-based configuration:
 5. **KnownSecretsStrategy** - Redacts the application's own credentials wherever they appear verbatim
 6. **RegexPatternsStrategy** - Custom regex patterns for emails, credit cards, etc.
 7. **ShannonEntropyStrategy** - Detects high-entropy strings (API keys, tokens)
+8. **EntityRecognitionStrategy** - Asks a named entity recogniser about free text; inert until enabled
 
 Strategies run in the order the profile lists them, and the chain stops at the
 first strategy that replaces a value outright. The regex and entropy strategies
@@ -344,6 +345,60 @@ A credential that only exists at runtime is registered the same way:
 
 ```php
 Redactor::registerSecret($vault->read('signing-key'));
+```
+
+## Entity Recognition
+
+Names, addresses and organisations are the PII no regex can express and no
+entropy measure can see. A named entity recogniser can find them, at a cost
+three orders of magnitude above the rule engine, so the package treats it as
+a gated extra rather than a default.
+
+The recogniser speaks Presidio's `/analyze` contract - text in, a list of
+`{entity_type, start, end, score}` out - so the reference Presidio analyzer,
+the same analyzer with a transformer recogniser, or a small wrapper around any
+fine-tuned model all work without a line of PHP:
+
+```php
+'recognition' => [
+    'enabled'         => true,
+    'driver'          => 'presidio',
+    'url'             => 'http://presidio:5002/analyze',
+    'entities'        => ['PERSON', 'LOCATION', 'ORGANIZATION'],
+    'entity_map'      => ['PERSON' => 'person', 'LOCATION' => 'location'],
+    'score_threshold' => 0.6,
+],
+
+'operators' => [
+    'person'   => 'surrogate',
+    'location' => 'redact',
+],
+```
+
+What the gate does:
+
+- Only values that read as prose, between `min_length` and `max_length`, are
+  sent. A JSON blob, a stack trace or a bare token is not something a model
+  reads well, and its guesses would be the false positives the gate exists to
+  prevent.
+- Only the labels listed, at or above `score_threshold`, become findings.
+- Every span comes back in character offsets and is converted to bytes and
+  checked against the value before it is replaced. A span that does not line
+  up is skipped, never guessed.
+- A recogniser that fails is skipped and the output is rules-only. After
+  `failure_threshold` consecutive failures it is not asked again for
+  `cooldown` seconds, so a dead sidecar costs one timeout, not one per log
+  line.
+- Recognised spans go through the same overlap resolution, confidence floor
+  and operators as everything else. A `person` becomes a stable surrogate
+  exactly the way an email does.
+
+Enable it on the profiles used from queues, exports and scans, not on the
+request path. To plug in something that does not speak the Presidio contract,
+implement `Recognition\Recognizer` and register it:
+
+```php
+Redactor::registerRecognizer(new MyOnnxRecognizer);   // then 'driver' => 'my-onnx'
 ```
 
 ## Path Rules
@@ -887,6 +942,8 @@ REDACTOR_PSEUDONYMIZATION_SALT=
 REDACTOR_SHANNON_ENABLED=true
 REDACTOR_SHANNON_THRESHOLD=4.8
 REDACTOR_SHANNON_MIN_LENGTH=25
+REDACTOR_RECOGNITION=false
+REDACTOR_RECOGNITION_URL=http://127.0.0.1:5002/analyze
 
 # File scanning
 REDACTOR_SCAN_PROFILE=file_scan
@@ -1053,7 +1110,8 @@ Still open:
 
 - Reversible tokenisation against an external vault
 - More built-in verifiers (AWS, GCP, Azure, Twilio)
-- Entity recognition beyond regex and entropy
+- An in-process ONNX recogniser, so entity recognition needs no sidecar
+- Batching every candidate string in a payload into one recogniser call
 
 ## License
 
