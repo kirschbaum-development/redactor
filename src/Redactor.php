@@ -18,6 +18,7 @@ use Kirschbaum\Redactor\Strategies\Contracts\ConditionalStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
 use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
+use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Strategies\StrategyOutcome;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Kirschbaum\Redactor\Support\SecretRegistry;
@@ -243,6 +244,14 @@ class Redactor
 
                 if ($unresolved !== []) {
                     $errors[$profile] = 'Unresolvable strategies: '.implode(', ', $unresolved);
+
+                    continue;
+                }
+
+                $failedSamples = $this->checkSamples($config);
+
+                if ($failedSamples !== []) {
+                    $errors[$profile] = implode('; ', $failedSamples);
                 }
             } catch (\Throwable $e) {
                 $errors[$profile] = $e->getMessage();
@@ -250,6 +259,47 @@ class Redactor
         }
 
         return $errors;
+    }
+
+    /**
+     * Run every rule that carries samples against them, through the real
+     * detection path - keywords, min_length, validators and allow-lists all
+     * apply - and describe each one that fails.
+     *
+     * @return array<int, string>
+     */
+    private function checkSamples(RedactorConfig $config): array
+    {
+        $strategy = new RegexPatternsStrategy;
+        $context = new RedactionContext($config, $this->operators, $this->secrets, $this->recognizers);
+        $problems = [];
+
+        foreach ($config->patterns as $rule) {
+            foreach ($rule->samples as $sample) {
+                if (! $this->ruleDetectsIn($strategy, $rule->name, $sample, $context)) {
+                    $problems[] = sprintf('rule "%s" does not detect its sample %s', $rule->name, json_encode($sample));
+                }
+            }
+
+            foreach ($rule->counterSamples as $sample) {
+                if ($this->ruleDetectsIn($strategy, $rule->name, $sample, $context)) {
+                    $problems[] = sprintf('rule "%s" detects its counter-sample %s', $rule->name, json_encode($sample));
+                }
+            }
+        }
+
+        return $problems;
+    }
+
+    private function ruleDetectsIn(RegexPatternsStrategy $strategy, string $rule, string $subject, RedactionContext $context): bool
+    {
+        foreach ($strategy->detect($subject, '', $context) as $detection) {
+            if ($detection->rule === $rule) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

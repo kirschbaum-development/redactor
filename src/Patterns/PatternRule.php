@@ -122,6 +122,22 @@ final readonly class PatternRule
          * miss real matches - so when in doubt leave it at 1.
          */
         public int $minLength = 1,
+        /**
+         * Texts this rule must detect something in, checked by redactor:validate.
+         *
+         * A rule that carries its own examples proves itself in CI: a regex
+         * edit that silently stops matching the thing it was written for
+         * fails the deploy instead of the audit.
+         *
+         * @var array<int, string>
+         */
+        public array $samples = [],
+        /**
+         * Texts this rule must not detect anything in.
+         *
+         * @var array<int, string>
+         */
+        public array $counterSamples = [],
     ) {}
 
     /**
@@ -255,6 +271,8 @@ final readonly class PatternRule
         $allow = ConfigValue::stringList($definition['allow'] ?? [], $path.'.allow');
 
         $minLength = ConfigValue::positiveInt($definition['min_length'] ?? 1, 1, $path.'.min_length');
+        $samples = ConfigValue::stringList($definition['samples'] ?? [], $path.'.samples');
+        $counterSamples = ConfigValue::stringList($definition['counter_samples'] ?? [], $path.'.counter_samples');
 
         if ($maskCharacter === '') {
             $maskCharacter = '*';
@@ -274,6 +292,8 @@ final readonly class PatternRule
             keywords: $keywords,
             allow: $allow === [] ? null : AllowList::for($allow),
             minLength: $minLength,
+            samples: $samples,
+            counterSamples: $counterSamples,
         );
     }
 
