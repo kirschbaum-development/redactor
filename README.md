@@ -554,6 +554,30 @@ profile that must not be linkable back sets its own salt:
 
 The shipped `observability` profile is set up for this.
 
+### Reversible tokens
+
+A surrogate is one-way. A token is a surrogate the *application* can exchange
+back, which is what the boundary in front of a language model needs: the model
+sees `tok_email_k4m9rp2xzq`, refers to it in its answer, and the application
+resolves it before acting.
+
+```php
+'operators' => ['email' => 'tokenize', 'credit_card' => ['tokenize' => ['ttl' => 600]]],
+```
+
+```php
+$prompt = Redactor::redact($ticket, 'ai');          // 'reply to tok_email_k4m9rp2xzq about ...'
+$answer = $llm->complete($prompt);                   // the model reasons about the token
+$action = Redactor::detokenize($answer);             // 'reply to alice@customer.com about ...'
+```
+
+Tokens are derived with the pseudonymisation key, so they are stable and
+cannot be guessed. Originals are kept in the cache, encrypted with the
+application key, for `redactor.tokenization.ttl` seconds; a token the store no
+longer knows, or one a model invented, is left exactly as it is. Anyone holding
+the cache and the application key can resolve tokens, which is the trust the
+application itself already carries.
+
 ## Confidence
 
 Binary matching forces a choice between noise and misses: the only way to quieten
