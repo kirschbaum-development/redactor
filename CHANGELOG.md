@@ -92,6 +92,10 @@ All notable changes to this project will be documented in this file.
   numbers, with the commit that added them for history. A secret removed by a
   later commit is still found. Paths given with a git mode act as a pathspec;
   exclude patterns still apply.
+- **`Redactor::fake()`** for application test suites: a redactor that still
+  redacts but records every call, with `assertNeverEmitted()`,
+  `assertRedacted()`, `assertFinding()`, `assertProfileUsed()` and friends,
+  so a test can prove a secret never left rather than hope it did not.
 - **Self-testing rules.** A rule carries `samples` and `counter_samples`, and
   `redactor:validate` runs them through the real detection path - keywords,
   min_length, validators and allow-lists applied - failing on a rule that no

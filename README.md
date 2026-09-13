@@ -1208,6 +1208,30 @@ Coverage and mutation testing need a coverage driver (pcov or Xdebug) loaded
 in the CLI; without one Pest reports no coverage and generates no mutations.
 Both scripts raise the memory limit, which the coverage report needs.
 
+### In your own test suite
+
+Redaction is a runtime promise, and a promise nobody tests is one that quietly
+stops being kept. `Redactor::fake()` swaps in a redactor that still redacts
+but remembers every call, so a test can say the thing that matters:
+
+```php
+use Kirschbaum\Redactor\Facades\Redactor;
+
+$fake = Redactor::fake();          // before the code under test logs anything
+
+$this->postJson('/login', ['email' => 'bob@example.com', 'password' => 'hunter2']);
+
+$fake->assertNeverEmitted('hunter2', 'bob@example.com');  // across every call and profile
+$fake->assertRedacted('password');
+$fake->assertFinding('email');
+$fake->assertProfileUsed('strict');
+```
+
+`assertNeverEmitted()` checks everything the redactor produced, whichever path
+it took - the log tap, a queued export, a response. Install the fake before a
+log channel is first used, because the tap resolves the redactor when the
+channel is built.
+
 ## Roadmap
 
 Done since the last release: partial (span-level) replacement, a Monolog
