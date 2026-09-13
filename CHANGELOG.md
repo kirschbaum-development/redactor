@@ -55,10 +55,13 @@ All notable changes to this project will be documented in this file.
   `phone` or `tel`; before, every Unix timestamp and ten-digit order number in
   a log message was redacted as one. The `strict` profile's phone rule, which
   matched any run of seven digits and spaces, is gone.
-- **Pattern `keywords`.** A rule can name literals that must appear in the
-  value before its pattern is tried. A prefilter for cost - `['@']` keeps the
-  email regex off almost every string in a payload - and for precision, so a
-  bare ten-digit run needs a `phone` label somewhere before it is believed.
+- **Pattern `keywords` and `min_length`.** A rule can name literals that must
+  appear in the value before its pattern is tried - a prefilter for cost, since
+  `['@']` keeps the email regex off almost every string in a payload, and for
+  precision, so a bare ten-digit run needs a `phone` label somewhere before it
+  is believed - and the shortest text it could match, so a shorter value skips
+  the rule with one integer compare. Every shipped rule declares both where
+  they apply.
 - **Allow-lists.** A profile `allowlist` of literals and regexes that are
   never findings whichever detector reports them, and a per-rule `allow` list
   scoped to one rule. Checked after detection, so patterns stay as strong as
@@ -110,6 +113,12 @@ All notable changes to this project will be documented in this file.
   payload that redacts to nothing costs a walk and no copy.
 - Net effect: the default profile went from ~17,600 to ~26,800 redactions/sec,
   and a 2.2KB file-scan subject from ~8,200 to ~26,300.
+- The pseudonymizer is resolved lazily by the operators that need it. Routing
+  blocked keys through operators had made every redaction with a blocked key
+  derive an HMAC key it then never used.
+- Each rule asks a capture-free `preg_match()` before `preg_match_all()` with
+  offsets, since most rules do not match most values, and skips the subject
+  outright when it is shorter than the rule's `min_length`.
 - The entropy detector asks PCRE for tokens of at least `min_length` rather
   than every token, since shorter ones can never qualify. A 1 MB subject of
   ordinary words held ~180,000 [token, offset] pairs - ten times the input -

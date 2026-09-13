@@ -284,6 +284,20 @@ number in a value that says `phone` and a Unix timestamp almost everywhere
 else, and a keyword lets the rule ask for the label without a regex that has to
 know where the label sits.
 
+### Minimum length
+
+A rule can also state the shortest text it could possibly match:
+
+```php
+'aws_access_key' => ['pattern' => '/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/', 'min_length' => 20],
+```
+
+A shorter value skips the rule with one integer compare, before PCRE is
+involved. Most values in a log payload are a few bytes and most credential
+rules need twenty or more, so this retires most of the list on most values.
+The number must never exceed the true minimum or the rule misses real
+matches; when in doubt leave it out. Every shipped rule declares one.
+
 ### Dictionary rules
 
 A rule can be a list of words instead of a regex. Product codenames, internal
