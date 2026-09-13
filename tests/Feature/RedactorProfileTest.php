@@ -12,8 +12,8 @@ use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 
-describe('Redactor Profile Tests', function () {
-    beforeEach(function () {
+describe('Redactor Profile Tests', function (): void {
+    beforeEach(function (): void {
         // Set up the profile-based config structure
         config()->set('redactor.default_profile', 'default');
         config()->set('redactor.profiles', [
@@ -83,7 +83,7 @@ describe('Redactor Profile Tests', function () {
         ]);
     });
 
-    test('it uses the default profile when no profile is specified', function () {
+    test('it uses the default profile when no profile is specified', function (): void {
         $redactor = new Redactor;
 
         $data = [
@@ -100,7 +100,7 @@ describe('Redactor Profile Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    test('it uses the specified profile when provided', function () {
+    test('it uses the specified profile when provided', function (): void {
         $redactor = new Redactor;
 
         $data = [
@@ -120,7 +120,7 @@ describe('Redactor Profile Tests', function () {
             ->and($result['_redacted_keys'])->toContain('name');
     });
 
-    test('it respects profile-specific configuration options', function () {
+    test('it respects profile-specific configuration options', function (): void {
         $redactor = new Redactor;
 
         $data = [
@@ -136,17 +136,17 @@ describe('Redactor Profile Tests', function () {
             ->and($result)->not->toHaveKey('_redacted'); // No redaction metadata
     });
 
-    test('it throws exception for non-existent profile', function () {
+    test('it throws exception for non-existent profile', function (): void {
         $redactor = new Redactor;
 
-        expect(fn () => $redactor->redact(['test' => 'data'], 'non_existent'))
+        expect(fn (): mixed => $redactor->redact(['test' => 'data'], 'non_existent'))
             ->toThrow(ProfileNotFoundException::class, 'Redaction profile [non_existent] is not configured.');
     });
 
-    test('it can list available profiles', function () {
+    test('it can list available profiles', function (): void {
         $redactor = new Redactor;
 
-        $profiles = $redactor->getAvailableProfiles();
+        $profiles = $redactor->profiles();
 
         expect($profiles)->toBeArray()
             ->and($profiles)->toContain('default')
@@ -155,35 +155,35 @@ describe('Redactor Profile Tests', function () {
             ->and($profiles)->toHaveCount(3);
     });
 
-    test('it can check if a profile exists', function () {
+    test('it can check if a profile exists', function (): void {
         $redactor = new Redactor;
 
-        expect($redactor->profileExists('default'))->toBeTrue()
-            ->and($redactor->profileExists('strict'))->toBeTrue()
-            ->and($redactor->profileExists('performance'))->toBeTrue()
-            ->and($redactor->profileExists('non_existent'))->toBeFalse();
+        expect($redactor->hasProfile('default'))->toBeTrue()
+            ->and($redactor->hasProfile('strict'))->toBeTrue()
+            ->and($redactor->hasProfile('performance'))->toBeTrue()
+            ->and($redactor->hasProfile('non_existent'))->toBeFalse();
     });
 
-    test('it loads strategies based on profile configuration', function () {
+    test('it loads strategies based on profile configuration', function (): void {
         $redactor = new Redactor;
 
-        $defaultStrategies = $redactor->getStrategies('default');
-        $performanceStrategies = $redactor->getStrategies('performance');
+        $defaultStrategies = $redactor->strategies('default');
+        $performanceStrategies = $redactor->strategies('performance');
 
         expect($defaultStrategies)->toBeArray()
             ->and($performanceStrategies)->toBeArray();
 
         // Both should have safe_keys and blocked_keys
-        $defaultStrategyNames = array_map(fn ($s) => get_class($s), $defaultStrategies);
-        $performanceStrategyNames = array_map(fn ($s) => get_class($s), $performanceStrategies);
+        $defaultStrategyNames = array_map(get_class(...), $defaultStrategies);
+        $performanceStrategyNames = array_map(get_class(...), $performanceStrategies);
 
-        expect($defaultStrategyNames)->toContain('Kirschbaum\Redactor\Strategies\SafeKeysStrategy')
-            ->and($defaultStrategyNames)->toContain('Kirschbaum\Redactor\Strategies\BlockedKeysStrategy')
-            ->and($performanceStrategyNames)->toContain('Kirschbaum\Redactor\Strategies\SafeKeysStrategy')
-            ->and($performanceStrategyNames)->toContain('Kirschbaum\Redactor\Strategies\BlockedKeysStrategy');
+        expect($defaultStrategyNames)->toContain(SafeKeysStrategy::class)
+            ->and($defaultStrategyNames)->toContain(BlockedKeysStrategy::class)
+            ->and($performanceStrategyNames)->toContain(SafeKeysStrategy::class)
+            ->and($performanceStrategyNames)->toContain(BlockedKeysStrategy::class);
     });
 
-    test('it can register custom strategies', function () {
+    test('it can register custom strategies', function (): void {
         $redactor = new Redactor;
 
         $customStrategy = new class implements Strategy
@@ -209,11 +209,11 @@ describe('Redactor Profile Tests', function () {
         $redactor->registerCustomStrategy('my_custom', $customStrategy);
 
         // Test that we can get strategies (should include our custom one for profiles that use it)
-        $strategies = $redactor->getStrategies();
+        $strategies = $redactor->strategies();
         expect($strategies)->toBeArray();
     });
 
-    test('it handles disabled profile gracefully', function () {
+    test('it handles disabled profile gracefully', function (): void {
         // Add a disabled profile
         config()->set('redactor.profiles.disabled_profile', [
             'enabled' => false,
@@ -240,7 +240,7 @@ describe('Redactor Profile Tests', function () {
         expect($result)->toBe($data);
     });
 
-    test('it validates RedactorConfig creation from profile', function () {
+    test('it validates RedactorConfig creation from profile', function (): void {
         $config = RedactorConfig::fromConfig('strict');
 
         expect($config->profile)->toBe('strict')

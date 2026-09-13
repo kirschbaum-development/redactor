@@ -11,13 +11,13 @@ use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
 use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 
-describe('Redactor Configuration Tests', function () {
-    beforeEach(function () {
+describe('Redactor Configuration Tests', function (): void {
+    beforeEach(function (): void {
         // Set up basic profile structure for tests
         config()->set('redactor.default_profile', 'default');
     });
 
-    it('can be disabled via configuration', function () {
+    it('can be disabled via configuration', function (): void {
         config()->set('redactor.profiles.default', [
             'enabled' => false,
             'strategies' => [BlockedKeysStrategy::class],
@@ -46,7 +46,7 @@ describe('Redactor Configuration Tests', function () {
         expect($result)->toBe($context);
     });
 
-    it('does not add redacted flag when mark_redacted is false', function () {
+    it('does not add redacted flag when mark_redacted is false', function (): void {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [BlockedKeysStrategy::class],
@@ -73,12 +73,12 @@ describe('Redactor Configuration Tests', function () {
     });
 });
 
-describe('RedactorConfig DTO Tests', function () {
-    beforeEach(function () {
+describe('RedactorConfig DTO Tests', function (): void {
+    beforeEach(function (): void {
         config()->set('redactor.default_profile', 'default');
     });
 
-    it('creates config from Laravel configuration with defaults', function () {
+    it('creates config from Laravel configuration with defaults', function (): void {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
@@ -121,7 +121,7 @@ describe('RedactorConfig DTO Tests', function () {
             ->and($config->profile)->toBe('default');
     });
 
-    it('creates config with custom values and handles invalid patterns', function () {
+    it('creates config with custom values and handles invalid patterns', function (): void {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [
@@ -158,7 +158,7 @@ describe('RedactorConfig DTO Tests', function () {
             ->and($config->nonRedactableObjectBehavior)->toBe('remove');
     });
 
-    it('rejects a non-numeric max_value_length instead of silently disabling it', function () {
+    it('rejects a non-numeric max_value_length instead of silently disabling it', function (): void {
         config()->set('redactor.profiles.default', [
             'enabled' => true,
             'strategies' => [SafeKeysStrategy::class],
@@ -177,25 +177,25 @@ describe('RedactorConfig DTO Tests', function () {
 
         // Previously this fell back to null, silently switching off the length
         // cap the operator had asked for.
-        expect(fn () => RedactorConfig::fromConfig())
+        expect(fn (): RedactorConfig => RedactorConfig::fromConfig())
             ->toThrow(\InvalidArgumentException::class, 'profiles.default.max_value_length');
     });
 
-    it('throws exception for non-existent profile', function () {
+    it('throws exception for non-existent profile', function (): void {
         config()->set('redactor.profiles', []); // Empty profiles
 
-        expect(fn () => RedactorConfig::fromConfig('non_existent'))
+        expect(fn (): RedactorConfig => RedactorConfig::fromConfig('non_existent'))
             ->toThrow(ProfileNotFoundException::class, 'Redaction profile [non_existent] is not configured.');
     });
 
-    it('can list available profiles', function () {
+    it('can list available profiles', function (): void {
         config()->set('redactor.profiles', [
             'default' => ['enabled' => true],
             'strict' => ['enabled' => true],
             'performance' => ['enabled' => true],
         ]);
 
-        $profiles = RedactorConfig::getAvailableProfiles();
+        $profiles = RedactorConfig::profiles();
 
         expect($profiles)->toBeArray()
             ->and($profiles)->toContain('default')
@@ -204,27 +204,27 @@ describe('RedactorConfig DTO Tests', function () {
             ->and($profiles)->toHaveCount(3);
     });
 
-    it('checks if profile exists', function () {
+    it('checks if profile exists', function (): void {
         config()->set('redactor.profiles', [
             'default' => ['enabled' => true],
             'strict' => ['enabled' => true],
         ]);
 
-        expect(RedactorConfig::profileExists('default'))->toBeTrue()
-            ->and(RedactorConfig::profileExists('strict'))->toBeTrue()
-            ->and(RedactorConfig::profileExists('non_existent'))->toBeFalse();
+        expect(RedactorConfig::hasProfile('default'))->toBeTrue()
+            ->and(RedactorConfig::hasProfile('strict'))->toBeTrue()
+            ->and(RedactorConfig::hasProfile('non_existent'))->toBeFalse();
     });
 
-    it('throws exception for invalid profile configuration types', function () {
+    it('throws exception for invalid profile configuration types', function (): void {
         // Test when profile config is not an array
         config()->set('redactor.profiles.invalid_profile', 'not_an_array');
 
-        expect(function () {
+        expect(function (): void {
             RedactorConfig::fromConfig('invalid_profile');
         })->toThrow(ConfigurationException::class, 'Redaction profile [invalid_profile] must be an array.');
     });
 
-    it('rejects zero and negative max_value_length', function () {
+    it('rejects zero and negative max_value_length', function (): void {
         foreach ([0, -5, '0', '-5'] as $bad) {
             config()->set('redactor.profiles.test_bad_max', [
                 'enabled' => true,
@@ -242,12 +242,12 @@ describe('RedactorConfig DTO Tests', function () {
                 'shannon_entropy' => ['enabled' => false],
             ]);
 
-            expect(fn () => RedactorConfig::fromConfig('test_bad_max'))
+            expect(fn (): RedactorConfig => RedactorConfig::fromConfig('test_bad_max'))
                 ->toThrow(\InvalidArgumentException::class, 'profiles.test_bad_max.max_value_length');
         }
     });
 
-    it('treats null and an empty string as "no max_value_length"', function () {
+    it('treats null and an empty string as "no max_value_length"', function (): void {
         foreach ([null, ''] as $disabled) {
             config()->set('redactor.profiles.test_no_max', [
                 'enabled' => true,
@@ -269,7 +269,7 @@ describe('RedactorConfig DTO Tests', function () {
         }
     });
 
-    it('validates regex patterns and removes invalid ones', function () {
+    it('validates regex patterns and removes invalid ones', function (): void {
         // Test validatePatterns with invalid regex patterns
         config()->set('redactor.profiles.test_invalid_patterns', [
             'enabled' => true,

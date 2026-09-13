@@ -36,7 +36,7 @@ final class Configuration
     {
         $container = Container::getInstance();
 
-        if (self::$repository === null || self::$container !== $container) {
+        if (! self::$repository instanceof Repository || self::$container !== $container) {
             /** @var Repository $repository */
             $repository = $container->make('config');
 

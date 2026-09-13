@@ -20,7 +20,7 @@ use Kirschbaum\Redactor\Support\DeterministicRandom;
  */
 class CreditCardSurrogate implements SurrogateGenerator
 {
-    private const DEFAULT_BIN_LENGTH = 6;
+    private const int DEFAULT_BIN_LENGTH = 6;
 
     /**
      * Determine if the value is a card number or is flagged as one.
@@ -61,15 +61,15 @@ class CreditCardSurrogate implements SurrogateGenerator
             $generated .= $random->digit();
         }
 
-        $generated .= self::checkDigit($generated);
+        $generated .= $this->checkDigit($generated);
 
-        return self::reapplyFormatting($value, $generated);
+        return $this->reapplyFormatting($value, $generated);
     }
 
     /**
      * Get the digit that makes a Luhn sum land on a multiple of ten.
      */
-    private static function checkDigit(string $withoutCheck): string
+    private function checkDigit(string $withoutCheck): string
     {
         $sum = 0;
         // The check digit sits in an undoubled position...
@@ -95,7 +95,7 @@ class CreditCardSurrogate implements SurrogateGenerator
     /**
      * Put the original spaces and dashes back where they were.
      */
-    private static function reapplyFormatting(string $original, string $digits): string
+    private function reapplyFormatting(string $original, string $digits): string
     {
         $out = '';
         $index = 0;

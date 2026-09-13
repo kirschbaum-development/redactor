@@ -24,7 +24,7 @@ function logPayload(): array
             'path' => '/orders/42',
             'headers' => ['authorization' => 'Bearer zzz', 'user_agent' => 'Mozilla/5.0'],
         ],
-        'meta' => array_fill_keys(array_map(fn (int $i) => "field_{$i}", range(1, 20)), 'value-string-here'),
+        'meta' => array_fill_keys(array_map(fn (int $i): string => "field_{$i}", range(1, 20)), 'value-string-here'),
     ];
 }
 
@@ -37,7 +37,7 @@ function logPayload(): array
  */
 function timeRedaction(string $profile, int $iterations = 100, int $runs = 7): float
 {
-    $redactor = app(Redactor::class);
+    $redactor = resolve(Redactor::class);
     $payload = logPayload();
 
     $redactor->redact($payload, $profile); // warm the strategy cache
@@ -74,8 +74,8 @@ function calibration(int $iterations = 100_000, int $runs = 5): float
     return $best;
 }
 
-describe('Redaction throughput', function () {
-    it('redacts a realistic log context within budget for its machine', function () {
+describe('Redaction throughput', function (): void {
+    it('redacts a realistic log context within budget for its machine', function (): void {
         $unit = calibration();
         $perRedaction = timeRedaction('default');
 
@@ -85,23 +85,23 @@ describe('Redaction throughput', function () {
         expect($perRedaction / $unit)->toBeLessThan(50_000.0);
     });
 
-    it('keeps the performance profile faster than the default', function () {
+    it('keeps the performance profile faster than the default', function (): void {
         // The performance profile exists to skip work. If it stops being
         // faster, it has stopped doing its job.
         expect(timeRedaction('performance'))->toBeLessThan(timeRedaction('default'));
     });
 
-    it('keeps the default profile faster than strict', function () {
+    it('keeps the default profile faster than strict', function (): void {
         expect(timeRedaction('default'))->toBeLessThan(timeRedaction('strict'));
     });
 })->skip(runningWithCoverage(), 'Timings are meaningless under coverage instrumentation.');
 
-describe('Redaction scaling', function () {
-    it('scales linearly with payload size, not quadratically', function () {
-        $redactor = app(Redactor::class);
+describe('Redaction scaling', function (): void {
+    it('scales linearly with payload size, not quadratically', function (): void {
+        $redactor = resolve(Redactor::class);
 
-        $build = fn (int $n) => array_fill_keys(
-            array_map(fn (int $i) => "field_{$i}", range(1, $n)),
+        $build = fn (int $n): array => array_fill_keys(
+            array_map(fn (int $i): string => "field_{$i}", range(1, $n)),
             'some ordinary value'
         );
 
@@ -128,19 +128,19 @@ describe('Redaction scaling', function () {
         expect($largeTime / max($smallTime, 1))->toBeLessThan(30.0);
     })->skip(runningWithCoverage(), 'Timings are meaningless under coverage instrumentation.');
 
-    it('holds memory flat for a large payload', function () {
+    it('holds memory flat for a large payload', function (): void {
         config()->set('redactor.profiles.scaling', array_merge(
             config('redactor.profiles.default'),
             ['redact_large_objects' => false, 'mark_redacted' => false]
         ));
 
         $payload = array_fill_keys(
-            array_map(fn (int $i) => "field_{$i}", range(1, 50_000)),
+            array_map(fn (int $i): string => "field_{$i}", range(1, 50_000)),
             'value with some text in it'
         );
 
         $before = memory_get_usage();
-        app(Redactor::class)->redact($payload, 'scaling');
+        resolve(Redactor::class)->redact($payload, 'scaling');
         $growthMb = (memory_get_usage() - $before) / 1_048_576;
 
         // The redacted copy is the only allocation that should scale with the
@@ -148,7 +148,7 @@ describe('Redaction scaling', function () {
         expect($growthMb)->toBeLessThan(64.0);
     });
 
-    it('does not let the entropy cache grow without bound across calls', function () {
+    it('does not let the entropy cache grow without bound across calls', function (): void {
         // The cache lives on RedactionContext, which is per-redaction. A cache
         // that outlived a call would grow forever in a long-running worker.
         config()->set('redactor.profiles.scaling', array_merge(
@@ -156,7 +156,7 @@ describe('Redaction scaling', function () {
             ['mark_redacted' => false]
         ));
 
-        $redactor = app(Redactor::class);
+        $redactor = resolve(Redactor::class);
 
         for ($i = 0; $i < 200; $i++) {
             $redactor->redact(['note' => "unique-string-number-{$i}-with-padding"], 'scaling');

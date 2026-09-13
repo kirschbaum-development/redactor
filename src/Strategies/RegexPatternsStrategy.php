@@ -32,7 +32,7 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
      * A Luhn-valid 16-digit run is a card with ~90% certainty and the same
      * digits failing Luhn almost never are, so this is the strongest signal.
      */
-    private const VALIDATOR_BOOST = 0.75;
+    private const float VALIDATOR_BOOST = 0.75;
 
     /**
      * Determine if the value is a string and the profile has patterns.

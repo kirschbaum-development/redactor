@@ -13,11 +13,11 @@ use Monolog\Level;
 use Monolog\LogRecord;
 use PHPUnit\Framework\AssertionFailedError;
 
-describe('Redactor::fake()', function () {
-    it('swaps the facade and the container binding and still redacts', function () {
+describe('Redactor::fake()', function (): void {
+    it('swaps the facade and the container binding and still redacts', function (): void {
         $fake = Redactor::fake();
 
-        expect(app(RedactorService::class))->toBe($fake)
+        expect(resolve(RedactorService::class))->toBe($fake)
             ->and(Redactor::redact(['password' => 'hunter2', 'id' => 1]))->toBe(['password' => '[REDACTED]', 'id' => 1, '_redacted' => true]);
 
         $fake->assertCalled(1);
@@ -27,7 +27,7 @@ describe('Redactor::fake()', function () {
         $fake->assertSomethingRedacted();
     });
 
-    it('proves a secret never left, across every call and profile', function () {
+    it('proves a secret never left, across every call and profile', function (): void {
         $fake = Redactor::fake();
 
         Redactor::redact('token sk_live_4eC39HqLyjWDarjtT1zdp7dc here');
@@ -39,7 +39,7 @@ describe('Redactor::fake()', function () {
         $fake->assertCalled(3);
     });
 
-    it('fails loudly when a secret did get out', function () {
+    it('fails loudly when a secret did get out', function (): void {
         $fake = Redactor::fake();
 
         Redactor::redact(['comment' => 'my pin is 1234']);
@@ -47,7 +47,7 @@ describe('Redactor::fake()', function () {
         expect(fn () => $fake->assertNeverEmitted('1234'))->toThrow(AssertionFailedError::class, 'should have been redacted');
     });
 
-    it('fails when nothing was redacted but something should have been', function () {
+    it('fails when nothing was redacted but something should have been', function (): void {
         $fake = Redactor::fake();
 
         Redactor::redact(['plain' => 'text']);
@@ -58,9 +58,9 @@ describe('Redactor::fake()', function () {
         $fake->assertNothingRedacted();
     });
 
-    it('records what went through the Monolog processor', function () {
+    it('records what went through the Monolog processor', function (): void {
         $fake = Redactor::fake();
-        $processor = new RedactorProcessor(app(RedactorService::class));
+        $processor = new RedactorProcessor(resolve(RedactorService::class));
 
         $processor(new LogRecord(new DateTimeImmutable(true), 'app', Level::Info, 'user bob@example.com', ['password' => 'x']));
 
@@ -68,7 +68,7 @@ describe('Redactor::fake()', function () {
         $fake->assertRedacted('password');
     });
 
-    it('can forget and be asserted empty', function () {
+    it('can forget and be asserted empty', function (): void {
         $fake = Redactor::fake();
         Redactor::redact('x');
         $fake->forget();

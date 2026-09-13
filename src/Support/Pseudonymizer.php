@@ -21,7 +21,7 @@ class Pseudonymizer
     /**
      * The minimum key length, since short keys make the confirm-a-guess attack cheap.
      */
-    private const MIN_KEY_BYTES = 16;
+    private const int MIN_KEY_BYTES = 16;
 
     /**
      * Create a new pseudonymizer instance.

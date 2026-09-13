@@ -11,8 +11,8 @@ use Monolog\Handler\StreamHandler;
 use Monolog\Handler\TestHandler;
 use Monolog\Logger as MonologLogger;
 
-describe('RedactorFormatterTap Tests', function () {
-    test('tap applies RedactorFormatter to formattable handlers', function () {
+describe('RedactorFormatterTap Tests', function (): void {
+    test('tap applies RedactorFormatter to formattable handlers', function (): void {
         // Create a logger with a formattable handler
         $monolog = new MonologLogger('test');
         $handler = new TestHandler;
@@ -28,7 +28,7 @@ describe('RedactorFormatterTap Tests', function () {
         expect($handler->getFormatter())->toBeInstanceOf(RedactorFormatter::class);
     });
 
-    test('tap applies RedactorFormatter to multiple formattable handlers', function () {
+    test('tap applies RedactorFormatter to multiple formattable handlers', function (): void {
         // Create a logger with multiple formattable handlers
         $monolog = new MonologLogger('test');
         $handler1 = new TestHandler;
@@ -47,7 +47,7 @@ describe('RedactorFormatterTap Tests', function () {
             ->and($handler2->getFormatter())->toBeInstanceOf(RedactorFormatter::class);
     });
 
-    test('tap handles logger with no handlers gracefully', function () {
+    test('tap handles logger with no handlers gracefully', function (): void {
         // Create a logger with no handlers
         $monolog = new MonologLogger('test');
         $logger = new Logger($monolog);
@@ -60,11 +60,11 @@ describe('RedactorFormatterTap Tests', function () {
         expect(true)->toBeTrue();
     });
 
-    test('tap skips non-formattable handlers', function () {
+    test('tap skips non-formattable handlers', function (): void {
         // Create a mock handler that doesn't implement FormattableHandlerInterface
         $nonFormattableHandler = new class
         {
-            public function getFormatter()
+            public function getFormatter(): null
             {
                 return null;
             }
@@ -89,7 +89,7 @@ describe('RedactorFormatterTap Tests', function () {
         expect($formattableHandler->getFormatter())->toBeInstanceOf(RedactorFormatter::class);
     });
 
-    test('tap can be invoked multiple times without issues', function () {
+    test('tap can be invoked multiple times without issues', function (): void {
         // Create a logger with a handler
         $monolog = new MonologLogger('test');
         $handler = new TestHandler;

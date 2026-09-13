@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Operators;
 
 use Kirschbaum\Redactor\Detection\Detection;
+use Kirschbaum\Redactor\Support\Pseudonymizer;
 
 /**
  * Replaces the span with a stable keyed token.
@@ -24,7 +25,7 @@ class HashOperator implements Operator
     {
         $pseudonymizer = $context->pseudonymizer();
 
-        if ($pseudonymizer === null) {
+        if (! $pseudonymizer instanceof Pseudonymizer) {
             // No key configured, so fail closed to a plain redaction rather than emit anything derived from the original...
             return $context->replacement;
         }

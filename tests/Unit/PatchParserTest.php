@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
+use Kirschbaum\Redactor\Scanner\Git\Patch;
 use Kirschbaum\Redactor\Scanner\Git\PatchParser;
 
-describe('PatchParser', function () {
-    it('collects added lines with their real line numbers', function () {
+describe('PatchParser', function (): void {
+    it('collects added lines with their real line numbers', function (): void {
         $diff = <<<'DIFF'
 diff --git a/config/app.php b/config/app.php
 index 1111111..2222222 100644
@@ -31,7 +32,7 @@ DIFF;
             ->and($patches[0]->lineAt(3))->toBe(42);
     });
 
-    it('splits several files and skips deletions and binaries', function () {
+    it('splits several files and skips deletions and binaries', function (): void {
         $diff = <<<'DIFF'
 diff --git a/a.txt b/a.txt
 --- a/a.txt
@@ -53,12 +54,12 @@ diff --git a/b.txt b/b.txt
 +beta
 DIFF;
 
-        $paths = array_map(fn ($p) => $p->path, PatchParser::parse($diff));
+        $paths = array_map(fn (Patch $p): string => $p->path, PatchParser::parse($diff));
 
         expect($paths)->toBe(['a.txt', 'b.txt']);
     });
 
-    it('attaches the commit hash from log output and separates commits', function () {
+    it('attaches the commit hash from log output and separates commits', function (): void {
         $diff = <<<'DIFF'
 commit 0123456789abcdef0123456789abcdef01234567
 diff --git a/x b/x
@@ -83,7 +84,7 @@ DIFF;
             ->and($patches[1]->addedLines)->toBe([2 => 'two']);
     });
 
-    it('unquotes a path git had to quote and handles context lines', function () {
+    it('unquotes a path git had to quote and handles context lines', function (): void {
         $diff = <<<'DIFF'
 diff --git "a/dir/sp ace.txt" "b/dir/sp ace.txt"
 --- "a/dir/sp ace.txt"
@@ -100,11 +101,11 @@ DIFF;
             ->and($patches[0]->addedLines)->toBe([2 => 'inserted']);
     });
 
-    it('drops a patch that adds nothing', function () {
+    it('drops a patch that adds nothing', function (): void {
         expect(PatchParser::parse("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +0,0 @@\n-gone\n"))->toBe([]);
     });
 
-    it('joins the added lines for scanning', function () {
+    it('joins the added lines for scanning', function (): void {
         $patch = PatchParser::parse("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -0,0 +5,2 @@\n+a\n+b\n")[0];
 
         expect($patch->text())->toBe("a\nb")

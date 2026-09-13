@@ -24,7 +24,7 @@ function collected(string $base, array $patterns = [], int $max = 10_485_760, bo
 
     $real = realpath($base);
     $relative = array_map(
-        fn (string $f) => ltrim(str_replace((string) $real, '', $f), '/'),
+        fn (string $f): string => ltrim(str_replace((string) $real, '', $f), '/'),
         $files
     );
 
@@ -33,8 +33,8 @@ function collected(string $base, array $patterns = [], int $max = 10_485_760, bo
     return $relative;
 }
 
-describe('FileCollector exclusions', function () {
-    it('excludes directories named by a path pattern', function () {
+describe('FileCollector exclusions', function (): void {
+    it('excludes directories named by a path pattern', function (): void {
         // notName() compares basenames only, so the shipped 'vendor/*' and
         // 'node_modules/*' defaults could never match and every dependency in
         // the project was scanned.
@@ -49,7 +49,7 @@ describe('FileCollector exclusions', function () {
         cleanupDirectory($base);
     });
 
-    it('excludes nested files under an excluded directory', function () {
+    it('excludes nested files under an excluded directory', function (): void {
         $base = tree([
             'keep.php' => 'ok',
             'vendor/a/b/c/deep.php' => 'x',
@@ -60,7 +60,7 @@ describe('FileCollector exclusions', function () {
         cleanupDirectory($base);
     });
 
-    it('still excludes by basename glob', function () {
+    it('still excludes by basename glob', function (): void {
         $base = tree([
             'composer.lock' => 'x',
             'app.min.js' => 'x',
@@ -73,7 +73,7 @@ describe('FileCollector exclusions', function () {
         cleanupDirectory($base);
     });
 
-    it('collects everything when no patterns are given', function () {
+    it('collects everything when no patterns are given', function (): void {
         $base = tree(['a.php' => 'x', 'sub/b.php' => 'x']);
 
         expect(collected($base))->toBe(['a.php', 'sub/b.php']);
@@ -81,7 +81,7 @@ describe('FileCollector exclusions', function () {
         cleanupDirectory($base);
     });
 
-    it('ignores an empty pattern rather than excluding everything', function () {
+    it('ignores an empty pattern rather than excluding everything', function (): void {
         $base = tree(['a.php' => 'x']);
 
         expect(collected($base, ['']))->toBe(['a.php']);
@@ -89,7 +89,7 @@ describe('FileCollector exclusions', function () {
         cleanupDirectory($base);
     });
 
-    it('scans a file named explicitly even when a pattern would exclude it', function () {
+    it('scans a file named explicitly even when a pattern would exclude it', function (): void {
         $base = tree(['vendor/pkg/a.php' => 'x']);
 
         $files = FileCollector::collect([$base.'/vendor/pkg/a.php'], ['vendor/*']);
@@ -100,8 +100,8 @@ describe('FileCollector exclusions', function () {
     });
 });
 
-describe('FileCollector eligibility', function () {
-    it('skips files over the size limit', function () {
+describe('FileCollector eligibility', function (): void {
+    it('skips files over the size limit', function (): void {
         $base = tree([
             'small.txt' => str_repeat('a', 10),
             'big.txt' => str_repeat('a', 5000),
@@ -112,7 +112,7 @@ describe('FileCollector eligibility', function () {
         cleanupDirectory($base);
     });
 
-    it('skips binary files', function () {
+    it('skips binary files', function (): void {
         // Random bytes score high entropy, so every binary in the tree used to
         // come back as a finding.
         $base = tree([
@@ -125,7 +125,7 @@ describe('FileCollector eligibility', function () {
         cleanupDirectory($base);
     });
 
-    it('keeps binary files when skip_binary is off', function () {
+    it('keeps binary files when skip_binary is off', function (): void {
         $base = tree([
             'text.txt' => 'hello',
             'image.bin' => "\x00\x01\x02\x03",
@@ -136,7 +136,7 @@ describe('FileCollector eligibility', function () {
         cleanupDirectory($base);
     });
 
-    it('keeps UTF-8 text that is not ASCII', function () {
+    it('keeps UTF-8 text that is not ASCII', function (): void {
         $base = tree([
             'japanese.txt' => '日本語のテキストです',
             'accents.txt' => 'café naïve',
@@ -147,7 +147,7 @@ describe('FileCollector eligibility', function () {
         cleanupDirectory($base);
     });
 
-    it('keeps an empty file', function () {
+    it('keeps an empty file', function (): void {
         $base = tree(['empty.txt' => '']);
 
         expect(collected($base))->toBe(['empty.txt']);
@@ -155,7 +155,7 @@ describe('FileCollector eligibility', function () {
         cleanupDirectory($base);
     });
 
-    it('skips unreadable files', function () {
+    it('skips unreadable files', function (): void {
         $base = tree(['secret.txt' => 'x', 'open.txt' => 'y']);
         chmod($base.'/secret.txt', 0000);
 
@@ -164,11 +164,11 @@ describe('FileCollector eligibility', function () {
         cleanupDirectory($base);
     })->skip(posix_geteuid() === 0, 'chmod does not restrict root');
 
-    it('silently ignores paths that do not exist', function () {
+    it('silently ignores paths that do not exist', function (): void {
         expect(FileCollector::collect(['/no/such/path/at/all']))->toBe([]);
     });
 
-    it('deduplicates a file reached by two paths', function () {
+    it('deduplicates a file reached by two paths', function (): void {
         $base = tree(['a.php' => 'x']);
 
         expect(FileCollector::collect([$base, $base.'/a.php']))->toHaveCount(1);
@@ -177,8 +177,8 @@ describe('FileCollector eligibility', function () {
     });
 });
 
-describe('FileCollector gitignore awareness', function () {
-    it('skips files git is ignoring', function () {
+describe('FileCollector gitignore awareness', function (): void {
+    it('skips files git is ignoring', function (): void {
         $base = tree([
             '.gitignore' => "ignored.txt\n",
             'ignored.txt' => 'x',
@@ -193,7 +193,7 @@ describe('FileCollector gitignore awareness', function () {
         cleanupDirectory($base);
     });
 
-    it('includes them when respect_gitignore is off', function () {
+    it('includes them when respect_gitignore is off', function (): void {
         $base = tree([
             '.gitignore' => "ignored.txt\n",
             'ignored.txt' => 'x',

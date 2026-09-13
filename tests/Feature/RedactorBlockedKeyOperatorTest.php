@@ -32,25 +32,25 @@ function blockedKeyProfile(array $overrides = []): array
     ], $overrides);
 }
 
-describe('Blocked keys go through operators', function () {
-    it('applies the entity operator to a value found by its key', function () {
+describe('Blocked keys go through operators', function (): void {
+    it('applies the entity operator to a value found by its key', function (): void {
         config()->set('redactor.profiles.blocked', blockedKeyProfile([
             'blocked_keys' => ['email'],
             'operators' => ['default' => 'redact', 'email' => ['surrogate' => ['preserve_domain' => true]]],
         ]));
 
-        $result = app(Redactor::class)->redact(['email' => 'alice@customer.com'], 'blocked');
+        $result = resolve(Redactor::class)->redact(['email' => 'alice@customer.com'], 'blocked');
 
         expect($result['email'])->toMatch('/^u_[a-z0-9]+@customer\.com$/');
     });
 
-    it('produces the same surrogate whether the key or the pattern found it', function () {
+    it('produces the same surrogate whether the key or the pattern found it', function (): void {
         config()->set('redactor.profiles.blocked', blockedKeyProfile([
             'blocked_keys' => ['email'],
             'operators' => ['default' => 'redact', 'email' => 'surrogate'],
         ]));
 
-        $result = app(Redactor::class)->redact([
+        $result = resolve(Redactor::class)->redact([
             'email' => 'alice@customer.com',
             'note' => 'from alice@customer.com',
         ], 'blocked');
@@ -58,21 +58,21 @@ describe('Blocked keys go through operators', function () {
         expect($result['note'])->toBe('from '.$result['email']);
     });
 
-    it('still collapses a container under a blocked key to the replacement', function () {
+    it('still collapses a container under a blocked key to the replacement', function (): void {
         config()->set('redactor.profiles.blocked', blockedKeyProfile([
             'blocked_keys' => ['credentials'],
             'operators' => ['default' => 'hash'],
         ]));
 
-        $result = app(Redactor::class)->redact(['credentials' => ['user' => 'a', 'pass' => 'b']], 'blocked');
+        $result = resolve(Redactor::class)->redact(['credentials' => ['user' => 'a', 'pass' => 'b']], 'blocked');
 
         expect($result['credentials'])->toBe('[REDACTED]');
     });
 
-    it('reports the key finding with a certain score', function () {
+    it('reports the key finding with a certain score', function (): void {
         config()->set('redactor.profiles.blocked', blockedKeyProfile(['blocked_keys' => ['password']]));
 
-        $result = app(Redactor::class)->redactWithMetadata(['password' => 'hunter2'], 'blocked');
+        $result = resolve(Redactor::class)->inspect(['password' => 'hunter2'], 'blocked');
 
         expect($result->findings[0]->rule)->toBe('blocked_key')
             ->and($result->findings[0]->confidence?->score)->toBe(1.0);

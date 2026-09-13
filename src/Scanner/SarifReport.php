@@ -10,7 +10,7 @@ namespace Kirschbaum\Redactor\Scanner;
  */
 class SarifReport
 {
-    private const SCHEMA = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json';
+    private const string SCHEMA = 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json';
 
     /**
      * @param  array<int, ScanFinding>  $findings
@@ -49,7 +49,7 @@ class SarifReport
                     'entity' => $finding->entity,
                     'confidence' => $finding->confidence,
                     'signals' => $finding->signals,
-                ], fn ($v) => $v !== null && $v !== '' && $v !== []),
+                ], fn (string|float|array|null $v): bool => ! in_array($v, [null, '', []], true)),
                 'locations' => [[
                     'physicalLocation' => [
                         'artifactLocation' => ['uri' => $finding->path],

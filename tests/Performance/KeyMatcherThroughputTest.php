@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 use Kirschbaum\Redactor\Support\KeyMatcher;
 
-describe('KeyMatcher throughput', function () {
+describe('KeyMatcher throughput', function (): void {
     afterEach(fn () => KeyMatcher::flush());
 
-    it('is markedly faster than rebuilding a regex per key', function () {
+    it('is markedly faster than rebuilding a regex per key', function (): void {
         $patterns = ['password', '*token*', '*key*', '*secret*', 'authorization', 'user_*_data'];
         $keys = ['user_id', 'created_at', 'api_token', 'normal_field', 'trace_id', 'status'];
 

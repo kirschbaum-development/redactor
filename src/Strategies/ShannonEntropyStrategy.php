@@ -36,9 +36,9 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
      * git hash scores just as high. A detection starts at medium, climbs with
      * its margin over the threshold, and reaches high only with a keyword.
      */
-    private const BASE_CONFIDENCE = 0.5;
+    private const float BASE_CONFIDENCE = 0.5;
 
-    private const MARGIN_BOOST_CAP = 0.4;
+    private const float MARGIN_BOOST_CAP = 0.4;
 
     /**
      * Determine if the value is a string long enough to measure.
@@ -110,9 +110,6 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
         $detections = [];
 
         foreach ($matches[0] as [$token, $offset]) {
-            $token = (string) $token;
-            $offset = (int) $offset;
-
             if ($token === '' || ! $this->shouldRedactByEntropy($token, $context)) {
                 continue;
             }

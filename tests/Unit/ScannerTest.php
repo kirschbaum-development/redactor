@@ -1,19 +1,20 @@
 <?php
 
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\Scanner\ScanFinding;
 use Kirschbaum\Redactor\Scanner\Scanner;
 
-describe('Scanner', function () {
-    beforeEach(function () {
+describe('Scanner', function (): void {
+    beforeEach(function (): void {
         $this->tempDir = sys_get_temp_dir().'/scanner_test_'.uniqid();
         mkdir($this->tempDir, 0755, true);
     });
 
-    afterEach(function () {
+    afterEach(function (): void {
         cleanupDirectory($this->tempDir);
     });
 
-    it('handles unreadable files gracefully when called directly', function () {
+    it('handles unreadable files gracefully when called directly', function (): void {
         $redactor = resolve(Redactor::class);
         $scanner = new Scanner($redactor);
 
@@ -33,7 +34,7 @@ describe('Scanner', function () {
         chmod($unreadableFile, 0644);
     });
 
-    it('handles non-existent files gracefully when called directly', function () {
+    it('handles non-existent files gracefully when called directly', function (): void {
         $redactor = resolve(Redactor::class);
         $scanner = new Scanner($redactor);
 
@@ -47,7 +48,7 @@ describe('Scanner', function () {
         expect($result->path)->toBe($nonExistentFile);
     });
 
-    it('scans readable files successfully when called directly', function () {
+    it('scans readable files successfully when called directly', function (): void {
         $redactor = resolve(Redactor::class);
         $scanner = new Scanner($redactor);
 
@@ -64,7 +65,7 @@ describe('Scanner', function () {
         expect($result->profile)->toBe('file_scan');
     });
 
-    it('reports a located finding for each sensitive span', function () {
+    it('reports a located finding for each sensitive span', function (): void {
         $redactor = resolve(Redactor::class);
         $scanner = new Scanner($redactor);
 
@@ -92,7 +93,7 @@ describe('Scanner', function () {
         expect($finding->fingerprint)->toHaveLength(32);
     });
 
-    it('detects array-based redaction for structured data', function () {
+    it('detects array-based redaction for structured data', function (): void {
         $redactor = resolve(Redactor::class);
         $scanner = new Scanner($redactor);
 
@@ -123,7 +124,7 @@ describe('Scanner', function () {
         expect(count($result->findings))->toBeGreaterThan(0);
     });
 
-    it('reports the key alongside a key-based finding in structured data', function () {
+    it('reports the key alongside a key-based finding in structured data', function (): void {
         $scanner = new Scanner(resolve(Redactor::class));
 
         $testFile = $this->tempDir.'/keys.json';
@@ -133,11 +134,11 @@ describe('Scanner', function () {
 
         expect($result->hasFindings())->toBeTrue();
 
-        $rules = array_map(fn ($finding) => $finding->rule, $result->findings);
+        $rules = array_map(fn (ScanFinding $finding): string => $finding->rule, $result->findings);
         expect($rules)->toContain('password_assignment');
     });
 
-    it('reports paths relative to a base when given one', function () {
+    it('reports paths relative to a base when given one', function (): void {
         $scanner = new Scanner(resolve(Redactor::class));
 
         $file = $this->tempDir.'/nested/app.env';
@@ -151,7 +152,7 @@ describe('Scanner', function () {
             ->and($result->path)->toBe($file);
     });
 
-    it('returns no findings for clean content', function () {
+    it('returns no findings for clean content', function (): void {
         $scanner = new Scanner(resolve(Redactor::class));
 
         $file = $this->tempDir.'/clean.txt';
@@ -163,7 +164,7 @@ describe('Scanner', function () {
             ->and($result->findings)->toBe([]);
     });
 
-    it('numbers lines correctly in a multi-line file', function () {
+    it('numbers lines correctly in a multi-line file', function (): void {
         $scanner = new Scanner(resolve(Redactor::class));
 
         $file = $this->tempDir.'/multi.env';
@@ -179,7 +180,7 @@ describe('Scanner', function () {
 
         $aws = array_values(array_filter(
             $result->findings,
-            fn ($finding) => $finding->rule === 'aws_access_key'
+            fn (ScanFinding $finding): bool => $finding->rule === 'aws_access_key'
         ));
 
         expect($aws)->toHaveCount(1)

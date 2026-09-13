@@ -54,25 +54,25 @@ function dispatchProfile(array $overrides = []): array
     ], $overrides);
 }
 
-describe('Strategy dispatch', function () {
-    beforeEach(function () {
+describe('Strategy dispatch', function (): void {
+    beforeEach(function (): void {
         CountingStrategy::reset();
         config()->set('redactor.custom_strategies', ['counting' => CountingStrategy::class]);
         config()->set('redactor.profiles.dispatch', dispatchProfile());
     });
 
-    it('evaluates each node exactly once', function () {
+    it('evaluates each node exactly once', function (): void {
         // {a: {b: {c: 1}}} is four nodes: the root, a, b and c. redactArray()
         // used to re-run the chain on every nested array with an empty key,
         // after the parent loop had already run it with the real key - six
         // dispatches for four nodes.
-        app(Redactor::class)->redact(['a' => ['b' => ['c' => 1]]], 'dispatch');
+        resolve(Redactor::class)->redact(['a' => ['b' => ['c' => 1]]], 'dispatch');
 
         expect(CountingStrategy::$keys)->toBe(['', 'a', 'b', 'c']);
     });
 
-    it('evaluates a wider tree once per node', function () {
-        app(Redactor::class)->redact([
+    it('evaluates a wider tree once per node', function (): void {
+        resolve(Redactor::class)->redact([
             'x' => ['p' => 1, 'q' => 2],
             'y' => ['r' => ['s' => 3]],
         ], 'dispatch');
@@ -81,32 +81,32 @@ describe('Strategy dispatch', function () {
         expect(CountingStrategy::$keys)->toHaveCount(7);
     });
 
-    it('evaluates the root once for a top-level array', function () {
-        app(Redactor::class)->redact(['only' => 'value'], 'dispatch');
+    it('evaluates the root once for a top-level array', function (): void {
+        resolve(Redactor::class)->redact(['only' => 'value'], 'dispatch');
 
         expect(CountingStrategy::$keys)->toBe(['', 'only']);
     });
 
-    it('still evaluates the root array as a whole so LargeObjectStrategy applies', function () {
+    it('still evaluates the root array as a whole so LargeObjectStrategy applies', function (): void {
         config()->set('redactor.profiles.dispatch_large', dispatchProfile([
             'strategies' => [LargeObjectStrategy::class],
             'redact_large_objects' => true,
             'max_object_size' => 3,
         ]));
 
-        $result = app(Redactor::class)->redact(['a' => 1, 'b' => 2, 'c' => 3, 'd' => 4], 'dispatch_large');
+        $result = resolve(Redactor::class)->redact(['a' => 1, 'b' => 2, 'c' => 3, 'd' => 4], 'dispatch_large');
 
         expect($result)->toHaveKey('_large_object_redacted');
     });
 
-    it('still evaluates a nested array as a whole so LargeObjectStrategy applies', function () {
+    it('still evaluates a nested array as a whole so LargeObjectStrategy applies', function (): void {
         config()->set('redactor.profiles.dispatch_large', dispatchProfile([
             'strategies' => [LargeObjectStrategy::class],
             'redact_large_objects' => true,
             'max_object_size' => 3,
         ]));
 
-        $result = app(Redactor::class)->redact([
+        $result = resolve(Redactor::class)->redact([
             'small' => ['a' => 1],
             'big' => ['a' => 1, 'b' => 2, 'c' => 3, 'd' => 4],
         ], 'dispatch_large');
@@ -115,8 +115,8 @@ describe('Strategy dispatch', function () {
             ->and($result['small'])->toBe(['a' => 1]);
     });
 
-    it('does not skip the chain for a scalar', function () {
-        app(Redactor::class)->redact('a bare string', 'dispatch');
+    it('does not skip the chain for a scalar', function (): void {
+        resolve(Redactor::class)->redact('a bare string', 'dispatch');
 
         expect(CountingStrategy::$keys)->toBe(['']);
     });

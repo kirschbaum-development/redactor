@@ -98,7 +98,7 @@ class Validator
         // The value is far wider than an int, so take the modulus piecewise...
         $remainder = 0;
         foreach (str_split($numeric, 7) as $chunk) {
-            $remainder = (int) (((string) $remainder).$chunk) % 97;
+            $remainder = (int) (($remainder).$chunk) % 97;
         }
 
         return $remainder === 1;

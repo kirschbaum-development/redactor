@@ -33,8 +33,8 @@ function fastest(callable $f, int $iterations): float
     return $best;
 }
 
-describe('Compiled key matchers stay compiled', function () {
-    it('resolves one matcher per profile, not one per call', function () {
+describe('Compiled key matchers stay compiled', function (): void {
+    it('resolves one matcher per profile, not one per call', function (): void {
         $first = RedactorConfig::fromConfig('default');
         $second = RedactorConfig::fromConfig('default');
 
@@ -44,11 +44,11 @@ describe('Compiled key matchers stay compiled', function () {
             ->and($first->blockedKeyMatcher)->toBe($second->blockedKeyMatcher);
     });
 
-    it('is far cheaper than looking the matcher up per call', function () {
+    it('is far cheaper than looking the matcher up per call', function (): void {
         $config = RedactorConfig::fromConfig('default');
         $keys = ['user_id', 'password', 'created_at', 'normal_field', 'api_token'];
 
-        $held = fastest(function () use ($config, $keys) {
+        $held = fastest(function () use ($config, $keys): void {
             foreach ($keys as $key) {
                 $config->blockedKeyMatcher->matches($key);
             }
@@ -56,7 +56,7 @@ describe('Compiled key matchers stay compiled', function () {
 
         // What it used to do: find the memoised matcher by rebuilding an
         // implode() of every configured key, on every single check.
-        $lookedUp = fastest(function () use ($config, $keys) {
+        $lookedUp = fastest(function () use ($config, $keys): void {
             foreach ($keys as $key) {
                 KeyMatcher::for($config->blockedKeys)->matches($key);
             }
@@ -66,8 +66,8 @@ describe('Compiled key matchers stay compiled', function () {
     })->skip(runningWithCoverage(), 'Timings are meaningless under coverage instrumentation.');
 });
 
-describe('Entropy skips what it cannot match', function () {
-    it('is far cheaper for values below min_length', function () {
+describe('Entropy skips what it cannot match', function (): void {
+    it('is far cheaper for values below min_length', function (): void {
         $config = RedactorConfig::fromConfig('default');
         $context = new RedactionContext($config);
         $strategy = new ShannonEntropyStrategy;
@@ -75,7 +75,7 @@ describe('Entropy skips what it cannot match', function () {
         $short = ['info', 'GET', '/orders/42', 'Bob', 'pending', 'v2.14.1'];
         $long = [str_repeat('Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf ', 1)];
 
-        $shortCost = fastest(function () use ($strategy, $short, $context) {
+        $shortCost = fastest(function () use ($strategy, $short, $context): void {
             foreach ($short as $v) {
                 if ($strategy->shouldHandle($v, 'k', $context)) {
                     $strategy->handle($v, 'k', $context);
@@ -84,7 +84,7 @@ describe('Entropy skips what it cannot match', function () {
             $context->discardPendingDetections();
         }, 20_000);
 
-        $longCost = fastest(function () use ($strategy, $long, $context) {
+        $longCost = fastest(function () use ($strategy, $long, $context): void {
             foreach ($long as $v) {
                 if ($strategy->shouldHandle($v, 'k', $context)) {
                     $strategy->handle($v, 'k', $context);
@@ -98,9 +98,9 @@ describe('Entropy skips what it cannot match', function () {
     })->skip(runningWithCoverage(), 'Timings are meaningless under coverage instrumentation.');
 });
 
-describe('An unchanged payload is not rebuilt', function () {
-    it('costs less to redact a clean payload than a matching one', function () {
-        $redactor = app(Redactor::class);
+describe('An unchanged payload is not rebuilt', function (): void {
+    it('costs less to redact a clean payload than a matching one', function (): void {
+        $redactor = resolve(Redactor::class);
 
         // Same shape, same size: the only difference is whether anything
         // matches, so the gap is the copy that no longer happens.
@@ -113,10 +113,10 @@ describe('An unchanged payload is not rebuilt', function () {
         expect($cleanCost)->toBeLessThan($dirtyCost);
     })->skip(runningWithCoverage(), 'Timings are meaningless under coverage instrumentation.');
 
-    it('hands back the very same array when nothing matched', function () {
+    it('hands back the very same array when nothing matched', function (): void {
         $payload = ['a' => ['x' => 'plain'], 'b' => 'also plain'];
 
-        $result = app(Redactor::class)->redact($payload, 'default');
+        $result = resolve(Redactor::class)->redact($payload, 'default');
 
         expect($result)->toBe($payload);
     });

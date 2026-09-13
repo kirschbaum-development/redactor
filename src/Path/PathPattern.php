@@ -23,10 +23,10 @@ use Kirschbaum\Redactor\Exceptions\ConfigurationException;
 final readonly class PathPattern
 {
     /** Matches exactly one segment. */
-    public const ANY = '*';
+    public const string ANY = '*';
 
     /** Matches zero or more segments. */
-    public const DEEP = '**';
+    public const string DEEP = '**';
 
     /**
      * Create a new path pattern instance.

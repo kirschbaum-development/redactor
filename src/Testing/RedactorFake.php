@@ -24,9 +24,9 @@ class RedactorFake extends Redactor
      */
     protected array $calls = [];
 
-    public function redactWithMetadata(mixed $content, ?string $profile = null, ?bool $mark = null): RedactionResult
+    public function inspect(mixed $content, ?string $profile = null, ?bool $mark = null): RedactionResult
     {
-        $result = parent::redactWithMetadata($content, $profile, $mark);
+        $result = parent::inspect($content, $profile, $mark);
 
         $this->calls[] = ['profile' => $profile, 'input' => $content, 'result' => $result];
 
@@ -62,7 +62,7 @@ class RedactorFake extends Redactor
         );
 
         foreach ($this->calls as $index => $call) {
-            $output = self::stringify($call['result']->value);
+            $output = $this->stringify($call['result']->value);
 
             foreach ($secrets as $secret) {
                 Assert::assertStringNotContainsString(
@@ -80,7 +80,7 @@ class RedactorFake extends Redactor
     public function assertRedacted(string $key): void
     {
         Assert::assertTrue(
-            $this->anyCall(fn (RedactionResult $r) => in_array($key, $r->redactedKeys, true)),
+            $this->anyCall(fn (RedactionResult $r): bool => in_array($key, $r->redactedKeys, true)),
             sprintf('No redaction recorded under key [%s]. Keys redacted: %s.', $key, $this->describeKeys())
         );
     }
@@ -88,7 +88,7 @@ class RedactorFake extends Redactor
     public function assertNotRedacted(string $key): void
     {
         Assert::assertFalse(
-            $this->anyCall(fn (RedactionResult $r) => in_array($key, $r->redactedKeys, true)),
+            $this->anyCall(fn (RedactionResult $r): bool => in_array($key, $r->redactedKeys, true)),
             sprintf('A redaction was recorded under key [%s], which should have been left alone.', $key)
         );
     }
@@ -115,7 +115,7 @@ class RedactorFake extends Redactor
     public function assertSomethingRedacted(): void
     {
         Assert::assertTrue(
-            $this->anyCall(fn (RedactionResult $r) => $r->wasRedacted),
+            $this->anyCall(fn (RedactionResult $r): bool => $r->wasRedacted),
             'Nothing was redacted in any call.'
         );
     }
@@ -123,7 +123,7 @@ class RedactorFake extends Redactor
     public function assertNothingRedacted(): void
     {
         Assert::assertFalse(
-            $this->anyCall(fn (RedactionResult $r) => $r->wasRedacted),
+            $this->anyCall(fn (RedactionResult $r): bool => $r->wasRedacted),
             sprintf('Something was redacted. Keys: %s.', $this->describeKeys())
         );
     }
@@ -176,7 +176,7 @@ class RedactorFake extends Redactor
         return $keys === [] ? 'none' : implode(', ', $keys);
     }
 
-    private static function stringify(mixed $value): string
+    private function stringify(mixed $value): string
     {
         if (is_string($value)) {
             return $value;

@@ -80,7 +80,7 @@ class McpResponseRedactor
     {
         // tools/call and streamed tool output...
         if (isset($result['content']) && is_array($result['content'])) {
-            $result['content'] = array_map(fn ($item) => $this->contentItem($item), $result['content']);
+            $result['content'] = array_map($this->contentItem(...), $result['content']);
         }
 
         if (isset($result['structuredContent']) && is_array($result['structuredContent'])) {
@@ -89,7 +89,7 @@ class McpResponseRedactor
 
         // resources/read...
         if (isset($result['contents']) && is_array($result['contents'])) {
-            $result['contents'] = array_map(fn ($item) => $this->contentItem($item), $result['contents']);
+            $result['contents'] = array_map($this->contentItem(...), $result['contents']);
         }
 
         // prompts/get...
@@ -143,11 +143,11 @@ class McpResponseRedactor
     {
         try {
             // No markers: structured content has a schema the model was told about, and an unexpected key breaks it...
-            $out = $this->redactor->redactWithMetadata($data, $this->profile, mark: false)->value;
+            $out = $this->redactor->inspect($data, $this->profile, mark: false)->value;
         } catch (\Throwable $e) {
             InternalLog::warning('MCP structured content could not be redacted; replaced as a precaution', [
                 'profile' => $this->profile,
-                'exception_type' => get_class($e),
+                'exception_type' => $e::class,
                 'exception_message' => $e->getMessage(),
             ]);
 

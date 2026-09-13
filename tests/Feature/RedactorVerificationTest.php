@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\Scanner\ScanFinding;
 use Kirschbaum\Redactor\Scanner\Scanner;
 use Kirschbaum\Redactor\Verification\SecretVerifier;
 use Kirschbaum\Redactor\Verification\VerificationResult;
@@ -64,42 +65,42 @@ function secretFile(string $contents): string
     return $dir.'/app.env';
 }
 
-describe('Verification is off unless three things agree', function () {
-    it('stays off when config does not enable it', function () {
+describe('Verification is off unless three things agree', function (): void {
+    it('stays off when config does not enable it', function (): void {
         expect(SecretVerifier::fromConfig(['enabled' => false, 'verifiers' => ['github_token']]))->toBeNull();
     });
 
-    it('stays off when enabled but no provider is allowed', function () {
+    it('stays off when enabled but no provider is allowed', function (): void {
         // Enabling the feature and choosing who to trust are separate
         // decisions; an empty list means none, not all.
         expect(SecretVerifier::fromConfig(['enabled' => true, 'verifiers' => []]))->toBeNull()
             ->and(SecretVerifier::fromConfig(['enabled' => true]))->toBeNull();
     });
 
-    it('runs only the providers on the allowlist', function () {
+    it('runs only the providers on the allowlist', function (): void {
         $verifier = new SecretVerifier(['github_token']);
 
-        $names = array_map(fn (Verifier $v) => $v->name(), $verifier->enabled());
+        $names = array_map(fn (Verifier $v): string => $v->name(), $verifier->enabled());
 
         expect($names)->toBe(['github_token'])
             ->and($verifier->canVerify('github_token', 'github_token'))->toBeTrue()
             ->and($verifier->canVerify('stripe_key', 'api_key_stripe'))->toBeFalse();
     });
 
-    it('names every host it would contact', function () {
+    it('names every host it would contact', function (): void {
         $verifier = new SecretVerifier(['github_token', 'stripe_key', 'slack_token']);
 
         expect($verifier->hosts())->toBe(['api.github.com', 'api.stripe.com', 'slack.com']);
     });
 
-    it('reports Unknown rather than silently skipping an unsupported entity', function () {
+    it('reports Unknown rather than silently skipping an unsupported entity', function (): void {
         $result = (new SecretVerifier(['github_token']))->verify('stripe_key', 'api_key_stripe', 'sk_live_x');
 
         expect($result->status)->toBe(VerificationStatus::Unknown)
             ->and($result->note)->toContain('No verifier is enabled');
     });
 
-    it('degrades to Unknown when a verifier throws', function () {
+    it('degrades to Unknown when a verifier throws', function (): void {
         $exploding = new class implements Verifier
         {
             public function name(): string
@@ -130,20 +131,20 @@ describe('Verification is off unless three things agree', function () {
     });
 });
 
-describe('Verification never leaks the secret', function () {
-    afterEach(fn () => SpyVerifier::$seen = []);
+describe('Verification never leaks the secret', function (): void {
+    afterEach(fn (): array => SpyVerifier::$seen = []);
 
-    it('keeps the secret out of the finding and its output', function () {
+    it('keeps the secret out of the finding and its output', function (): void {
         SpyVerifier::$seen = [];
 
         $path = secretFile("GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789\n");
 
-        $scanner = (new Scanner(app(Redactor::class)))
+        $scanner = (new Scanner(resolve(Redactor::class)))
             ->withVerifier(new SecretVerifier(['spy'], [new SpyVerifier]));
 
         $result = $scanner->scanFile($path, 'file_scan');
 
-        $encoded = json_encode(array_map(fn ($f) => $f->toArray(), $result->findings));
+        $encoded = json_encode(array_map(fn (ScanFinding $f): array => $f->toArray(), $result->findings));
 
         // The verifier saw it - that is its job - but nothing that gets written
         // out did.
@@ -153,12 +154,12 @@ describe('Verification never leaks the secret', function () {
         cleanupDirectory(dirname($path));
     });
 
-    it('sends nothing at all when no verifier is attached', function () {
+    it('sends nothing at all when no verifier is attached', function (): void {
         SpyVerifier::$seen = [];
 
         $path = secretFile("GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789\n");
 
-        (new Scanner(app(Redactor::class)))->scanFile($path, 'file_scan');
+        (new Scanner(resolve(Redactor::class)))->scanFile($path, 'file_scan');
 
         expect(SpyVerifier::$seen)->toBe([]);
 
@@ -166,13 +167,13 @@ describe('Verification never leaks the secret', function () {
     });
 });
 
-describe('Verification changes triage', function () {
-    afterEach(fn () => SpyVerifier::$seen = []);
+describe('Verification changes triage', function (): void {
+    afterEach(fn (): array => SpyVerifier::$seen = []);
 
-    it('ranks a confirmed-live credential above everything else', function () {
+    it('ranks a confirmed-live credential above everything else', function (): void {
         $path = secretFile("GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789\n");
 
-        $scanner = (new Scanner(app(Redactor::class)))
+        $scanner = (new Scanner(resolve(Redactor::class)))
             ->withVerifier(new SecretVerifier(['spy'], [new SpyVerifier(VerificationStatus::Active)]));
 
         $finding = $scanner->scanFile($path, 'file_scan')->findings[0];
@@ -183,17 +184,17 @@ describe('Verification changes triage', function () {
         cleanupDirectory(dirname($path));
     });
 
-    it('does not downgrade an unverifiable finding to safe', function () {
+    it('does not downgrade an unverifiable finding to safe', function (): void {
         // A check that could not complete is not evidence of safety.
         expect(VerificationStatus::Unknown->severity())->toBe('high')
             ->and(VerificationStatus::Inactive->severity())->toBe('low')
             ->and(VerificationStatus::Active->severity())->toBe('critical');
     });
 
-    it('reports the verdict in JSON output', function () {
+    it('reports the verdict in JSON output', function (): void {
         $path = secretFile("GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789\n");
 
-        $scanner = (new Scanner(app(Redactor::class)))
+        $scanner = (new Scanner(resolve(Redactor::class)))
             ->withVerifier(new SecretVerifier(['spy'], [new SpyVerifier(VerificationStatus::Inactive)]));
 
         $finding = $scanner->scanFile($path, 'file_scan')->findings[0]->toArray();
@@ -205,38 +206,38 @@ describe('Verification changes triage', function () {
     });
 });
 
-describe('Built-in verifiers', function () {
-    it('reads GitHub 401 as inactive', function () {
+describe('Built-in verifiers', function (): void {
+    it('reads GitHub 401 as inactive', function (): void {
         Http::fake(['api.github.com/*' => Http::response([], 401)]);
 
         expect((new GitHubTokenVerifier)->verify('ghp_x')->status)->toBe(VerificationStatus::Inactive);
     });
 
-    it('reads GitHub 200 as live', function () {
+    it('reads GitHub 200 as live', function (): void {
         Http::fake(['api.github.com/*' => Http::response(['login' => 'someone'], 200)]);
 
         expect((new GitHubTokenVerifier)->verify('ghp_x')->status)->toBe(VerificationStatus::Active);
     });
 
-    it('reads an unexpected GitHub status as unknown', function () {
+    it('reads an unexpected GitHub status as unknown', function (): void {
         Http::fake(['api.github.com/*' => Http::response([], 503)]);
 
         expect((new GitHubTokenVerifier)->verify('ghp_x')->status)->toBe(VerificationStatus::Unknown);
     });
 
-    it('reads Stripe 401 as inactive', function () {
+    it('reads Stripe 401 as inactive', function (): void {
         Http::fake(['api.stripe.com/*' => Http::response([], 401)]);
 
         expect((new StripeKeyVerifier)->verify('sk_live_x')->status)->toBe(VerificationStatus::Inactive);
     });
 
-    it('reads Stripe 200 as live', function () {
+    it('reads Stripe 200 as live', function (): void {
         Http::fake(['api.stripe.com/*' => Http::response(['object' => 'balance'], 200)]);
 
         expect((new StripeKeyVerifier)->verify('sk_live_x')->status)->toBe(VerificationStatus::Active);
     });
 
-    it('reads a Slack rejection from the body, not the status code', function () {
+    it('reads a Slack rejection from the body, not the status code', function (): void {
         // Slack answers 200 either way; trusting the status alone would call
         // every dead token live.
         Http::fake(['slack.com/*' => Http::response(['ok' => false, 'error' => 'invalid_auth'], 200)]);
@@ -247,13 +248,13 @@ describe('Built-in verifiers', function () {
             ->and($result->note)->toContain('invalid_auth');
     });
 
-    it('reads a Slack acceptance from the body', function () {
+    it('reads a Slack acceptance from the body', function (): void {
         Http::fake(['slack.com/*' => Http::response(['ok' => true, 'team' => 'acme'], 200)]);
 
         expect((new SlackTokenVerifier)->verify('xoxb-x')->status)->toBe(VerificationStatus::Active);
     });
 
-    it('never lets a transport failure escape as an exception', function () {
+    it('never lets a transport failure escape as an exception', function (): void {
         Http::fake(fn () => throw new \RuntimeException('connection refused'));
 
         expect((new GitHubTokenVerifier)->verify('ghp_x')->status)->toBe(VerificationStatus::Unknown)
@@ -261,7 +262,7 @@ describe('Built-in verifiers', function () {
             ->and((new SlackTokenVerifier)->verify('xoxb-x')->status)->toBe(VerificationStatus::Unknown);
     });
 
-    it('routes each entity to the right verifier', function () {
+    it('routes each entity to the right verifier', function (): void {
         expect((new GitHubTokenVerifier)->supports('github_token', 'x'))->toBeTrue()
             ->and((new GitHubTokenVerifier)->supports('stripe_key', 'x'))->toBeFalse()
             ->and((new StripeKeyVerifier)->supports('x', 'api_key_stripe'))->toBeTrue()
@@ -269,15 +270,15 @@ describe('Built-in verifiers', function () {
     });
 });
 
-describe('The scan command gate', function () {
-    beforeEach(function () {
+describe('The scan command gate', function (): void {
+    beforeEach(function (): void {
         config(['redactor.scan.profile' => 'file_scan', 'redactor.scan.baseline' => null]);
         $this->path = secretFile("GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789\n");
     });
 
     afterEach(fn () => cleanupDirectory(dirname($this->path)));
 
-    it('refuses --verify when config has not enabled it', function () {
+    it('refuses --verify when config has not enabled it', function (): void {
         config(['redactor.scan.verification' => ['enabled' => false, 'verifiers' => ['github_token']]]);
 
         $exit = Artisan::call('redactor:scan', ['paths' => [$this->path], '--verify' => true]);
@@ -286,13 +287,13 @@ describe('The scan command gate', function () {
             ->and(Artisan::output())->toContain('Verification is not enabled');
     });
 
-    it('refuses --verify when enabled with an empty allowlist', function () {
+    it('refuses --verify when enabled with an empty allowlist', function (): void {
         config(['redactor.scan.verification' => ['enabled' => true, 'verifiers' => []]]);
 
         expect(Artisan::call('redactor:scan', ['paths' => [$this->path], '--verify' => true]))->toBe(1);
     });
 
-    it('names the hosts before contacting any of them', function () {
+    it('names the hosts before contacting any of them', function (): void {
         config(['redactor.scan.verification' => ['enabled' => true, 'verifiers' => ['github_token']]]);
         Http::fake(['api.github.com/*' => Http::response([], 401)]);
 
@@ -301,7 +302,7 @@ describe('The scan command gate', function () {
         expect(Artisan::output())->toContain('api.github.com');
     });
 
-    it('sends nothing when --verify is absent, however config is set', function () {
+    it('sends nothing when --verify is absent, however config is set', function (): void {
         config(['redactor.scan.verification' => ['enabled' => true, 'verifiers' => ['github_token']]]);
         Http::fake();
 

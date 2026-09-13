@@ -92,7 +92,7 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
         $settings = $context->config->recognition;
         $recognizer = $this->recognizer($settings, $context);
 
-        if ($recognizer === null) {
+        if (! $recognizer instanceof Recognizer) {
             return [];
         }
 
@@ -217,7 +217,7 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
         $driver = $this->string($settings, 'driver', 'presidio');
         $recognizer = $context->recognizers()->get($driver);
 
-        if ($recognizer === null) {
+        if (! $recognizer instanceof Recognizer) {
             InternalLog::warning('Unknown entity recogniser; continuing with rules only', [
                 'driver' => $driver,
                 'available' => $context->recognizers()->names(),
@@ -275,7 +275,7 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
     {
         $entities = $settings['entities'] ?? [];
 
-        return is_array($entities) ? array_values(array_filter($entities, 'is_string')) : [];
+        return is_array($entities) ? array_values(array_filter($entities, is_string(...))) : [];
     }
 
     /**

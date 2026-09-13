@@ -51,25 +51,25 @@ function seamDetection(string $rule, int $offset, string $value, float $score = 
     return new Detection(entity: $rule, rule: $rule, offset: $offset, value: $value, confidence: Confidence::of($score));
 }
 
-describe('Surrogates survive the rest of the chain', function () {
-    it('does not let the entropy detector eat a surrogate the regex detector just wrote', function () {
+describe('Surrogates survive the rest of the chain', function (): void {
+    it('does not let the entropy detector eat a surrogate the regex detector just wrote', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'operators' => ['default' => 'redact', 'stripe_key' => ['surrogate' => ['preserve_prefix' => 8]]],
         ]));
 
-        $result = app(Redactor::class)->redact('key sk_live_4eC39HqLyjWDarjtT1zdp7dc end', 'seam');
+        $result = resolve(Redactor::class)->redact('key sk_live_4eC39HqLyjWDarjtT1zdp7dc end', 'seam');
 
         expect($result)->toMatch('/^key sk_live_[A-Za-z0-9]{24} end$/')
             ->and($result)->not->toContain('4eC39HqLyjWDarjtT1zdp7dc')
             ->and($result)->not->toContain('[REDACTED]');
     });
 
-    it('reports the original secret, never the surrogate, in the findings', function () {
+    it('reports the original secret, never the surrogate, in the findings', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'operators' => ['default' => 'redact', 'stripe_key' => 'surrogate'],
         ]));
 
-        $result = app(Redactor::class)->redactWithMetadata('key sk_live_4eC39HqLyjWDarjtT1zdp7dc end', 'seam');
+        $result = resolve(Redactor::class)->inspect('key sk_live_4eC39HqLyjWDarjtT1zdp7dc end', 'seam');
 
         expect($result->findings)->toHaveCount(1)
             ->and($result->findings[0]->rule)->toBe('stripe')
@@ -77,8 +77,8 @@ describe('Surrogates survive the rest of the chain', function () {
     });
 });
 
-describe('Offsets are always against the original value', function () {
-    it('keeps a later rule\'s offsets correct after an earlier rule changed the length', function () {
+describe('Offsets are always against the original value', function (): void {
+    it('keeps a later rule\'s offsets correct after an earlier rule changed the length', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'patterns' => [
                 'email' => SEAM_EMAIL,
@@ -88,7 +88,7 @@ describe('Offsets are always against the original value', function () {
         ]));
 
         $line = 'contact a@b.com card 4111111111111111 end';
-        $result = app(Redactor::class)->redactWithMetadata($line, 'seam');
+        $result = resolve(Redactor::class)->inspect($line, 'seam');
 
         $byRule = [];
         foreach ($result->findings as $finding) {
@@ -100,13 +100,13 @@ describe('Offsets are always against the original value', function () {
             ->and($result->value)->toBe('contact [REDACTED] card [REDACTED] end');
     });
 
-    it('gives the scanner the right column for the second finding on a line', function () {
+    it('gives the scanner the right column for the second finding on a line', function (): void {
         $path = tempnam(sys_get_temp_dir(), 'seam');
         $line = 'contact a@b.com card 4111111111111111 end';
         file_put_contents($path, $line."\n");
 
         try {
-            $findings = app(Scanner::class)->scanFile($path, 'file_scan')->findings;
+            $findings = resolve(Scanner::class)->scanFile($path, 'file_scan')->findings;
         } finally {
             unlink($path);
         }
@@ -121,11 +121,11 @@ describe('Offsets are always against the original value', function () {
     });
 });
 
-describe('Entropy detections are first-class', function () {
-    it('carries a score and its signals', function () {
+describe('Entropy detections are first-class', function (): void {
+    it('carries a score and its signals', function (): void {
         config()->set('redactor.profiles.seam', seamProfile(['patterns' => []]));
 
-        $result = app(Redactor::class)->redactWithMetadata(['v' => 'Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf'], 'seam');
+        $result = resolve(Redactor::class)->inspect(['v' => 'Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf'], 'seam');
 
         expect($result->findings[0]->rule)->toBe('shannon_entropy')
             ->and($result->findings[0]->entity)->toBe('high_entropy')
@@ -133,43 +133,43 @@ describe('Entropy detections are first-class', function () {
             ->and(implode(' ', $result->findings[0]->confidence?->explain() ?? []))->toContain('entropy');
     });
 
-    it('scores higher beside a credential keyword', function () {
+    it('scores higher beside a credential keyword', function (): void {
         config()->set('redactor.profiles.seam', seamProfile(['patterns' => []]));
 
-        $bare = app(Redactor::class)->redactWithMetadata(['v' => 'Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf'], 'seam');
-        $labelled = app(Redactor::class)->redactWithMetadata(['v' => 'token=Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf'], 'seam');
+        $bare = resolve(Redactor::class)->inspect(['v' => 'Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf'], 'seam');
+        $labelled = resolve(Redactor::class)->inspect(['v' => 'token=Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf'], 'seam');
 
         expect($labelled->findings[0]->confidence?->score)
             ->toBeGreaterThan($bare->findings[0]->confidence?->score ?? 1.0);
     });
 
-    it('respects the confidence floor', function () {
+    it('respects the confidence floor', function (): void {
         config()->set('redactor.profiles.seam', seamProfile(['patterns' => [], 'min_confidence' => 0.99]));
 
-        $result = app(Redactor::class)->redactWithMetadata(['v' => 'Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf'], 'seam');
+        $result = resolve(Redactor::class)->inspect(['v' => 'Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf'], 'seam');
 
         expect($result->wasRedacted)->toBeFalse()
             ->and($result->value)->toBe(['v' => 'Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf']);
     });
 
-    it('goes through the configured operator', function () {
+    it('goes through the configured operator', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'patterns' => [],
             'operators' => ['default' => 'hash'],
         ]));
 
-        $result = app(Redactor::class)->redact(['v' => 'note Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf end'], 'seam');
+        $result = resolve(Redactor::class)->redact(['v' => 'note Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf end'], 'seam');
 
         expect($result['v'])->toMatch('/^note \[high_entropy:[a-z0-9]+\] end$/');
     });
 
-    it('still fails closed when the tokeniser cannot split the value', function () {
+    it('still fails closed when the tokeniser cannot split the value', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'patterns' => [],
             'operators' => ['default' => 'hash'],
         ]));
 
-        $result = app(Redactor::class)->redact(['v' => "\xff\xfe bad Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf"], 'seam');
+        $result = resolve(Redactor::class)->redact(['v' => "\xff\xfe bad Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf"], 'seam');
 
         // Plain replacement, whatever the operator policy says: there is
         // nothing meaningful to hash.
@@ -177,8 +177,8 @@ describe('Entropy detections are first-class', function () {
     });
 });
 
-describe('Overlap resolution', function () {
-    it('lets a validated card beat the digit run that also matched it', function () {
+describe('Overlap resolution', function (): void {
+    it('lets a validated card beat the digit run that also matched it', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'patterns' => [
                 'digits' => ['pattern' => '/\d+/', 'entity' => 'digits'],
@@ -188,11 +188,11 @@ describe('Overlap resolution', function () {
             'shannon_entropy' => ['enabled' => false],
         ]));
 
-        expect(app(Redactor::class)->redact('paid 4111111111111111 ok', 'seam'))
+        expect(resolve(Redactor::class)->redact('paid 4111111111111111 ok', 'seam'))
             ->toBe('paid ************1111 ok');
     });
 
-    it('lets the rule listed first win an equal-score overlap', function () {
+    it('lets the rule listed first win an equal-score overlap', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'patterns' => [
                 'url_with_auth' => ['pattern' => '/(https?:\/\/[^:\/\s]+:)([^@\/\s]+)(@)/', 'capture' => 2],
@@ -201,11 +201,11 @@ describe('Overlap resolution', function () {
             'shannon_entropy' => ['enabled' => false],
         ]));
 
-        expect(app(Redactor::class)->redact('https://admin:hunter2@db.example.com/x', 'seam'))
+        expect(resolve(Redactor::class)->redact('https://admin:hunter2@db.example.com/x', 'seam'))
             ->toBe('https://admin:[REDACTED]@db.example.com/x');
     });
 
-    it('never returns overlapping spans', function () {
+    it('never returns overlapping spans', function (): void {
         $kept = DetectionSet::resolve([
             seamDetection('a', 0, 'aaaaa', 0.6),
             seamDetection('b', 3, 'bbbbb', 0.7),
@@ -213,19 +213,19 @@ describe('Overlap resolution', function () {
             seamDetection('d', 20, 'dd', 0.2),
         ], 0.3);
 
-        expect(array_map(fn (Detection $d) => $d->rule, $kept))->toBe(['b']);
+        expect(array_map(fn (Detection $d): string => $d->rule, $kept))->toBe(['b']);
     });
 
-    it('keeps the order of arrival as the tie-break, not the order of offset', function () {
+    it('keeps the order of arrival as the tie-break, not the order of offset', function (): void {
         $kept = DetectionSet::resolve([
             seamDetection('later', 2, 'xxxx'),
             seamDetection('earlier', 0, 'yyyy'),
         ]);
 
-        expect(array_map(fn (Detection $d) => $d->rule, $kept))->toBe(['later']);
+        expect(array_map(fn (Detection $d): string => $d->rule, $kept))->toBe(['later']);
     });
 
-    it('lets a fail-closed detection swallow everything', function () {
+    it('lets a fail-closed detection swallow everything', function (): void {
         $kept = DetectionSet::resolve([
             seamDetection('a', 0, 'aaaaa', 0.9),
             Detection::failClosed('x', 'x', 'aaaaa bbbbb', '', 'engine gave up'),
@@ -236,14 +236,14 @@ describe('Overlap resolution', function () {
     });
 });
 
-describe('Preserved detections are reported, not redacted', function () {
-    it('lists the finding without marking the payload redacted', function () {
+describe('Preserved detections are reported, not redacted', function (): void {
+    it('lists the finding without marking the payload redacted', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'operators' => ['default' => 'redact', 'email' => 'preserve'],
             'shannon_entropy' => ['enabled' => false],
         ]));
 
-        $result = app(Redactor::class)->redactWithMetadata(['v' => 'hi bob@example.com'], 'seam');
+        $result = resolve(Redactor::class)->inspect(['v' => 'hi bob@example.com'], 'seam');
 
         expect($result->value)->toBe(['v' => 'hi bob@example.com'])
             ->and($result->wasRedacted)->toBeFalse()
@@ -252,8 +252,8 @@ describe('Preserved detections are reported, not redacted', function () {
     });
 });
 
-describe('Keyword prefilter', function () {
-    it('skips a rule when none of its keywords appear in the subject', function () {
+describe('Keyword prefilter', function (): void {
+    it('skips a rule when none of its keywords appear in the subject', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'patterns' => [
                 'phone_bare' => ['pattern' => '/\b\d{10}\b/', 'keywords' => ['phone', 'tel']],
@@ -261,13 +261,13 @@ describe('Keyword prefilter', function () {
             'shannon_entropy' => ['enabled' => false],
         ]));
 
-        expect(app(Redactor::class)->redact('started at 1694600000', 'seam'))
+        expect(resolve(Redactor::class)->redact('started at 1694600000', 'seam'))
             ->toBe('started at 1694600000')
-            ->and(app(Redactor::class)->redact('Phone: 5558675309', 'seam'))
+            ->and(resolve(Redactor::class)->redact('Phone: 5558675309', 'seam'))
             ->toBe('Phone: [REDACTED]');
     });
 
-    it('matches keywords case-insensitively', function () {
+    it('matches keywords case-insensitively', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'patterns' => [
                 'email' => ['pattern' => SEAM_EMAIL, 'keywords' => ['@']],
@@ -275,39 +275,39 @@ describe('Keyword prefilter', function () {
             'shannon_entropy' => ['enabled' => false],
         ]));
 
-        expect(app(Redactor::class)->redact('BOB@EXAMPLE.COM', 'seam'))->toBe('[REDACTED]');
+        expect(resolve(Redactor::class)->redact('BOB@EXAMPLE.COM', 'seam'))->toBe('[REDACTED]');
     });
 
-    it('rejects a non-list keywords option', function () {
+    it('rejects a non-list keywords option', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'patterns' => ['x' => ['pattern' => '/x/', 'keywords' => 'phone']],
         ]));
 
-        app(Redactor::class)->redact('x', 'seam');
+        resolve(Redactor::class)->redact('x', 'seam');
     })->throws(\InvalidArgumentException::class, 'keywords');
 });
 
-describe('Pattern min_length', function () {
-    it('skips a subject shorter than the rule can match, and only then', function () {
+describe('Pattern min_length', function (): void {
+    it('skips a subject shorter than the rule can match, and only then', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'patterns' => ['digits' => ['pattern' => '/\d+/', 'min_length' => 5]],
             'shannon_entropy' => ['enabled' => false],
         ]));
 
-        expect(app(Redactor::class)->redact('1234', 'seam'))->toBe('1234')
-            ->and(app(Redactor::class)->redact('12345', 'seam'))->toBe('[REDACTED]')
-            ->and(app(Redactor::class)->redact('ab 12', 'seam'))->toBe('ab [REDACTED]');
+        expect(resolve(Redactor::class)->redact('1234', 'seam'))->toBe('1234')
+            ->and(resolve(Redactor::class)->redact('12345', 'seam'))->toBe('[REDACTED]')
+            ->and(resolve(Redactor::class)->redact('ab 12', 'seam'))->toBe('ab [REDACTED]');
     });
 
-    it('rejects a non-positive min_length', function () {
+    it('rejects a non-positive min_length', function (): void {
         config()->set('redactor.profiles.seam', seamProfile([
             'patterns' => ['digits' => ['pattern' => '/\d+/', 'min_length' => 0]],
         ]));
 
-        app(Redactor::class)->redact('1', 'seam');
+        resolve(Redactor::class)->redact('1', 'seam');
     })->throws(\InvalidArgumentException::class, 'min_length');
 
-    it('declares no shipped min_length above the length of the secret it catches', function () {
+    it('declares no shipped min_length above the length of the secret it catches', function (): void {
         // Every planted secret in the shipped-pattern suite must still be
         // caught; this pins the cheaper invariant that no rule declares a
         // minimum its own sample would fail.

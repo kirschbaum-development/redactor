@@ -7,6 +7,7 @@ namespace Kirschbaum\Redactor\Tokenization;
 use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Operators\Operator;
 use Kirschbaum\Redactor\Operators\OperatorContext;
+use Kirschbaum\Redactor\Support\Pseudonymizer;
 
 /**
  * Replaces the span with a token the application can exchange back.
@@ -41,7 +42,7 @@ class TokenizeOperator implements Operator
     {
         $pseudonymizer = $context->pseudonymizer();
 
-        if ($pseudonymizer === null) {
+        if (! $pseudonymizer instanceof Pseudonymizer) {
             return $context->replacement;
         }
 

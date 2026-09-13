@@ -138,7 +138,7 @@ class RedactorScanCommand extends Command
                 ConfigValue::map(config('redactor.scan.verification', []), 'scan.verification')
             );
 
-            if ($verifier === null) {
+            if (! $verifier instanceof SecretVerifier) {
                 $this->components->error(
                     'Verification is not enabled. Set redactor.scan.verification.enabled to true '
                     .'and list the providers you permit under redactor.scan.verification.verifiers.'
@@ -182,7 +182,7 @@ class RedactorScanCommand extends Command
         }
 
         /** @var Collection<int, ScanFinding> $allFindings */
-        $allFindings = $results->flatMap(fn (ScanResult $r) => $r->findings);
+        $allFindings = $results->flatMap(fn (ScanResult $r): array => $r->findings);
 
         if ($updateBaseline) {
             return $this->writeBaseline($baselinePath, $allFindings->all(), $ruleset);
@@ -192,14 +192,14 @@ class RedactorScanCommand extends Command
 
         if (! $baseline->isEmpty()) {
             $before = $allFindings->count();
-            $results = $results->map(fn (ScanResult $r) => $r->withoutBaseline($baseline->fingerprints));
-            $allFindings = $results->flatMap(fn (ScanResult $r) => $r->findings);
+            $results = $results->map(fn (ScanResult $r): ScanResult => $r->withoutBaseline($baseline->fingerprints));
+            $allFindings = $results->flatMap(fn (ScanResult $r): array => $r->findings);
             $suppressed = $before - $allFindings->count();
         }
 
         $this->displayResults($results, $allFindings->all(), $outputFormat, $summaryOnly, $ruleset);
 
-        $filesWithFindings = $results->filter(fn (ScanResult $r) => $r->hasFindings());
+        $filesWithFindings = $results->filter(fn (ScanResult $r): bool => $r->hasFindings());
 
         if (! $quiet) {
             $this->newLine();
@@ -260,13 +260,13 @@ class RedactorScanCommand extends Command
 
         $patches = match (true) {
             (bool) $this->option('staged') => $git->staged($pathspec),
-            is_string($this->option('diff')) && $this->option('diff') !== '' => $git->diff((string) $this->option('diff'), $pathspec),
+            is_string($this->option('diff')) && $this->option('diff') !== '' => $git->diff($this->option('diff'), $pathspec),
             default => $git->history(is_string($this->option('history')) ? $this->option('history') : null, $pathspec),
         };
 
         return array_values(array_filter(
             $patches,
-            fn (Patch $patch) => ! FileCollector::matchesExclude($patch->path, $ignorePatterns)
+            fn (Patch $patch): bool => ! FileCollector::matchesExclude($patch->path, $ignorePatterns)
         ));
     }
 
@@ -361,15 +361,15 @@ class RedactorScanCommand extends Command
      */
     protected function displayJsonResults(Collection $results, ?string $ruleset = null): void
     {
-        $jsonData = $results->map(fn (ScanResult $r) => [
+        $jsonData = $results->map(fn (ScanResult $r): array => [
             'path' => $r->path,
             'ruleset' => $ruleset,
             'status' => $r->skipped ? 'skipped' : ($r->hasFindings() ? 'findings' : 'clean'),
             'findings_count' => count($r->findings),
-            'findings' => array_map(fn (ScanFinding $f) => $f->toArray(), $r->findings),
+            'findings' => array_map(fn (ScanFinding $f): array => $f->toArray(), $r->findings),
             'profile' => $r->profile,
             'error' => $r->error,
-        ])->toArray();
+        ])->all();
 
         $jsonOutput = json_encode($jsonData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
@@ -408,16 +408,16 @@ class RedactorScanCommand extends Command
 
         // Findings, not files: a list of file names with a count next to each is nothing
         // you can act on. Sorted by severity so the certain findings are read first...
-        $rank = fn (ScanFinding $f) => match ($f->severity()) {
+        $rank = fn (ScanFinding $f): int => match ($f->severity()) {
             'critical' => 4, 'high' => 3, 'medium' => 2, 'low' => 1, default => 0,
         };
 
-        usort($findings, fn (ScanFinding $a, ScanFinding $b) => [$rank($b), $b->confidence ?? 1.0]
+        usort($findings, fn (ScanFinding $a, ScanFinding $b): int => [$rank($b), $b->confidence ?? 1.0]
             <=> [$rank($a), $a->confidence ?? 1.0]);
 
         $this->table(
             ['Severity', 'Rule', 'Location', 'Excerpt'],
-            array_map(fn (ScanFinding $f) => [
+            array_map(fn (ScanFinding $f): array => [
                 match ($f->severity()) {
                     'critical' => '<fg=white;bg=red>LIVE</>',
                     'high' => '<fg=red>HIGH</>',
@@ -426,19 +426,19 @@ class RedactorScanCommand extends Command
                     default => '<fg=gray>VERY LOW</>',
                 },
                 $f->rule,
-                self::shorten($f->location(), 52),
-                self::shorten($f->excerpt, 48),
+                $this->shorten($f->location(), 52),
+                $this->shorten($f->excerpt, 48),
             ], $findings)
         );
 
-        $skipped = $results->filter(fn (ScanResult $r) => $r->skipped);
+        $skipped = $results->filter(fn (ScanResult $r): bool => $r->skipped);
 
         foreach ($skipped as $result) {
             $this->components->warn("Skipped {$result->path}: {$result->error}");
         }
     }
 
-    private static function shorten(string $value, int $limit = 60): string
+    private function shorten(string $value, int $limit = 60): string
     {
         return strlen($value) > $limit ? '...'.substr($value, -($limit - 3)) : $value;
     }

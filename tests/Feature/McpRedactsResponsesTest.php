@@ -102,8 +102,8 @@ class ObservabilityServer extends RedactedServer
     }
 }
 
-describe('RedactsResponses on an MCP server', function () {
-    it('redacts a tool\'s text content', function () {
+describe('RedactsResponses on an MCP server', function (): void {
+    it('redacts a tool\'s text content', function (): void {
         RedactedServer::tool(LeakyTool::class)
             ->assertOk()
             ->assertDontSee('bob@example.com')
@@ -112,47 +112,47 @@ describe('RedactsResponses on an MCP server', function () {
             ->assertSee('************1111');
     });
 
-    it('redacts structured content as data, keeping its shape', function () {
+    it('redacts structured content as data, keeping its shape', function (): void {
         RedactedServer::tool(StructuredTool::class)
             ->assertOk()
             ->assertStructuredContent(['id' => 7, 'email' => '[REDACTED]', 'password' => '[REDACTED]']);
     });
 
-    it('redacts JSON returned as text', function () {
+    it('redacts JSON returned as text', function (): void {
         RedactedServer::tool(JsonTextTool::class)
             ->assertOk()
             ->assertDontSee('bob@example.com')
             ->assertSee('"id":7');
     });
 
-    it('leaves binary content alone', function () {
+    it('leaves binary content alone', function (): void {
         $response = RedactedServer::tool(BlobTool::class)->assertOk();
 
         $response->assertDontSee('[REDACTED]');
     });
 
-    it('redacts an error message', function () {
+    it('redacts an error message', function (): void {
         RedactedServer::tool(ErrorTool::class)
             ->assertHasErrors()
             ->assertDontSee('s3cr3t')
             ->assertSee('postgres://app:[REDACTED]@db.internal/app');
     });
 
-    it('redacts a resource read', function () {
+    it('redacts a resource read', function (): void {
         RedactedServer::resource(CustomerResource::class)
             ->assertOk()
             ->assertDontSee('bob@example.com')
             ->assertSee('email: [REDACTED]');
     });
 
-    it('redacts a prompt\'s messages', function () {
+    it('redacts a prompt\'s messages', function (): void {
         RedactedServer::prompt(SummaryPrompt::class)
             ->assertOk()
             ->assertDontSee('bob@example.com')
             ->assertSee('************1111');
     });
 
-    it('honours the profile the server names', function () {
+    it('honours the profile the server names', function (): void {
         config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
 
         ObservabilityServer::tool(LeakyTool::class)

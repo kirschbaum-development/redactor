@@ -40,7 +40,7 @@ class PingDto
  */
 class RepeatedChildDto
 {
-    public function __construct(private object $child) {}
+    public function __construct(private readonly object $child) {}
 
     public function toArray(): array
     {
@@ -76,15 +76,15 @@ function recursionProfile(array $overrides = []): array
     ], $overrides);
 }
 
-describe('Recursion limits', function () {
-    beforeEach(function () {
+describe('Recursion limits', function (): void {
+    beforeEach(function (): void {
         config()->set('redactor.profiles.recursion', recursionProfile());
     });
 
-    it('breaks a self-referencing toArray() instead of exhausting memory', function () {
+    it('breaks a self-referencing toArray() instead of exhausting memory', function (): void {
         // Before the depth budget and cycle check existed, this exhausted the
         // 128 MB memory limit and killed the process with a fatal error.
-        $result = app(Redactor::class)->redact(['dto' => new SelfReferencingDto], 'recursion');
+        $result = resolve(Redactor::class)->redact(['dto' => new SelfReferencingDto], 'recursion');
 
         expect($result)->toBeArray()
             ->and($result['dto'])->toBeArray()
@@ -93,20 +93,20 @@ describe('Recursion limits', function () {
             ->and($result['dto']['password'])->toBe('[REDACTED]');
     });
 
-    it('breaks a two-object reference cycle', function () {
+    it('breaks a two-object reference cycle', function (): void {
         $a = new PingDto;
         $b = new PingDto;
         $a->partner = $b;
         $b->partner = $a;
 
-        $result = app(Redactor::class)->redact(['a' => $a], 'recursion');
+        $result = resolve(Redactor::class)->redact(['a' => $a], 'recursion');
 
         expect($result['a']['partner']['partner'])->toContain('Circular reference')
             ->and($result['a']['token'])->toBe('[REDACTED]');
     });
 
-    it('still walks the same object twice when it is repeated, not cyclic', function () {
-        $result = app(Redactor::class)->redact(
+    it('still walks the same object twice when it is repeated, not cyclic', function (): void {
+        $result = resolve(Redactor::class)->redact(
             ['parent' => new RepeatedChildDto(new LeafDto)],
             'recursion'
         );
@@ -119,7 +119,7 @@ describe('Recursion limits', function () {
             ->and($result['parent']['second']['keep'])->toBe('visible');
     });
 
-    it('replaces anything deeper than max_depth', function () {
+    it('replaces anything deeper than max_depth', function (): void {
         config()->set('redactor.profiles.recursion', recursionProfile(['max_depth' => 4]));
 
         $payload = ['password' => 'top'];
@@ -127,7 +127,7 @@ describe('Recursion limits', function () {
             $payload = ['nested' => $payload];
         }
 
-        $result = app(Redactor::class)->redact($payload, 'recursion');
+        $result = resolve(Redactor::class)->redact($payload, 'recursion');
 
         $json = json_encode($result);
 
@@ -137,10 +137,10 @@ describe('Recursion limits', function () {
             ->and($json)->not->toContain('top');
     });
 
-    it('leaves payloads shallower than max_depth completely intact', function () {
+    it('leaves payloads shallower than max_depth completely intact', function (): void {
         config()->set('redactor.profiles.recursion', recursionProfile(['max_depth' => 6]));
 
-        $result = app(Redactor::class)->redact([
+        $result = resolve(Redactor::class)->redact([
             'a' => ['b' => ['c' => ['d' => ['keep' => 'value', 'password' => 'x']]]],
         ], 'recursion');
 
@@ -149,14 +149,14 @@ describe('Recursion limits', function () {
             ->and(json_encode($result))->not->toContain('Max depth');
     });
 
-    it('survives a deeply nested payload that would previously blow the stack', function () {
+    it('survives a deeply nested payload that would previously blow the stack', function (): void {
         $payload = 'leaf';
         for ($i = 0; $i < 20_000; $i++) {
             $payload = ['n' => $payload];
         }
 
         $before = memory_get_usage();
-        $result = app(Redactor::class)->redact($payload, 'recursion');
+        $result = resolve(Redactor::class)->redact($payload, 'recursion');
         $growth = (memory_get_usage() - $before) / 1_048_576;
 
         expect(json_encode($result))->toContain('Max depth of 32 exceeded')
@@ -164,13 +164,13 @@ describe('Recursion limits', function () {
             ->and($growth)->toBeLessThan(16.0);
     });
 
-    it('marks the payload as redacted when the depth limit trips', function () {
+    it('marks the payload as redacted when the depth limit trips', function (): void {
         config()->set('redactor.profiles.recursion', recursionProfile([
             'max_depth' => 2,
             'mark_redacted' => true,
         ]));
 
-        $result = app(Redactor::class)->redact(
+        $result = resolve(Redactor::class)->redact(
             ['a' => ['b' => ['c' => ['harmless' => 'value']]]],
             'recursion'
         );
@@ -179,7 +179,7 @@ describe('Recursion limits', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('defaults max_depth when a profile does not set one', function () {
+    it('defaults max_depth when a profile does not set one', function (): void {
         $profile = recursionProfile();
         unset($profile['max_depth']);
         config()->set('redactor.profiles.recursion_default', $profile);
@@ -188,10 +188,10 @@ describe('Recursion limits', function () {
             ->toBe(RedactorConfig::DEFAULT_MAX_DEPTH);
     });
 
-    it('rejects a non-positive max_depth', function () {
+    it('rejects a non-positive max_depth', function (): void {
         config()->set('redactor.profiles.recursion_bad', recursionProfile(['max_depth' => 0]));
 
-        expect(fn () => RedactorConfig::fromConfig('recursion_bad'))
+        expect(fn (): RedactorConfig => RedactorConfig::fromConfig('recursion_bad'))
             ->toThrow(\InvalidArgumentException::class, 'profiles.recursion_bad.max_depth');
     });
 });

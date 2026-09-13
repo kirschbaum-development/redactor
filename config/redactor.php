@@ -1117,7 +1117,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Register custom strategy classes that can be used in profiles.
-    | These should implement RedactionStrategyInterface.
+    | These should implement Strategies\Contracts\Strategy.
     |
     */
 

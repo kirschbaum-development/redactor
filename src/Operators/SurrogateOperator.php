@@ -6,6 +6,7 @@ namespace Kirschbaum\Redactor\Operators;
 
 use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Operators\Surrogates\SurrogateFactory;
+use Kirschbaum\Redactor\Support\Pseudonymizer;
 
 /**
  * Replaces the span with a stable fake of the same shape.
@@ -34,7 +35,7 @@ class SurrogateOperator implements Operator
     {
         $pseudonymizer = $context->pseudonymizer();
 
-        if ($pseudonymizer === null) {
+        if (! $pseudonymizer instanceof Pseudonymizer) {
             // Without a key there is no stable mapping to produce, and an unstable one would look joinable and silently not be...
             return $context->replacement;
         }

@@ -12,8 +12,8 @@ use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
-describe('Redactor Mixed Input Types Tests', function () {
-    beforeEach(function () {
+describe('Redactor Mixed Input Types Tests', function (): void {
+    beforeEach(function (): void {
         // Set up profile-based configuration
         config()->set('redactor.default_profile', 'default');
         config()->set('redactor.profiles.default', [
@@ -47,7 +47,7 @@ describe('Redactor Mixed Input Types Tests', function () {
         ]);
     });
 
-    it('handles string input with email pattern redaction', function () {
+    it('handles string input with email pattern redaction', function (): void {
         $redactor = new Redactor;
 
         $email = 'user@example.com';
@@ -56,7 +56,7 @@ describe('Redactor Mixed Input Types Tests', function () {
         expect($result)->toBe('[REDACTED]');
     });
 
-    it('handles string input without redaction needed', function () {
+    it('handles string input without redaction needed', function (): void {
         $redactor = new Redactor;
 
         $normalString = 'Hello World';
@@ -65,7 +65,7 @@ describe('Redactor Mixed Input Types Tests', function () {
         expect($result)->toBe('Hello World');
     });
 
-    it('handles string input with high entropy redaction', function () {
+    it('handles string input with high entropy redaction', function (): void {
         $redactor = new Redactor;
 
         // High entropy string over minimum length
@@ -75,7 +75,7 @@ describe('Redactor Mixed Input Types Tests', function () {
         expect($result)->toBe('[REDACTED]');
     });
 
-    it('handles object input with toArray method', function () {
+    it('handles object input with toArray method', function (): void {
         $redactor = new Redactor;
 
         $object = new class
@@ -99,7 +99,7 @@ describe('Redactor Mixed Input Types Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles object input without toArray method via JSON serialization', function () {
+    it('handles object input without toArray method via JSON serialization', function (): void {
         $redactor = new Redactor;
 
         $object = new \stdClass;
@@ -116,7 +116,7 @@ describe('Redactor Mixed Input Types Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles non-serializable object based on behavior config', function () {
+    it('handles non-serializable object based on behavior config', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'preserve');
 
@@ -131,7 +131,7 @@ describe('Redactor Mixed Input Types Tests', function () {
         expect($result)->toBe($object); // Should preserve original object
     });
 
-    it('handles non-serializable object with remove behavior', function () {
+    it('handles non-serializable object with remove behavior', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'remove');
 
@@ -146,7 +146,7 @@ describe('Redactor Mixed Input Types Tests', function () {
         expect($result)->toBe('__REDACTOR_REMOVE_OBJECT__');
     });
 
-    it('handles non-serializable object with empty_array behavior', function () {
+    it('handles non-serializable object with empty_array behavior', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'empty_array');
 
@@ -164,7 +164,7 @@ describe('Redactor Mixed Input Types Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles non-serializable object with redact behavior', function () {
+    it('handles non-serializable object with redact behavior', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'redact');
 
@@ -181,7 +181,7 @@ describe('Redactor Mixed Input Types Tests', function () {
             ->and($result)->toContain('stdClass');
     });
 
-    it('handles integer input unchanged', function () {
+    it('handles integer input unchanged', function (): void {
         $redactor = new Redactor;
 
         $integer = 12345;
@@ -190,7 +190,7 @@ describe('Redactor Mixed Input Types Tests', function () {
         expect($result)->toBe(12345);
     });
 
-    it('handles float input unchanged', function () {
+    it('handles float input unchanged', function (): void {
         $redactor = new Redactor;
 
         $float = 123.45;
@@ -199,7 +199,7 @@ describe('Redactor Mixed Input Types Tests', function () {
         expect($result)->toBe(123.45);
     });
 
-    it('handles boolean input unchanged', function () {
+    it('handles boolean input unchanged', function (): void {
         $redactor = new Redactor;
 
         $boolean = true;
@@ -208,7 +208,7 @@ describe('Redactor Mixed Input Types Tests', function () {
         expect($result)->toBe(true);
     });
 
-    it('handles null input unchanged', function () {
+    it('handles null input unchanged', function (): void {
         $redactor = new Redactor;
 
         $null = null;
@@ -217,7 +217,7 @@ describe('Redactor Mixed Input Types Tests', function () {
         expect($result)->toBeNull();
     });
 
-    it('handles array input with metadata (existing functionality)', function () {
+    it('handles array input with metadata (existing functionality)', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.track_redacted_keys', true);
 
@@ -240,7 +240,7 @@ describe('Redactor Mixed Input Types Tests', function () {
             ->and($result['_redacted_keys'])->toContain('password');
     });
 
-    it('does not add metadata to non-array results', function () {
+    it('does not add metadata to non-array results', function (): void {
         $redactor = new Redactor;
 
         $email = 'user@example.com';
@@ -251,7 +251,7 @@ describe('Redactor Mixed Input Types Tests', function () {
             ->and($result)->not->toBeArray();
     });
 
-    it('handles nested mixed types within arrays', function () {
+    it('handles nested mixed types within arrays', function (): void {
         $redactor = new Redactor;
 
         $object = new \stdClass;
@@ -283,8 +283,8 @@ describe('Redactor Mixed Input Types Tests', function () {
     });
 });
 
-describe('Redactor Nested Structure Tests', function () {
-    beforeEach(function () {
+describe('Redactor Nested Structure Tests', function (): void {
+    beforeEach(function (): void {
         // Set up profile-based configuration for nested tests
         config()->set('redactor.default_profile', 'default');
         config()->set('redactor.profiles.default', [
@@ -316,7 +316,7 @@ describe('Redactor Nested Structure Tests', function () {
         ]);
     });
 
-    it('handles nested arrays and objects recursively', function () {
+    it('handles nested arrays and objects recursively', function (): void {
         $redactor = new Redactor;
 
         $context = [

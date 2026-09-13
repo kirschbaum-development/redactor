@@ -12,7 +12,7 @@ class FileCollector
     /**
      * How much of a file to inspect when deciding whether it is binary.
      */
-    private const BINARY_SNIFF_BYTES = 8192;
+    private const int BINARY_SNIFF_BYTES = 8192;
 
     /**
      * Collect the files eligible for scanning.
@@ -180,11 +180,7 @@ class FileCollector
             return false;
         }
 
-        if ($skipBinary && self::looksBinary($filePath)) {
-            return false;
-        }
-
-        return true;
+        return ! $skipBinary || ! self::looksBinary($filePath);
     }
 
     /**

@@ -140,7 +140,7 @@ packaging and conventions. Each item is one commit, with tests.
   string - a regex, an entropy measure, a recogniser model in another process
   - plugs into the same resolution and operator pipeline.
 
-- `Redactor::redactWithMetadata()` returning a `RedactionResult`. (R-07)
+- `Redactor::inspect()` returning a `RedactionResult`. (R-07)
 - `Redactor::redactSafely()`, which never throws. (R-04)
 - `php artisan redactor:validate` - resolves every profile and fails on the
   broken ones, including keys listed as both safe and blocked. (R-04, R-02)
@@ -211,7 +211,7 @@ packaging and conventions. Each item is one commit, with tests.
 
 - **Fluent entry point.** `Redactor::profile('strict')->withoutMarkers()->redact($data)`
   and `->inspect($data)`; `Redactor::inspect()` returns the result with its
-  findings. `redactWithMetadata()` remains. The redactor and the pending
+  findings. `inspect()` remains. The redactor and the pending
   redaction are `Macroable` and `Conditionable`.
 - **Package exceptions.** Everything thrown implements
   `Exceptions\RedactorException`: `ConfigurationException` and
@@ -221,11 +221,12 @@ packaging and conventions. Each item is one commit, with tests.
 - **Results are `Arrayable` and `JsonSerializable`.** `RedactionResult`,
   `MatchFinding` and `ScanFinding`; a finding's array form omits the matched
   text.
-- **Renamed, old names kept as deprecated aliases.** `ReadactFormatter` is
-  `RedactorFormatter`, `CustomLogTap` is `RedactorFormatterTap`,
-  `RedactionStrategyInterface` is `Strategies\Contracts\Strategy`;
-  `getAvailableProfiles()`, `profileExists()` and `getStrategies()` are
-  `profiles()`, `hasProfile()` and `strategies()`.
+- **Renamed, without aliases.** `ReadactFormatter` is `Logging\RedactorFormatter`,
+  `CustomLogTap` is `Logging\RedactorFormatterTap`,
+  `RedactionStrategyInterface` is `Strategies\Contracts\Strategy`,
+  `redactWithMetadata()` is `inspect()`, and `getAvailableProfiles()`,
+  `profileExists()` and `getStrategies()` are `profiles()`, `hasProfile()`
+  and `strategies()`. The old names are gone rather than deprecated.
 - Services are no longer `final`; value objects stay `final readonly`.
   Configuration, events and the container are reached the way first-party
   packages reach them, and the service provider registers commands and
@@ -268,7 +269,7 @@ packaging and conventions. Each item is one commit, with tests.
 - **Monolog integration moved to a processor.** Use
   `Logging\RedactorTap` / `Logging\RedactorProcessor`, which redact message,
   context and extra without touching the channel's output format.
-  `ReadactFormatter` still works and can now wrap an inner formatter. (R-06)
+  `RedactorFormatter` still works and can now wrap an inner formatter. (R-06)
 - **Scan findings are structured**: rule, line, column and a redacted excerpt,
   instead of one opaque `full_content_redacted` record per file. (R-10)
 - **Removed** `Redactor::addStrategy()`, `removeStrategy()`,
@@ -311,7 +312,7 @@ packaging and conventions. Each item is one commit, with tests.
   too. (R-05)
 - Redaction metadata no longer corrupts the payload: a list stays a list, and a
   caller's own `_redacted` key is not overwritten. Prefer
-  `redactWithMetadata()`. (R-07)
+  `inspect()`. (R-07)
 - `safe_keys` supports the wildcards the README has always documented. (R-08)
 - Documented environment variables take effect. `REDACTOR_MAX_OBJECT_SIZE` was
   silently ignored and `REDACTOR_SCAN_MAX_FILE_SIZE` crashed the scan
@@ -324,10 +325,16 @@ packaging and conventions. Each item is one commit, with tests.
 - Checksum validators (`luhn`, `iban`, `ssn`) reject values of the right shape
   that cannot be the real thing. (R-17)
 - `mergeConfigFrom()` runs in `register()`, not `boot()`. (R-14)
-- `ReadactFormatter::formatBatch()` formats every record; it used to return only
+- `RedactorFormatter::formatBatch()` formats every record; it used to return only
   the first, so batching handlers dropped the rest. (R-06)
 
 ### Packaging and CI
+
+- Rector with the PHP 8.3, dead-code, code-quality, type-declaration,
+  early-return and Laravel sets, applied to the tree and enforced by the
+  pre-commit hook, `composer preflight` and the static-analysis workflow.
+- A security workflow: Semgrep on the PHP and secrets rulesets, and
+  `composer audit`, on push, on pull requests and weekly.
 
 - PHP 8.5 supported and in the test matrix. (R-21)
 - `Tests\` no longer ships in the production autoload; `.gitattributes` keeps

@@ -17,7 +17,7 @@ class Scanner
     /**
      * How much of a line to show in a finding's excerpt.
      */
-    private const EXCERPT_LIMIT = 200;
+    private const int EXCERPT_LIMIT = 200;
 
     /**
      * A marker on the same line that suppresses the finding.
@@ -64,7 +64,7 @@ class Scanner
         }
 
         $reportedPath = $relativeTo !== null
-            ? self::relativePath($filePath, $relativeTo)
+            ? $this->relativePath($filePath, $relativeTo)
             : $filePath;
 
         return $this->scanWindows(
@@ -105,7 +105,7 @@ class Scanner
         return new ScanResult(
             path: $result->path,
             findings: array_map(
-                fn (ScanFinding $finding) => $finding->at($patch->lineAt($finding->line), $patch->commit),
+                fn (ScanFinding $finding): ScanFinding => $finding->at($patch->lineAt($finding->line), $patch->commit),
                 $result->findings
             ),
             profile: $result->profile,
@@ -120,7 +120,7 @@ class Scanner
         $findings = [];
 
         foreach ($reader as [$startLine, $window]) {
-            $result = $this->redactor->redactWithMetadata($window, $profile);
+            $result = $this->redactor->inspect($window, $profile);
 
             $located = $result->findings === []
                 ? []
@@ -144,7 +144,7 @@ class Scanner
 
         $ordered = array_values($findings);
 
-        usort($ordered, fn (ScanFinding $a, ScanFinding $b) => [$a->line, $a->column] <=> [$b->line, $b->column]);
+        usort($ordered, fn (ScanFinding $a, ScanFinding $b): int => [$a->line, $a->column] <=> [$b->line, $b->column]);
 
         return new ScanResult(
             path: $filePath,
@@ -181,14 +181,14 @@ class Scanner
      */
     private function locatedInDerived(DerivedSubject $derived, string $window, string $path, ?string $profile, string $profileName): array
     {
-        $result = $this->redactor->redactWithMetadata($derived->text, $profile);
+        $result = $this->redactor->inspect($derived->text, $profile);
 
         if ($result->findings === []) {
             return [];
         }
 
-        $lineStarts = self::lineStarts($window);
-        $line = self::lineForOffset($lineStarts, $derived->offset);
+        $lineStarts = $this->lineStarts($window);
+        $line = $this->lineForOffset($lineStarts, $derived->offset);
         $column = $derived->offset - $lineStarts[$line - 1] + 1;
         $verdicts = $this->verifyAll($result->findings);
         $redacted = is_string($result->value) ? $result->value : '';
@@ -201,7 +201,7 @@ class Scanner
                 rule: $match->rule,
                 line: $line,
                 column: $column,
-                excerpt: sprintf('[%s] %s', $derived->encoding, self::excerpt(strtok($redacted, "\n") ?: '')),
+                excerpt: sprintf('[%s] %s', $derived->encoding, $this->excerpt(strtok($redacted, "\n") ?: '')),
                 profile: $profileName,
                 fingerprint: ScanFinding::fingerprint($match->rule, $path, $match->matched),
                 entity: $match->entity(),
@@ -227,7 +227,7 @@ class Scanner
      */
     protected function verifyAll(array $matches): array
     {
-        if ($this->verifier === null) {
+        if (! $this->verifier instanceof SecretVerifier) {
             return [];
         }
 
@@ -256,7 +256,7 @@ class Scanner
             return [];
         }
 
-        $lineStarts = self::lineStarts($original);
+        $lineStarts = $this->lineStarts($original);
 
         // Replacements never add or remove newlines, so line N of the redacted output
         // is line N of the input, which is what lets the excerpt come from it...
@@ -266,7 +266,7 @@ class Scanner
         $findings = [];
 
         foreach ($matches as $match) {
-            $line = self::lineForOffset($lineStarts, $match->offset);
+            $line = $this->lineForOffset($lineStarts, $match->offset);
             $column = $match->offset - $lineStarts[$line - 1] + 1;
 
             if ($originalLines !== null && str_contains($originalLines[$line - 1] ?? '', self::ALLOW_MARKER)) {
@@ -278,7 +278,7 @@ class Scanner
                 rule: $match->rule,
                 line: $line,
                 column: $column,
-                excerpt: self::excerpt($redactedLines[$line - 1] ?? ''),
+                excerpt: $this->excerpt($redactedLines[$line - 1] ?? ''),
                 profile: $profile,
                 fingerprint: ScanFinding::fingerprint($match->rule, $path, $match->matched),
                 entity: $match->entity(),
@@ -295,7 +295,7 @@ class Scanner
      *
      * @return array<int, int>
      */
-    private static function lineStarts(string $content): array
+    private function lineStarts(string $content): array
     {
         $starts = [0];
         $offset = 0;
@@ -311,7 +311,7 @@ class Scanner
     /**
      * @param  array<int, int>  $lineStarts
      */
-    private static function lineForOffset(array $lineStarts, int $offset): int
+    private function lineForOffset(array $lineStarts, int $offset): int
     {
         $low = 0;
         $high = count($lineStarts) - 1;
@@ -329,7 +329,7 @@ class Scanner
         return $low + 1;
     }
 
-    private static function excerpt(string $line): string
+    private function excerpt(string $line): string
     {
         $line = trim(str_replace(["\r", "\t"], ['', ' '], $line));
 
@@ -340,9 +340,9 @@ class Scanner
         return substr($line, 0, self::EXCERPT_LIMIT).'...';
     }
 
-    private static function relativePath(string $path, string $base): string
+    private function relativePath(string $path, string $base): string
     {
-        $base = rtrim((string) (realpath($base) ?: $base), '/').'/';
+        $base = rtrim(realpath($base) ?: $base, '/').'/';
         $real = realpath($path) ?: $path;
 
         return str_starts_with($real, $base) ? substr($real, strlen($base)) : $real;

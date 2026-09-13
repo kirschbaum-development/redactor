@@ -22,7 +22,7 @@ class SimpleTestObject
 
     public $prop3 = 'value3';
 
-    public function getData()
+    public function getData(): array
     {
         return ['prop1' => $this->prop1, 'prop2' => $this->prop2, 'prop3' => $this->prop3];
     }
@@ -43,8 +43,8 @@ class TestObjectWithToArray
     }
 }
 
-describe('Redactor Content Tests', function () {
-    beforeEach(function () {
+describe('Redactor Content Tests', function (): void {
+    beforeEach(function (): void {
         // Set up test configurations for different scenarios
         // This replaces the need for dynamic strategy addition/removal
         config()->set('redactor.profiles.no_shannon', [
@@ -115,11 +115,11 @@ describe('Redactor Content Tests', function () {
         ]);
     });
 
-    test('it returns zero entropy when no ShannonEntropyStrategy is found during entropy calculation', function () {
+    test('it returns zero entropy when no ShannonEntropyStrategy is found during entropy calculation', function (): void {
         $redactor = new Redactor;
 
         // Use profile without ShannonEntropyStrategy - should return 0.0
-        $strategies = $redactor->getStrategies('no_shannon');
+        $strategies = $redactor->strategies('no_shannon');
         $hasShannon = false;
         foreach ($strategies as $strategy) {
             if ($strategy instanceof ShannonEntropyStrategy) {
@@ -140,7 +140,7 @@ describe('Redactor Content Tests', function () {
             ->toBe($entropy);
     });
 
-    test('it reports no exclusion match when the profile configures no exclusion patterns', function () {
+    test('it reports no exclusion match when the profile configures no exclusion patterns', function (): void {
         config()->set('redactor.default_profile', 'no_shannon');
         $config = RedactorConfig::fromConfig('no_shannon');
 
@@ -149,7 +149,7 @@ describe('Redactor Content Tests', function () {
         expect($isCommon)->toBe(false);
     });
 
-    test('it allows long hex strings to bypass common pattern exclusion for entropy checking', function () {
+    test('it allows long hex strings to bypass common pattern exclusion for entropy checking', function (): void {
         $redactor = new Redactor;
         $config = RedactorConfig::fromConfig('test_shannon');
 
@@ -168,13 +168,13 @@ describe('Redactor Content Tests', function () {
         expect($isCommonShort)->toBe(true);
     });
 
-    test('it handles exceptions thrown by toArray method during object redaction', function () {
+    test('it handles exceptions thrown by toArray method during object redaction', function (): void {
         $redactor = new Redactor;
 
         // Create an object with a toArray method that throws an exception
         $objectWithBadToArray = new class
         {
-            public function toArray()
+            public function toArray(): never
             {
                 throw new Exception('toArray failed');
             }
@@ -187,7 +187,7 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('bad_object');
     });
 
-    test('it skips large object redaction when feature is disabled', function () {
+    test('it skips large object redaction when feature is disabled', function (): void {
         // Create profile with large object redaction disabled
         config()->set('redactor.profiles.no_large_objects', [
             'enabled' => true,
@@ -229,7 +229,7 @@ describe('Redactor Content Tests', function () {
         expect($result['large_data'])->toBe($largeArray);
     });
 
-    test('it wraps non-array strategy results in redacted array structure', function () {
+    test('it wraps non-array strategy results in redacted array structure', function (): void {
         // Create a custom strategy that returns a string when processing arrays
         $customStrategy = new class implements Strategy
         {
@@ -283,7 +283,7 @@ describe('Redactor Content Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    test('it removes keys when strategy returns removal signal', function () {
+    test('it removes keys when strategy returns removal signal', function (): void {
         // Create a custom strategy that removes specific keys by returning __REDACTOR_REMOVE_OBJECT__
         $removeStrategy = new class implements Strategy
         {
@@ -346,7 +346,7 @@ describe('Redactor Content Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    test('it handles large objects that exceed size limits during property counting', function () {
+    test('it handles large objects that exceed size limits during property counting', function (): void {
         // Create profile with very small max object size
         config()->set('redactor.profiles.small_object_test', [
             'enabled' => true,
@@ -387,7 +387,7 @@ describe('Redactor Content Tests', function () {
         expect($message)->toContain('stdClass');
     });
 
-    test('it handles large objects detected via JSON encoding when toArray is unavailable', function () {
+    test('it handles large objects detected via JSON encoding when toArray is unavailable', function (): void {
         // Create profile with small max object size
         config()->set('redactor.profiles.json_size_test', [
             'enabled' => true,
@@ -432,7 +432,7 @@ describe('Redactor Content Tests', function () {
         expect($result['large_obj'])->toHaveKey('_large_object_redacted');
     });
 
-    test('it handles objects with toArray method that throws exception during size detection', function () {
+    test('it handles objects with toArray method that throws exception during size detection', function (): void {
         config(['redactor.max_object_size' => 2]);
 
         $redactor = new Redactor;
@@ -440,7 +440,7 @@ describe('Redactor Content Tests', function () {
         // Create object with toArray that throws an exception during size detection
         $largeObject = new class
         {
-            public function toArray()
+            public function toArray(): never
             {
                 throw new Exception('Failed during detection');
             }
@@ -453,7 +453,7 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('large_obj');
     });
 
-    test('it handles objects with JSON encoding failures during size detection', function () {
+    test('it handles objects with JSON encoding failures during size detection', function (): void {
         config(['redactor.max_object_size' => 2]);
 
         $redactor = new Redactor;
@@ -461,6 +461,9 @@ describe('Redactor Content Tests', function () {
         // Create object that will fail JSON encoding during size detection
         $largeObject = new class
         {
+            /**
+             * @var $this
+             */
             public $circular;
 
             public function __construct()
@@ -476,7 +479,7 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('large_obj');
     });
 
-    test('it returns strategy-processed objects directly when handled by custom strategies', function () {
+    test('it returns strategy-processed objects directly when handled by custom strategies', function (): void {
         // Create a custom strategy that specifically handles certain objects
         $objectStrategy = new class implements Strategy
         {
@@ -538,11 +541,11 @@ describe('Redactor Content Tests', function () {
             ->and($arrayResult['_redacted'])->toBeTrue();
     });
 
-    test('it returns all registered strategies via getStrategies method', function () {
+    test('it returns all registered strategies via getStrategies method', function (): void {
         $redactor = new Redactor;
 
         // Get the initial strategies from default profile
-        $strategies = $redactor->getStrategies();
+        $strategies = $redactor->strategies();
 
         // Seven of the eight configured strategies: entity recognition is
         // configured but switched off, so it stays out of the chain.
@@ -595,15 +598,15 @@ describe('Redactor Content Tests', function () {
         ]);
 
         // Should now have 7 strategies when using custom profile
-        $strategiesWithCustom = $redactor->getStrategies('custom_strategy_test');
+        $strategiesWithCustom = $redactor->strategies('custom_strategy_test');
         expect($strategiesWithCustom)->toHaveCount(7);
 
         // Profile without custom strategy should still have 7
-        $strategiesDefault = $redactor->getStrategies();
+        $strategiesDefault = $redactor->strategies();
         expect($strategiesDefault)->toHaveCount(7);
     });
 
-    test('it skips large object redaction when feature is disabled in configuration', function () {
+    test('it skips large object redaction when feature is disabled in configuration', function (): void {
         // Disable large object redaction
         config(['redactor.redact_large_objects' => false]);
 
@@ -634,7 +637,7 @@ describe('Redactor Content Tests', function () {
             ->and($result)->not->toHaveKey('_redacted'); // No redaction occurred
     });
 
-    test('it redacts large objects when they exceed size limits', function () {
+    test('it redacts large objects when they exceed size limits', function (): void {
         // Use the small_object_test profile we already set up
         $redactor = new Redactor;
 
@@ -652,14 +655,20 @@ describe('Redactor Content Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    test('it handles objects with circular references gracefully', function () {
+    test('it handles objects with circular references gracefully', function (): void {
         $redactor = new Redactor;
 
         // Create an object with circular reference
         $problematicObject = new class
         {
+            /**
+             * @var $this
+             */
             public $circular;
 
+            /**
+             * @var 'value1'
+             */
             public $prop1;
 
             public function __construct()
@@ -676,7 +685,7 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('problematic_obj');
     });
 
-    test('it handles string values correctly in redaction process', function () {
+    test('it handles string values correctly in redaction process', function (): void {
         $redactor = new Redactor;
 
         $data = ['simple_string' => 'test_value'];
@@ -686,7 +695,7 @@ describe('Redactor Content Tests', function () {
         expect($result['simple_string'])->toBe('test_value');
     });
 
-    test('it handles objects with toArray method correctly', function () {
+    test('it handles objects with toArray method correctly', function (): void {
         $redactor = new Redactor;
 
         // Use an object that has a toArray method
@@ -699,7 +708,7 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('test_object');
     });
 
-    test('it handles complex objects with encoding issues gracefully', function () {
+    test('it handles complex objects with encoding issues gracefully', function (): void {
         $redactor = new Redactor;
 
         // Create an object that might cause encoding issues
@@ -709,6 +718,9 @@ describe('Redactor Content Tests', function () {
 
             public $prop2 = 'value2';
 
+            /**
+             * @var $this
+             */
             public $circular;
 
             public function __construct()
@@ -724,7 +736,7 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('complex_obj');
     });
 
-    test('it allows long hex strings to bypass exclusion patterns in shannon entropy strategy', function () {
+    test('it allows long hex strings to bypass exclusion patterns in shannon entropy strategy', function (): void {
         // Create profile with Shannon entropy and hex exclusion pattern
         config()->set('redactor.profiles.hex_test', [
             'enabled' => true,
@@ -766,7 +778,7 @@ describe('Redactor Content Tests', function () {
             ->and($shortResult)->not->toHaveKey('_redacted');
     });
 
-    test('it calculates shannon entropy correctly', function () {
+    test('it calculates shannon entropy correctly', function (): void {
         $redactor = new Redactor;
 
         // Test the public calculateShannonEntropy method

@@ -14,13 +14,13 @@ namespace Kirschbaum\Redactor\Detection;
  */
 final readonly class Confidence
 {
-    public const CERTAIN = 1.0;
+    public const float CERTAIN = 1.0;
 
-    public const HIGH = 0.9;
+    public const float HIGH = 0.9;
 
-    public const MEDIUM = 0.6;
+    public const float MEDIUM = 0.6;
 
-    public const LOW = 0.3;
+    public const float LOW = 0.3;
 
     /**
      * @param  array<int, Signal>  $signals
@@ -74,7 +74,7 @@ final readonly class Confidence
      */
     public function explain(): array
     {
-        return array_map(fn (Signal $s) => $s->describe(), $this->signals);
+        return array_map(fn (Signal $s): string => $s->describe(), $this->signals);
     }
 
     /**

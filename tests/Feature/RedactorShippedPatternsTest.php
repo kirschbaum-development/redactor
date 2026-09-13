@@ -56,64 +56,64 @@ function shippedInnocents(): array
     ];
 }
 
-describe('Shipped profiles catch credentials in free text', function () {
+describe('Shipped profiles catch credentials in free text', function (): void {
     foreach (['default', 'strict', 'observability', 'file_scan'] as $profile) {
-        it("catches every planted secret with the {$profile} profile", function () use ($profile) {
+        it("catches every planted secret with the {$profile} profile", function () use ($profile): void {
             config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
 
             foreach (shippedSecrets() as $name => $line) {
-                $result = app(Redactor::class)->redactWithMetadata($line, $profile);
+                $result = resolve(Redactor::class)->inspect($line, $profile);
 
                 expect($result->wasRedacted)->toBeTrue("{$profile} missed {$name}: {$line}");
             }
         });
     }
 
-    it('keeps the host and path of a credential URL for any scheme', function () {
-        $result = app(Redactor::class)->redact('db at postgres://app:s3cr3t@db.internal:5432/app');
+    it('keeps the host and path of a credential URL for any scheme', function (): void {
+        $result = resolve(Redactor::class)->redact('db at postgres://app:s3cr3t@db.internal:5432/app');
 
         expect($result)->toBe('db at postgres://app:[REDACTED]@db.internal:5432/app');
     });
 
-    it('replaces only the token after Bearer', function () {
-        expect(app(Redactor::class)->redact('Authorization: Bearer 8f14e45fceea167a5a36dedd4bea2543'))
+    it('replaces only the token after Bearer', function (): void {
+        expect(resolve(Redactor::class)->redact('Authorization: Bearer 8f14e45fceea167a5a36dedd4bea2543'))
             ->toBe('Authorization: Bearer [REDACTED]');
     });
 
-    it('prefers the more specific provider rule when two prefixes overlap', function () {
-        $result = app(Redactor::class)->redactWithMetadata('sk-ant-api03-abcdefghijklmnopqrstuvwxyz');
+    it('prefers the more specific provider rule when two prefixes overlap', function (): void {
+        $result = resolve(Redactor::class)->inspect('sk-ant-api03-abcdefghijklmnopqrstuvwxyz');
 
         expect($result->findings)->toHaveCount(1)
             ->and($result->findings[0]->rule)->toBe('anthropic_key');
     });
 });
 
-describe('Shipped profiles leave ordinary log text alone', function () {
+describe('Shipped profiles leave ordinary log text alone', function (): void {
     foreach (['default', 'observability', 'performance'] as $profile) {
-        it("does not touch any innocent line with the {$profile} profile", function () use ($profile) {
+        it("does not touch any innocent line with the {$profile} profile", function () use ($profile): void {
             foreach (shippedInnocents() as $name => $line) {
-                $result = app(Redactor::class)->redactWithMetadata($line, $profile);
+                $result = resolve(Redactor::class)->inspect($line, $profile);
 
                 expect($result->wasRedacted)->toBeFalse("{$profile} redacted {$name}: ".json_encode($result->value));
             }
         });
     }
 
-    it('does not mistake a card number for a formatted phone number', function () {
+    it('does not mistake a card number for a formatted phone number', function (): void {
         // Partial masking keeps the length, spaces included: 15 masked, 4 kept.
-        expect(app(Redactor::class)->redact('paid with 4111 1111 1111 1111 ok'))
+        expect(resolve(Redactor::class)->redact('paid with 4111 1111 1111 1111 ok'))
             ->toBe('paid with ***************1111 ok');
     });
 
-    it('believes a bare ten-digit run only next to a label', function () {
-        expect(app(Redactor::class)->redact('Phone: 5558675309'))->toBe('Phone: [REDACTED]')
-            ->and(app(Redactor::class)->redact('id 5558675309'))->toBe('id 5558675309');
+    it('believes a bare ten-digit run only next to a label', function (): void {
+        expect(resolve(Redactor::class)->redact('Phone: 5558675309'))->toBe('Phone: [REDACTED]')
+            ->and(resolve(Redactor::class)->redact('id 5558675309'))->toBe('id 5558675309');
     });
 });
 
-describe('The performance profile', function () {
-    it('still catches an email and a bare token but is gated on literals', function () {
-        expect(app(Redactor::class)->redact('user bob@example.com', 'performance'))->toBe('user [REDACTED]')
-            ->and(app(Redactor::class)->redact(['t' => str_repeat('Ab1', 12)], 'performance'))->toBe(['t' => '[REDACTED]']);
+describe('The performance profile', function (): void {
+    it('still catches an email and a bare token but is gated on literals', function (): void {
+        expect(resolve(Redactor::class)->redact('user bob@example.com', 'performance'))->toBe('user [REDACTED]')
+            ->and(resolve(Redactor::class)->redact(['t' => str_repeat('Ab1', 12)], 'performance'))->toBe(['t' => '[REDACTED]']);
     });
 });

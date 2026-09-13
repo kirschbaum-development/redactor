@@ -49,6 +49,6 @@ final readonly class VerificationResult
             'status' => $this->status->value,
             'note' => $this->note,
             'verifier' => $this->verifier,
-        ], fn ($v) => $v !== null);
+        ], fn (?string $v): bool => $v !== null);
     }
 }

@@ -31,8 +31,8 @@ function failingSubject(): string
     return "\xff\xfe not valid utf-8";
 }
 
-describe('PCRE failures fail closed', function () {
-    it('sanity check: the probe really does make the engine give up', function () {
+describe('PCRE failures fail closed', function (): void {
+    it('sanity check: the probe really does make the engine give up', function (): void {
         // Without this the tests below could pass for the wrong reason - a
         // pattern that simply matched would look identical.
         $raw = @preg_match(failingPattern(), failingSubject());
@@ -41,7 +41,7 @@ describe('PCRE failures fail closed', function () {
             ->and(preg_last_error())->toBe(PREG_BAD_UTF8_ERROR);
     });
 
-    it('treats an unevaluatable detection pattern as a match', function () {
+    it('treats an unevaluatable detection pattern as a match', function (): void {
         config()->set('redactor.profiles.pcre', [
             'enabled' => true,
             'strategies' => [RegexPatternsStrategy::class],
@@ -58,14 +58,14 @@ describe('PCRE failures fail closed', function () {
             'shannon_entropy' => ['enabled' => false],
         ]);
 
-        $result = app(Redactor::class)->redact(['note' => failingSubject()], 'pcre');
+        $result = resolve(Redactor::class)->redact(['note' => failingSubject()], 'pcre');
 
         // Before: preg_match returned false, was read as "no match", and the
         // value went out untouched.
         expect($result['note'])->toBe('[REDACTED]');
     });
 
-    it('does not let an unevaluatable exclusion pattern excuse a value', function () {
+    it('does not let an unevaluatable exclusion pattern excuse a value', function (): void {
         config()->set('redactor.profiles.pcre_exclusion', [
             'enabled' => true,
             'strategies' => [ShannonEntropyStrategy::class],
@@ -97,7 +97,7 @@ describe('PCRE failures fail closed', function () {
         expect($excluded)->toBeFalse();
     });
 
-    it('replaces a value the entropy tokeniser cannot even split', function () {
+    it('replaces a value the entropy tokeniser cannot even split', function (): void {
         config()->set('redactor.profiles.pcre_entropy', [
             'enabled' => true,
             'strategies' => [ShannonEntropyStrategy::class],
@@ -119,7 +119,7 @@ describe('PCRE failures fail closed', function () {
             ],
         ]);
 
-        $result = app(Redactor::class)->redact(
+        $result = resolve(Redactor::class)->redact(
             ['note' => failingSubject()."\xfe high entropy Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf"],
             'pcre_entropy'
         );
@@ -127,7 +127,7 @@ describe('PCRE failures fail closed', function () {
         expect($result['note'])->toBe('[REDACTED]');
     });
 
-    it('treats an unevaluatable blocked-key pattern as blocking the key', function () {
+    it('treats an unevaluatable blocked-key pattern as blocking the key', function (): void {
         config()->set('redactor.profiles.pcre_keys', [
             'enabled' => true,
             'strategies' => [BlockedKeysStrategy::class],
@@ -147,38 +147,38 @@ describe('PCRE failures fail closed', function () {
         // A *contains* pattern is compiled to str_contains, which cannot fail,
         // so this asserts the safe-by-construction path rather than the
         // fail-closed one. The regex branch is covered by the Pcre tests below.
-        $result = app(Redactor::class)->redact(['a'.failingSubject().'b' => 'value'], 'pcre_keys');
+        $result = resolve(Redactor::class)->redact(['a'.failingSubject().'b' => 'value'], 'pcre_keys');
 
         expect(array_values($result)[0])->toBe('[REDACTED]');
     });
 });
 
-describe('Pcre helper', function () {
-    it('reports a normal match and non-match correctly', function () {
+describe('Pcre helper', function (): void {
+    it('reports a normal match and non-match correctly', function (): void {
         expect(Pcre::matches('/foo/', 'a foo b', onError: true))->toBeTrue()
             ->and(Pcre::matches('/foo/', 'a bar b', onError: true))->toBeFalse();
     });
 
-    it('returns the caller-chosen answer on engine failure', function () {
+    it('returns the caller-chosen answer on engine failure', function (): void {
         expect(Pcre::matches(failingPattern(), failingSubject(), onError: true))->toBeTrue()
             ->and(Pcre::matches(failingPattern(), failingSubject(), onError: false))->toBeFalse();
     });
 
-    it('returns null from replaceCallback when the engine fails', function () {
+    it('returns null from replaceCallback when the engine fails', function (): void {
         $out = Pcre::replaceCallback(
             failingPattern(),
-            fn (array $m) => '[X]',
+            fn (array $m): string => '[X]',
             failingSubject()
         );
 
         expect($out)->toBeNull();
     });
 
-    it('replaces normally when the engine succeeds', function () {
-        expect(Pcre::replaceCallback('/\d+/', fn (array $m) => '#', 'a1b22c'))->toBe('a#b#c');
+    it('replaces normally when the engine succeeds', function (): void {
+        expect(Pcre::replaceCallback('/\d+/', fn (array $m): string => '#', 'a1b22c'))->toBe('a#b#c');
     });
 
-    it('recognises invalid patterns without emitting a PHP warning', function () {
+    it('recognises invalid patterns without emitting a PHP warning', function (): void {
         expect(Pcre::isValidPattern('/valid/'))->toBeTrue()
             ->and(Pcre::isValidPattern('/[unclosed/'))->toBeFalse();
     });

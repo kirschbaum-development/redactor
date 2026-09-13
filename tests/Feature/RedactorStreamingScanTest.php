@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\Scanner\LineWindowReader;
+use Kirschbaum\Redactor\Scanner\ScanFinding;
 use Kirschbaum\Redactor\Scanner\Scanner;
 use Kirschbaum\Redactor\Scanner\ScanResult;
 
@@ -19,9 +20,9 @@ function scratchFile(string $contents, string $name = 'scan.txt'): string
     return $path;
 }
 
-describe('Line window reader', function () {
-    it('covers every line exactly once when nothing overlaps', function () {
-        $path = scratchFile(implode("\n", array_map(fn (int $i) => "line {$i}", range(1, 10))));
+describe('Line window reader', function (): void {
+    it('covers every line exactly once when nothing overlaps', function (): void {
+        $path = scratchFile(implode("\n", array_map(fn (int $i): string => "line {$i}", range(1, 10))));
 
         $reader = new LineWindowReader($path, windowLines: 4, overlapLines: 0);
 
@@ -39,8 +40,8 @@ describe('Line window reader', function () {
         cleanupDirectory(dirname($path));
     });
 
-    it('numbers lines correctly across windows with overlap', function () {
-        $path = scratchFile(implode("\n", array_map(fn (int $i) => "line {$i}", range(1, 20))));
+    it('numbers lines correctly across windows with overlap', function (): void {
+        $path = scratchFile(implode("\n", array_map(fn (int $i): string => "line {$i}", range(1, 20))));
 
         foreach (new LineWindowReader($path, windowLines: 6, overlapLines: 2) as [$start, $text]) {
             $first = explode("\n", $text)[0];
@@ -53,8 +54,8 @@ describe('Line window reader', function () {
         cleanupDirectory(dirname($path));
     });
 
-    it('carries lines forward so a match spanning a boundary survives', function () {
-        $path = scratchFile(implode("\n", array_map(fn (int $i) => "line {$i}", range(1, 12))));
+    it('carries lines forward so a match spanning a boundary survives', function (): void {
+        $path = scratchFile(implode("\n", array_map(fn (int $i): string => "line {$i}", range(1, 12))));
 
         $windows = [];
         foreach (new LineWindowReader($path, windowLines: 5, overlapLines: 2) as [$start, $text]) {
@@ -68,8 +69,8 @@ describe('Line window reader', function () {
         cleanupDirectory(dirname($path));
     });
 
-    it('never stalls when the overlap is set as large as the window', function () {
-        $path = scratchFile(implode("\n", array_map(fn (int $i) => "line {$i}", range(1, 30))));
+    it('never stalls when the overlap is set as large as the window', function (): void {
+        $path = scratchFile(implode("\n", array_map(fn (int $i): string => "line {$i}", range(1, 30))));
 
         $count = 0;
         foreach (new LineWindowReader($path, windowLines: 4, overlapLines: 99) as $ignored) {
@@ -84,13 +85,13 @@ describe('Line window reader', function () {
         cleanupDirectory(dirname($path));
     });
 
-    it('yields nothing for an unreadable file rather than throwing', function () {
+    it('yields nothing for an unreadable file rather than throwing', function (): void {
         $reader = new LineWindowReader('/no/such/file');
 
         expect(iterator_to_array($reader))->toBe([]);
     });
 
-    it('handles a file with no trailing newline', function () {
+    it('handles a file with no trailing newline', function (): void {
         $path = scratchFile('only line, no newline');
 
         $windows = iterator_to_array(new LineWindowReader($path, windowLines: 10));
@@ -102,19 +103,19 @@ describe('Line window reader', function () {
     });
 });
 
-describe('Streaming scan correctness', function () {
-    it('reports the same findings as a single-window scan', function () {
-        $lines = array_map(fn (int $i) => "line {$i} ordinary text", range(1, 60));
+describe('Streaming scan correctness', function (): void {
+    it('reports the same findings as a single-window scan', function (): void {
+        $lines = array_map(fn (int $i): string => "line {$i} ordinary text", range(1, 60));
         $lines[9] = 'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE';
         $lines[39] = 'contact bob@example.com';
 
         $path = scratchFile(implode("\n", $lines));
 
-        $wide = (new Scanner(app(Redactor::class), windowLines: 10_000))->scanFile($path, 'file_scan');
-        $narrow = (new Scanner(app(Redactor::class), windowLines: 7, overlapLines: 3))->scanFile($path, 'file_scan');
+        $wide = (new Scanner(resolve(Redactor::class), windowLines: 10_000))->scanFile($path, 'file_scan');
+        $narrow = (new Scanner(resolve(Redactor::class), windowLines: 7, overlapLines: 3))->scanFile($path, 'file_scan');
 
-        $shape = fn (ScanResult $result) => array_map(
-            fn ($f) => $f->rule.'@'.$f->line,
+        $shape = fn (ScanResult $result): array => array_map(
+            fn (ScanFinding $f): string => $f->rule.'@'.$f->line,
             $result->findings
         );
 
@@ -125,15 +126,15 @@ describe('Streaming scan correctness', function () {
         cleanupDirectory(dirname($path));
     });
 
-    it('numbers a finding by its absolute line, not its line within a window', function () {
-        $lines = array_map(fn (int $i) => "filler {$i}", range(1, 100));
+    it('numbers a finding by its absolute line, not its line within a window', function (): void {
+        $lines = array_map(fn (int $i): string => "filler {$i}", range(1, 100));
         $lines[74] = 'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE';
 
         $path = scratchFile(implode("\n", $lines));
 
-        $result = (new Scanner(app(Redactor::class), windowLines: 8, overlapLines: 2))->scanFile($path, 'file_scan');
+        $result = (new Scanner(resolve(Redactor::class), windowLines: 8, overlapLines: 2))->scanFile($path, 'file_scan');
 
-        $aws = array_values(array_filter($result->findings, fn ($f) => $f->rule === 'aws_access_key'));
+        $aws = array_values(array_filter($result->findings, fn (ScanFinding $f): bool => $f->rule === 'aws_access_key'));
 
         expect($aws)->toHaveCount(1)
             ->and($aws[0]->line)->toBe(75);
@@ -141,32 +142,32 @@ describe('Streaming scan correctness', function () {
         cleanupDirectory(dirname($path));
     });
 
-    it('reports a finding in the overlap region only once', function () {
-        $lines = array_map(fn (int $i) => "filler {$i}", range(1, 20));
+    it('reports a finding in the overlap region only once', function (): void {
+        $lines = array_map(fn (int $i): string => "filler {$i}", range(1, 20));
         // Line 5 sits inside the overlap of the first two windows.
         $lines[4] = 'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE';
 
         $path = scratchFile(implode("\n", $lines));
 
-        $result = (new Scanner(app(Redactor::class), windowLines: 6, overlapLines: 4))->scanFile($path, 'file_scan');
+        $result = (new Scanner(resolve(Redactor::class), windowLines: 6, overlapLines: 4))->scanFile($path, 'file_scan');
 
-        $aws = array_filter($result->findings, fn ($f) => $f->rule === 'aws_access_key');
+        $aws = array_filter($result->findings, fn (ScanFinding $f): bool => $f->rule === 'aws_access_key');
 
         expect($aws)->toHaveCount(1);
 
         cleanupDirectory(dirname($path));
     });
 
-    it('returns findings in file order', function () {
-        $lines = array_map(fn (int $i) => "filler {$i}", range(1, 40));
+    it('returns findings in file order', function (): void {
+        $lines = array_map(fn (int $i): string => "filler {$i}", range(1, 40));
         $lines[4] = 'first bob@example.com';
         $lines[24] = 'later AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE';
 
         $path = scratchFile(implode("\n", $lines));
 
-        $result = (new Scanner(app(Redactor::class), windowLines: 6, overlapLines: 2))->scanFile($path, 'file_scan');
+        $result = (new Scanner(resolve(Redactor::class), windowLines: 6, overlapLines: 2))->scanFile($path, 'file_scan');
 
-        $lineNumbers = array_map(fn ($f) => $f->line, $result->findings);
+        $lineNumbers = array_map(fn (ScanFinding $f): int => $f->line, $result->findings);
         $sorted = $lineNumbers;
         sort($sorted);
 
@@ -175,24 +176,24 @@ describe('Streaming scan correctness', function () {
         cleanupDirectory(dirname($path));
     });
 
-    it('still reports an unreadable file as skipped', function () {
-        $result = (new Scanner(app(Redactor::class)))->scanFile('/no/such/file', 'file_scan');
+    it('still reports an unreadable file as skipped', function (): void {
+        $result = (new Scanner(resolve(Redactor::class)))->scanFile('/no/such/file', 'file_scan');
 
         expect($result->skipped)->toBeTrue()
             ->and($result->error)->toBe('File unreadable');
     });
 
-    it('finds nothing in a clean file', function () {
+    it('finds nothing in a clean file', function (): void {
         $path = scratchFile("nothing to see here\njust ordinary prose\nand more of it\n");
 
-        expect((new Scanner(app(Redactor::class)))->scanFile($path, 'file_scan')->hasFindings())->toBeFalse();
+        expect((new Scanner(resolve(Redactor::class)))->scanFile($path, 'file_scan')->hasFindings())->toBeFalse();
 
         cleanupDirectory(dirname($path));
     });
 });
 
-describe('Streaming memory', function () {
-    it('holds memory flat as the file grows', function () {
+describe('Streaming memory', function (): void {
+    it('holds memory flat as the file grows', function (): void {
         // A 12 MB file scanned in windows should not cost anything like 12 MB.
         $dir = sys_get_temp_dir().'/redactor_big_'.uniqid();
         mkdir($dir);
@@ -211,7 +212,7 @@ describe('Streaming memory', function () {
         gc_collect_cycles();
         $before = memory_get_usage();
 
-        $result = (new Scanner(app(Redactor::class)))->scanFile($path, 'file_scan');
+        $result = (new Scanner(resolve(Redactor::class)))->scanFile($path, 'file_scan');
 
         $growthMb = (memory_get_usage() - $before) / 1_048_576;
 

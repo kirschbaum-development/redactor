@@ -30,22 +30,22 @@ use Kirschbaum\Redactor\Support\Pcre;
 final readonly class PatternRule
 {
     /** Replace just the matched text with the replacement string. */
-    public const MODE_REPLACE = 'replace';
+    public const string MODE_REPLACE = 'replace';
 
     /** Replace each matched character with a mask character, preserving length. */
-    public const MODE_MASK = 'mask';
+    public const string MODE_MASK = 'mask';
 
     /** Keep the last N characters of the match and mask the rest. */
-    public const MODE_PARTIAL = 'partial';
+    public const string MODE_PARTIAL = 'partial';
 
     /** Delete the matched text entirely. */
-    public const MODE_REMOVE = 'remove';
+    public const string MODE_REMOVE = 'remove';
 
     /** Replace the whole value, not just the match. The pre-1.0 behaviour. */
-    public const MODE_FULL = 'full';
+    public const string MODE_FULL = 'full';
 
     /** @var array<int, string> */
-    public const MODES = [
+    public const array MODES = [
         self::MODE_REPLACE,
         self::MODE_MASK,
         self::MODE_PARTIAL,
@@ -106,7 +106,7 @@ final readonly class PatternRule
      */
     public function hasExplicitOperator(): bool
     {
-        return $this->operator !== null || $this->mode !== self::MODE_REPLACE;
+        return $this->operator instanceof OperatorSpec || $this->mode !== self::MODE_REPLACE;
     }
 
     /**
@@ -114,7 +114,7 @@ final readonly class PatternRule
      */
     public function operatorSpec(): OperatorSpec
     {
-        if ($this->operator !== null) {
+        if ($this->operator instanceof OperatorSpec) {
             return $this->operator;
         }
 
@@ -155,7 +155,7 @@ final readonly class PatternRule
         if ($pattern === null && isset($definition['words'])) {
             $words = array_values(array_filter(
                 ConfigValue::stringList($definition['words'], $path.'.words'),
-                fn (string $word) => trim($word) !== ''
+                fn (string $word): bool => trim($word) !== ''
             ));
 
             if ($words === []) {
@@ -165,10 +165,10 @@ final readonly class PatternRule
                 ));
             }
 
-            usort($words, fn (string $a, string $b) => strlen($b) <=> strlen($a));
+            usort($words, fn (string $a, string $b): int => strlen($b) <=> strlen($a));
 
             $pattern = '/(?<![\p{L}\p{N}])(?:'
-                .implode('|', array_map(fn (string $word) => preg_quote(trim($word), '/'), $words))
+                .implode('|', array_map(fn (string $word): string => preg_quote(trim($word), '/'), $words))
                 .')(?![\p{L}\p{N}])/iu';
         }
 
@@ -209,9 +209,9 @@ final readonly class PatternRule
             : ConfigValue::positiveInt($capture, 0, $path.'.capture');
 
         $keywords = array_values(array_filter(array_map(
-            'strtolower',
+            strtolower(...),
             ConfigValue::stringList($definition['keywords'] ?? [], $path.'.keywords')
-        ), fn (string $keyword) => $keyword !== ''));
+        ), fn (string $keyword): bool => $keyword !== ''));
 
         $allow = ConfigValue::stringList($definition['allow'] ?? [], $path.'.allow');
 
@@ -247,7 +247,7 @@ final readonly class PatternRule
      */
     public function accepts(string $match): bool
     {
-        if ($this->allow !== null && $this->allow->allows($match)) {
+        if ($this->allow instanceof AllowList && $this->allow->allows($match)) {
             return false;
         }
 

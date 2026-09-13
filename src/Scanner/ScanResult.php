@@ -37,7 +37,7 @@ class ScanResult
             path: $this->path,
             findings: array_values(array_filter(
                 $this->findings,
-                fn (ScanFinding $finding) => ! isset($acceptedFingerprints[$finding->fingerprint])
+                fn (ScanFinding $finding): bool => ! isset($acceptedFingerprints[$finding->fingerprint])
             )),
             profile: $this->profile,
             skipped: $this->skipped,

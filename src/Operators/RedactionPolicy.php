@@ -32,7 +32,7 @@ final readonly class RedactionPolicy
      */
     public function operatorFor(Detection $detection, ?OperatorSpec $atLocation = null): OperatorSpec
     {
-        if ($atLocation !== null) {
+        if ($atLocation instanceof OperatorSpec) {
             return $atLocation;
         }
 
@@ -43,7 +43,7 @@ final readonly class RedactionPolicy
         // Only a rule that actually chose an operator outranks the profile default,
         // since treating a rule's implied default as a choice would make
         // `operators.default` unreachable for anything found by a pattern...
-        if ($detection->operator !== null) {
+        if ($detection->operator instanceof OperatorSpec) {
             return $detection->operator;
         }
 
@@ -65,6 +65,6 @@ final readonly class RedactionPolicy
      */
     public function entities(): array
     {
-        return array_values(array_filter(array_keys($this->byEntity), fn (string $k) => $k !== 'default'));
+        return array_values(array_filter(array_keys($this->byEntity), fn (string $k): bool => $k !== 'default'));
     }
 }

@@ -60,25 +60,25 @@ function pseudoProfile(array $overrides = []): array
     ], $overrides);
 }
 
-describe('Operators', function () {
-    it('redacts, masks, keeps a tail and removes', function () {
+describe('Operators', function (): void {
+    it('redacts, masks, keeps a tail and removes', function (): void {
         expect(operate('redact', 'hunter2'))->toBe('[REDACTED]')
             ->and(operate('mask', 'hunter2'))->toBe('*******')
             ->and(operate('partial', '4111111111111111', ['keep' => 4]))->toBe('************1111')
             ->and(operate('remove', 'hunter2'))->toBe('');
     });
 
-    it('preserves a value while still reporting it', function () {
+    it('preserves a value while still reporting it', function (): void {
         expect(operate('preserve', 'hunter2'))->toBe('hunter2')
             ->and((new OperatorRegistry)->get('preserve')->isPreserving())->toBeTrue();
     });
 
-    it('names the unknown operator rather than failing silently', function () {
-        expect(fn () => (new OperatorRegistry)->get('teleport'))
+    it('names the unknown operator rather than failing silently', function (): void {
+        expect(fn (): Operator => (new OperatorRegistry)->get('teleport'))
             ->toThrow(\InvalidArgumentException::class, 'teleport');
     });
 
-    it('accepts custom operators', function () {
+    it('accepts custom operators', function (): void {
         $registry = new OperatorRegistry;
         $registry->register('shout', new class implements Operator
         {
@@ -97,27 +97,27 @@ describe('Operators', function () {
     });
 });
 
-describe('Operator configuration shapes', function () {
-    it('accepts a bare name, a name with options, and an explicit key', function () {
+describe('Operator configuration shapes', function (): void {
+    it('accepts a bare name, a name with options, and an explicit key', function (): void {
         expect(OperatorSpec::parse('partial', 'p')->name)->toBe('partial')
             ->and(OperatorSpec::parse(['partial' => ['keep' => 6]], 'p')->options)->toBe(['keep' => 6])
             ->and(OperatorSpec::parse(['operator' => 'partial', 'keep' => 6], 'p')->name)->toBe('partial')
             ->and(OperatorSpec::parse(['operator' => 'partial', 'keep' => 6], 'p')->options)->toBe(['keep' => 6]);
     });
 
-    it('rejects a definition that names no operator', function () {
-        expect(fn () => OperatorSpec::parse([], 'profiles.x.operators.y'))
+    it('rejects a definition that names no operator', function (): void {
+        expect(fn (): OperatorSpec => OperatorSpec::parse([], 'profiles.x.operators.y'))
             ->toThrow(\InvalidArgumentException::class, 'profiles.x.operators.y');
     });
 });
 
-describe('Operator precedence', function () {
+describe('Operator precedence', function (): void {
     function precedenceProfile(array $patterns, array $operators): array
     {
         return pseudoProfile(['patterns' => $patterns, 'operators' => $operators]);
     }
 
-    it('applies operators.default to a rule that asked for nothing', function () {
+    it('applies operators.default to a rule that asked for nothing', function (): void {
         // `mode` defaults to replace, so a rule can always produce an operator
         // spec - which is not the same as having chosen one. Treating the
         // default as a choice made operators.default unreachable for anything
@@ -127,64 +127,64 @@ describe('Operator precedence', function () {
             ['default' => 'mask'],
         ));
 
-        expect(app(Redactor::class)->redact('a1b22c', 'prec'))->toBe('a*b**c');
+        expect(resolve(Redactor::class)->redact('a1b22c', 'prec'))->toBe('a*b**c');
     });
 
-    it('lets a rule that did choose a mode outrank the default', function () {
+    it('lets a rule that did choose a mode outrank the default', function (): void {
         config()->set('redactor.profiles.prec', precedenceProfile(
             ['digits' => ['pattern' => '/\d+/', 'mode' => 'remove']],
             ['default' => 'mask'],
         ));
 
-        expect(app(Redactor::class)->redact('a1b22c', 'prec'))->toBe('abc');
+        expect(resolve(Redactor::class)->redact('a1b22c', 'prec'))->toBe('abc');
     });
 
-    it('lets a rule with an explicit operator outrank the default', function () {
+    it('lets a rule with an explicit operator outrank the default', function (): void {
         config()->set('redactor.profiles.prec', precedenceProfile(
             ['digits' => ['pattern' => '/\d+/', 'operator' => 'remove']],
             ['default' => 'mask'],
         ));
 
-        expect(app(Redactor::class)->redact('a1b22c', 'prec'))->toBe('abc');
+        expect(resolve(Redactor::class)->redact('a1b22c', 'prec'))->toBe('abc');
     });
 
-    it('lets the entity outrank both the rule and the default', function () {
+    it('lets the entity outrank both the rule and the default', function (): void {
         config()->set('redactor.profiles.prec', precedenceProfile(
             ['digits' => ['pattern' => '/\d+/', 'entity' => 'num', 'mode' => 'remove']],
             ['default' => 'mask', 'num' => 'redact'],
         ));
 
-        expect(app(Redactor::class)->redact('a1b22c', 'prec'))->toBe('a[REDACTED]b[REDACTED]c');
+        expect(resolve(Redactor::class)->redact('a1b22c', 'prec'))->toBe('a[REDACTED]b[REDACTED]c');
     });
 
-    it('falls back to redaction when no operator is configured anywhere', function () {
+    it('falls back to redaction when no operator is configured anywhere', function (): void {
         config()->set('redactor.profiles.prec', precedenceProfile(['digits' => '/\d+/'], []));
 
-        expect(app(Redactor::class)->redact('a1b22c', 'prec'))->toBe('a[REDACTED]b[REDACTED]c');
+        expect(resolve(Redactor::class)->redact('a1b22c', 'prec'))->toBe('a[REDACTED]b[REDACTED]c');
     });
 });
 
-describe('Deterministic pseudonymization', function () {
-    it('maps the same value to the same surrogate every time', function () {
+describe('Deterministic pseudonymization', function (): void {
+    it('maps the same value to the same surrogate every time', function (): void {
         $a = operate('surrogate', 'alice@customer.com', [], 'email');
         $b = operate('surrogate', 'alice@customer.com', [], 'email');
 
         expect($a)->toBe($b);
     });
 
-    it('maps different values to different surrogates', function () {
+    it('maps different values to different surrogates', function (): void {
         expect(operate('surrogate', 'alice@customer.com', [], 'email'))
             ->not->toBe(operate('surrogate', 'bob@customer.com', [], 'email'));
     });
 
-    it('normalises case and whitespace so the mapping stays joinable', function () {
+    it('normalises case and whitespace so the mapping stays joinable', function (): void {
         // The same person written two ways has to land on the same surrogate,
         // or grouping by it silently double-counts.
         expect(operate('surrogate', ' Alice@Customer.COM ', [], 'email'))
             ->toBe(operate('surrogate', 'alice@customer.com', [], 'email'));
     });
 
-    it('produces different surrogates under a different key', function () {
+    it('produces different surrogates under a different key', function (): void {
         $withKeyA = (new OperatorRegistry)->get('surrogate')->apply(
             detection('alice@customer.com', 'email'),
             new OperatorContext('[R]', [], Pseudonymizer::fromKey(testPseudonymizationKey())),
@@ -198,29 +198,29 @@ describe('Deterministic pseudonymization', function () {
         expect($withKeyA)->not->toBe($withKeyB);
     });
 
-    it('falls back to plain redaction when no key is available', function () {
+    it('falls back to plain redaction when no key is available', function (): void {
         // An unkeyed surrogate would look joinable and silently not be.
         $result = (new OperatorRegistry)->get('surrogate')->apply(
             detection('alice@customer.com', 'email'),
-            new OperatorContext('[REDACTED]', [], null),
+            new OperatorContext('[REDACTED]', []),
         );
 
         expect($result)->toBe('[REDACTED]');
     });
 
-    it('rejects a key too short to be worth having', function () {
-        expect(fn () => Pseudonymizer::fromKey('short'))
+    it('rejects a key too short to be worth having', function (): void {
+        expect(fn (): Pseudonymizer => Pseudonymizer::fromKey('short'))
             ->toThrow(\RuntimeException::class, 'at least');
     });
 
-    it('derives a key from APP_KEY without using it directly', function () {
+    it('derives a key from APP_KEY without using it directly', function (): void {
         $derived = Pseudonymizer::derivedFrom('base64:'.base64_encode(str_repeat('k', 32)));
         $direct = Pseudonymizer::fromKey(str_repeat('k', 32));
 
         expect($derived->digest('email', 'a@b.com'))->not->toBe($direct->digest('email', 'a@b.com'));
     });
 
-    it('emits a stable labelled token in hash mode', function () {
+    it('emits a stable labelled token in hash mode', function (): void {
         $token = operate('hash', 'alice@customer.com', [], 'email');
 
         expect($token)->toStartWith('[email:')
@@ -230,8 +230,8 @@ describe('Deterministic pseudonymization', function () {
     });
 });
 
-describe('Format-preserving surrogates', function () {
-    it('keeps an email parseable and its domain intact', function () {
+describe('Format-preserving surrogates', function (): void {
+    it('keeps an email parseable and its domain intact', function (): void {
         $result = operate('surrogate', 'alice@customer.com', ['preserve_domain' => true], 'email');
 
         expect($result)->toEndWith('@customer.com')
@@ -239,14 +239,14 @@ describe('Format-preserving surrogates', function () {
             ->and(filter_var($result, FILTER_VALIDATE_EMAIL))->not->toBeFalse();
     });
 
-    it('replaces the domain with a guaranteed-unroutable one when asked', function () {
+    it('replaces the domain with a guaranteed-unroutable one when asked', function (): void {
         // RFC 2606 reserves .invalid, so a surrogate that escapes into a mail
         // queue bounces rather than reaching a stranger.
         expect(operate('surrogate', 'alice@customer.com', ['preserve_domain' => false], 'email'))
             ->toEndWith('@example.invalid');
     });
 
-    it('keeps a card Luhn-valid, same length, same grouping', function () {
+    it('keeps a card Luhn-valid, same length, same grouping', function (): void {
         $result = operate('surrogate', '4111 1111 1111 1111', ['preserve_bin' => 6], 'credit_card');
 
         expect($result)->not->toBe('4111 1111 1111 1111')
@@ -256,7 +256,7 @@ describe('Format-preserving surrogates', function () {
             ->and(preg_match('/^\d{4} \d{4} \d{4} \d{4}$/', $result))->toBe(1);
     });
 
-    it('preserves character classes and separators for anything else', function () {
+    it('preserves character classes and separators for anything else', function (): void {
         $result = (new CharacterClassSurrogate)->generate(
             'sk_live_4eC39HqLyj',
             Pseudonymizer::fromKey(testPseudonymizationKey())->random('generic', 'sk_live_4eC39HqLyj'),
@@ -276,7 +276,7 @@ describe('Format-preserving surrogates', function () {
         }
     });
 
-    it('preserves digit positions and punctuation in a structured value', function () {
+    it('preserves digit positions and punctuation in a structured value', function (): void {
         $original = '2024-01-15T09:31:00Z';
 
         $result = (new CharacterClassSurrogate)->generate(
@@ -292,7 +292,7 @@ describe('Format-preserving surrogates', function () {
             ->and(strlen($result))->toBe(strlen($original));
     });
 
-    it('picks the most specific generator for the entity', function () {
+    it('picks the most specific generator for the entity', function (): void {
         expect((new EmailSurrogate)->supports('email', 'a@b.com'))->toBeTrue()
             ->and((new EmailSurrogate)->supports('generic', 'no-at-sign'))->toBeFalse()
             ->and((new CreditCardSurrogate)->supports('credit_card', '4111111111111111'))->toBeTrue()
@@ -301,14 +301,14 @@ describe('Format-preserving surrogates', function () {
     });
 });
 
-describe('Pseudonymization end to end', function () {
-    it('keeps a log line joinable through the redactor', function () {
+describe('Pseudonymization end to end', function (): void {
+    it('keeps a log line joinable through the redactor', function (): void {
         config()->set('redactor.profiles.pseudo', pseudoProfile([
             'operators' => ['default' => 'redact', 'email' => ['surrogate' => ['preserve_domain' => true]]],
         ]));
 
-        $first = app(Redactor::class)->redact('login from alice@customer.com ok', 'pseudo');
-        $second = app(Redactor::class)->redact('logout for alice@customer.com ok', 'pseudo');
+        $first = resolve(Redactor::class)->redact('login from alice@customer.com ok', 'pseudo');
+        $second = resolve(Redactor::class)->redact('logout for alice@customer.com ok', 'pseudo');
 
         preg_match('/(\S+@customer\.com)/', $first, $a);
         preg_match('/(\S+@customer\.com)/', $second, $b);
@@ -318,7 +318,7 @@ describe('Pseudonymization end to end', function () {
             ->and($first)->toStartWith('login from ');
     });
 
-    it('lets one entity be pseudonymised while another is redacted', function () {
+    it('lets one entity be pseudonymised while another is redacted', function (): void {
         config()->set('redactor.profiles.pseudo', pseudoProfile([
             'patterns' => [
                 'email' => ['pattern' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/', 'entity' => 'email'],
@@ -331,17 +331,17 @@ describe('Pseudonymization end to end', function () {
             ],
         ]));
 
-        $result = app(Redactor::class)->redact('a@b.com paid with 4111111111111111', 'pseudo');
+        $result = resolve(Redactor::class)->redact('a@b.com paid with 4111111111111111', 'pseudo');
 
         expect($result)->toContain('@b.com')
             ->and($result)->not->toContain('a@b.com')
             ->and($result)->toContain('[REDACTED]');
     });
 
-    it('honours the shipped observability profile', function () {
+    it('honours the shipped observability profile', function (): void {
         config()->set('redactor.pseudonymization', ['enabled' => true, 'key' => testPseudonymizationKey()]);
 
-        $result = app(Redactor::class)->redact([
+        $result = resolve(Redactor::class)->redact([
             'message' => 'checkout by alice@customer.com from 203.0.113.9',
             'trace_id' => 'abc-123',
         ], 'observability');
@@ -353,13 +353,13 @@ describe('Pseudonymization end to end', function () {
             ->and($result['message'])->not->toContain('203.0.113.9');
     });
 
-    it('degrades to redaction rather than emitting an unkeyed surrogate', function () {
+    it('degrades to redaction rather than emitting an unkeyed surrogate', function (): void {
         config()->set('redactor.profiles.pseudo', pseudoProfile([
             'operators' => ['default' => 'redact', 'email' => 'surrogate'],
             'pseudonymization' => ['enabled' => false],
         ]));
 
-        expect(app(Redactor::class)->redact('mail a@b.com now', 'pseudo'))
+        expect(resolve(Redactor::class)->redact('mail a@b.com now', 'pseudo'))
             ->toBe('mail [REDACTED] now');
     });
 });

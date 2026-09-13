@@ -94,7 +94,7 @@ final readonly class ScanFinding implements Arrayable, JsonSerializable
     public function severity(): string
     {
         // A confirmed-live credential outranks anything confidence can say...
-        if ($this->verification !== null && $this->verification->status->isActive()) {
+        if ($this->verification instanceof VerificationResult && $this->verification->status->isActive()) {
             return 'critical';
         }
 

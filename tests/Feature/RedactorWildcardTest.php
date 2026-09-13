@@ -7,8 +7,8 @@ namespace Tests\Feature;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
 
-describe('Redactor Wildcard Blocked Keys Tests', function () {
-    it('matches wildcard patterns for blocked keys', function () {
+describe('Redactor Wildcard Blocked Keys Tests', function (): void {
+    it('matches wildcard patterns for blocked keys', function (): void {
         // Configure a test profile with wildcard patterns
         config()->set('redactor.default_profile', 'wildcard_test');
         config()->set('redactor.profiles.wildcard_test', [
@@ -63,7 +63,7 @@ describe('Redactor Wildcard Blocked Keys Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('supports exact matches alongside wildcard patterns', function () {
+    it('supports exact matches alongside wildcard patterns', function (): void {
         config()->set('redactor.default_profile', 'wildcard_test');
         config()->set('redactor.profiles.wildcard_test', [
             'enabled' => true,
@@ -104,7 +104,7 @@ describe('Redactor Wildcard Blocked Keys Tests', function () {
             ->and($result['other_field'])->toBe('should_stay');
     });
 
-    it('handles case-insensitive wildcard matching', function () {
+    it('handles case-insensitive wildcard matching', function (): void {
         config()->set('redactor.default_profile', 'wildcard_test');
         config()->set('redactor.profiles.wildcard_test', [
             'enabled' => true,
@@ -143,7 +143,7 @@ describe('Redactor Wildcard Blocked Keys Tests', function () {
             ->and($result['other_field'])->toBe('should_stay');
     });
 
-    it('supports multiple wildcard positions', function () {
+    it('supports multiple wildcard positions', function (): void {
         config()->set('redactor.default_profile', 'wildcard_test');
         config()->set('redactor.profiles.wildcard_test', [
             'enabled' => true,

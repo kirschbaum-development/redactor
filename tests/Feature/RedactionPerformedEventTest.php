@@ -8,11 +8,11 @@ use Illuminate\Support\Facades\Event;
 use Kirschbaum\Redactor\Events\RedactionPerformed;
 use Kirschbaum\Redactor\Redactor;
 
-describe('RedactionPerformed', function () {
-    it('is dispatched with names and counts, never values', function () {
+describe('RedactionPerformed', function (): void {
+    it('is dispatched with names and counts, never values', function (): void {
         Event::fake([RedactionPerformed::class]);
 
-        app(Redactor::class)->redact(['password' => 'hunter2', 'note' => 'mail bob@example.com and alice@example.com']);
+        resolve(Redactor::class)->redact(['password' => 'hunter2', 'note' => 'mail bob@example.com and alice@example.com']);
 
         Event::assertDispatched(RedactionPerformed::class, function (RedactionPerformed $event): bool {
             $serialised = json_encode($event);
@@ -27,15 +27,15 @@ describe('RedactionPerformed', function () {
         });
     });
 
-    it('is not dispatched when nothing was redacted', function () {
+    it('is not dispatched when nothing was redacted', function (): void {
         Event::fake([RedactionPerformed::class]);
 
-        app(Redactor::class)->redact(['plain' => 'text']);
+        resolve(Redactor::class)->redact(['plain' => 'text']);
 
         Event::assertNotDispatched(RedactionPerformed::class);
     });
 
-    it('can be switched off', function () {
+    it('can be switched off', function (): void {
         config()->set('redactor.events', false);
         Event::fake([RedactionPerformed::class]);
 
@@ -44,9 +44,9 @@ describe('RedactionPerformed', function () {
         Event::assertNotDispatched(RedactionPerformed::class);
     });
 
-    it('never lets a failing listener break redaction', function () {
+    it('never lets a failing listener break redaction', function (): void {
         Event::listen(RedactionPerformed::class, fn () => throw new \RuntimeException('metrics down'));
 
-        expect(app(Redactor::class)->redact(['password' => 'x']))->toBe(['password' => '[REDACTED]', '_redacted' => true]);
+        expect(resolve(Redactor::class)->redact(['password' => 'x']))->toBe(['password' => '[REDACTED]', '_redacted' => true]);
     });
 });

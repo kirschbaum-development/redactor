@@ -30,7 +30,7 @@ class RedactorFormatter implements FormatterInterface
     {
         $record = $this->redact($record);
 
-        if ($this->inner !== null) {
+        if ($this->inner instanceof FormatterInterface) {
             // Monolog 3 types FormatterInterface::format() as mixed, since a formatter may not render a string...
             $formatted = $this->inner->format($record);
 
@@ -61,9 +61,9 @@ class RedactorFormatter implements FormatterInterface
      */
     public function formatBatch(array $records): string
     {
-        if ($this->inner !== null) {
+        if ($this->inner instanceof FormatterInterface) {
             $formatted = $this->inner->formatBatch(array_map(
-                fn (LogRecord $record) => $this->redact($record),
+                $this->redact(...),
                 $records
             ));
 

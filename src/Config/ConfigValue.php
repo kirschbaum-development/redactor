@@ -249,7 +249,7 @@ class ConfigValue
     private static function describe(mixed $value): string
     {
         if (is_object($value)) {
-            return get_class($value);
+            return $value::class;
         }
 
         if (is_string($value)) {

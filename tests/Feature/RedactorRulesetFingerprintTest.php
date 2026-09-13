@@ -6,8 +6,8 @@ use Illuminate\Support\Facades\Artisan;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Scanner\Baseline;
 
-describe('Ruleset fingerprint', function () {
-    beforeEach(function () {
+describe('Ruleset fingerprint', function (): void {
+    beforeEach(function (): void {
         config(['redactor.scan.profile' => 'file_scan', 'redactor.scan.baseline' => null]);
         $this->dir = sys_get_temp_dir().'/redactor_ruleset_'.uniqid();
         mkdir($this->dir);
@@ -16,7 +16,7 @@ describe('Ruleset fingerprint', function () {
 
     afterEach(fn () => cleanupDirectory($this->dir));
 
-    it('is stable for the same rules and changes when a rule changes', function () {
+    it('is stable for the same rules and changes when a rule changes', function (): void {
         $before = RedactorConfig::fromConfig('file_scan')->rulesetFingerprint;
 
         expect($before)->toHaveLength(16)
@@ -27,7 +27,7 @@ describe('Ruleset fingerprint', function () {
         expect(RedactorConfig::fromConfig('file_scan')->rulesetFingerprint)->not->toBe($before);
     });
 
-    it('is carried in JSON and SARIF output', function () {
+    it('is carried in JSON and SARIF output', function (): void {
         $expected = RedactorConfig::fromConfig('file_scan')->rulesetFingerprint;
 
         Artisan::call('redactor:scan', ['paths' => [$this->dir], '--output' => 'json']);
@@ -37,7 +37,7 @@ describe('Ruleset fingerprint', function () {
         expect(json_decode(Artisan::output(), true)['runs'][0]['tool']['driver']['properties']['rulesetFingerprint'])->toBe($expected);
     });
 
-    it('is written into the baseline and a mismatch is warned about', function () {
+    it('is written into the baseline and a mismatch is warned about', function (): void {
         $baseline = $this->dir.'/baseline.json';
 
         Artisan::call('redactor:scan', ['paths' => [$this->dir], '--baseline' => $baseline, '--update-baseline' => true]);

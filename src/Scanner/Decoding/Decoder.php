@@ -18,7 +18,7 @@ class Decoder
     /**
      * Base64 tokens shorter than this are far more often ordinary words.
      */
-    private const MIN_BASE64_LENGTH = 20;
+    private const int MIN_BASE64_LENGTH = 20;
 
     /**
      * @return array<int, DerivedSubject>
@@ -88,7 +88,7 @@ class Decoder
             $decoded = rawurldecode($encoded);
 
             if ($decoded !== $encoded) {
-                $subjects[] = new DerivedSubject($decoded, (int) $offset, strlen($encoded), 'url');
+                $subjects[] = new DerivedSubject($decoded, $offset, strlen($encoded), 'url');
             }
         }
 
@@ -120,7 +120,7 @@ class Decoder
                 continue;
             }
 
-            $subjects[] = new DerivedSubject($decoded, (int) $offset, strlen($token), 'base64');
+            $subjects[] = new DerivedSubject($decoded, $offset, strlen($token), 'base64');
         }
 
         return $subjects;

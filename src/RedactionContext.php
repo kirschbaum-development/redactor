@@ -78,9 +78,9 @@ class RedactionContext
      */
     public function secrets(): SecretRegistry
     {
-        return $this->secrets ??= $this->runtimeSecrets === null
-            ? $this->config->knownSecrets
-            : $this->config->knownSecrets->merge($this->runtimeSecrets);
+        return $this->secrets ??= $this->runtimeSecrets instanceof SecretRegistry
+            ? $this->config->knownSecrets->merge($this->runtimeSecrets)
+            : $this->config->knownSecrets;
     }
 
     /**
@@ -185,7 +185,7 @@ class RedactionContext
 
         return $this->operators->get($spec->name)->apply(
             $detection,
-            new OperatorContext($this->config->replacement, $spec->options, fn () => $this->pseudonymizer()),
+            new OperatorContext($this->config->replacement, $spec->options, fn (): ?\Kirschbaum\Redactor\Support\Pseudonymizer => $this->pseudonymizer()),
         );
     }
 

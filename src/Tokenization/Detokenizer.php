@@ -64,9 +64,7 @@ class Detokenizer
             return $text;
         }
 
-        $result = preg_replace_callback($this->pattern(), function (array $m): string {
-            return $this->store->get($m[0]) ?? $m[0];
-        }, $text);
+        $result = preg_replace_callback($this->pattern(), fn (array $m): string => $this->store->get($m[0]) ?? $m[0], $text);
 
         return $result ?? $text;
     }

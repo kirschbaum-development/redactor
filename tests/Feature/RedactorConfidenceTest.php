@@ -32,8 +32,8 @@ function confidenceProfile(array $patterns, array $overrides = []): array
     ], $overrides);
 }
 
-describe('Confidence arithmetic', function () {
-    it('never exceeds certainty however many signals stack', function () {
+describe('Confidence arithmetic', function (): void {
+    it('never exceeds certainty however many signals stack', function (): void {
         $confidence = Confidence::of(0.6);
 
         for ($i = 0; $i < 50; $i++) {
@@ -44,7 +44,7 @@ describe('Confidence arithmetic', function () {
             ->and($confidence->score)->toBeGreaterThan(0.99);
     });
 
-    it('applies a positive signal to the remaining headroom, not flat', function () {
+    it('applies a positive signal to the remaining headroom, not flat', function (): void {
         // Flat addition would let two 0.6 signals claim 1.2 certainty, and
         // would let one strong signal swamp everything after it.
         $once = Confidence::of(0.5)->with('a', 0.5, 'r');
@@ -54,17 +54,17 @@ describe('Confidence arithmetic', function () {
             ->and($twice->score)->toBe(0.875);
     });
 
-    it('reduces the score for a negative signal', function () {
+    it('reduces the score for a negative signal', function (): void {
         expect(Confidence::of(0.8)->with('a', -0.5, 'r')->score)
             ->toBeLessThan(0.8);
     });
 
-    it('clamps a base outside the range', function () {
+    it('clamps a base outside the range', function (): void {
         expect(Confidence::of(5.0)->score)->toBe(1.0)
             ->and(Confidence::of(-5.0)->score)->toBe(0.0);
     });
 
-    it('explains every contribution', function () {
+    it('explains every contribution', function (): void {
         $confidence = Confidence::of(0.6, 'pattern matched')->with('luhn', 0.75, 'checksum passed');
 
         expect($confidence->explain())->toHaveCount(2)
@@ -72,7 +72,7 @@ describe('Confidence arithmetic', function () {
             ->and($confidence->explain()[1])->toContain('checksum passed');
     });
 
-    it('labels bands a human can sort by', function () {
+    it('labels bands a human can sort by', function (): void {
         expect(Confidence::of(0.95)->label())->toBe('high')
             ->and(Confidence::of(0.7)->label())->toBe('medium')
             ->and(Confidence::of(0.4)->label())->toBe('low')
@@ -80,106 +80,106 @@ describe('Confidence arithmetic', function () {
     });
 });
 
-describe('Scoring a detection', function () {
-    it('raises the score when a checksum passes', function () {
+describe('Scoring a detection', function (): void {
+    it('raises the score when a checksum passes', function (): void {
         config()->set('redactor.profiles.conf', confidenceProfile([
             'card' => ['pattern' => '/\b\d{16}\b/', 'confidence' => 0.3, 'validator' => 'luhn'],
         ], ['track_redacted_keys' => true, 'mark_redacted' => true]));
 
-        $result = app(Redactor::class)->redactWithMetadata(['v' => '4111111111111111'], 'conf');
+        $result = resolve(Redactor::class)->inspect(['v' => '4111111111111111'], 'conf');
 
         expect($result->findings[0]->confidence?->score)->toBeGreaterThan(0.3)
             ->and(implode(' ', $result->findings[0]->confidence?->explain() ?? []))->toContain('luhn');
     });
 
-    it('raises the score when a credential keyword sits beside the match', function () {
+    it('raises the score when a credential keyword sits beside the match', function (): void {
         config()->set('redactor.profiles.conf', confidenceProfile([
             'token' => ['pattern' => '/[a-z0-9]{20,}/', 'confidence' => 0.3],
         ]));
 
-        $bare = app(Redactor::class)->redactWithMetadata(['v' => 'abcdefghijklmnopqrstuvwxyz'], 'conf');
-        $labelled = app(Redactor::class)->redactWithMetadata(['v' => 'token=abcdefghijklmnopqrstuvwxyz'], 'conf');
+        $bare = resolve(Redactor::class)->inspect(['v' => 'abcdefghijklmnopqrstuvwxyz'], 'conf');
+        $labelled = resolve(Redactor::class)->inspect(['v' => 'token=abcdefghijklmnopqrstuvwxyz'], 'conf');
 
         expect($labelled->findings[0]->confidence?->score)
             ->toBeGreaterThan($bare->findings[0]->confidence?->score ?? 1.0);
     });
 
-    it('raises the score when the key itself names a credential', function () {
+    it('raises the score when the key itself names a credential', function (): void {
         config()->set('redactor.profiles.conf', confidenceProfile([
             'token' => ['pattern' => '/[a-z0-9]{20,}/', 'confidence' => 0.3],
         ]));
 
-        $neutral = app(Redactor::class)->redactWithMetadata(['note' => 'abcdefghijklmnopqrstuvwxyz'], 'conf');
-        $named = app(Redactor::class)->redactWithMetadata(['api_key' => 'abcdefghijklmnopqrstuvwxyz'], 'conf');
+        $neutral = resolve(Redactor::class)->inspect(['note' => 'abcdefghijklmnopqrstuvwxyz'], 'conf');
+        $named = resolve(Redactor::class)->inspect(['api_key' => 'abcdefghijklmnopqrstuvwxyz'], 'conf');
 
         expect($named->findings[0]->confidence?->score)
             ->toBeGreaterThan($neutral->findings[0]->confidence?->score ?? 1.0);
     });
 
-    it('ignores a keyword that only appears after the match', function () {
+    it('ignores a keyword that only appears after the match', function (): void {
         // "<value> token" is usually the next field, not a label for this one.
         config()->set('redactor.profiles.conf', confidenceProfile([
             'token' => ['pattern' => '/^[a-z0-9]{20,}/', 'confidence' => 0.3],
         ]));
 
-        $after = app(Redactor::class)->redactWithMetadata(['v' => 'abcdefghijklmnopqrstuvwxyz token'], 'conf');
+        $after = resolve(Redactor::class)->inspect(['v' => 'abcdefghijklmnopqrstuvwxyz token'], 'conf');
 
         expect($after->findings[0]->confidence?->score)->toBe(0.3);
     });
 });
 
-describe('The confidence floor', function () {
-    it('leaves a detection below the floor completely alone', function () {
+describe('The confidence floor', function (): void {
+    it('leaves a detection below the floor completely alone', function (): void {
         config()->set('redactor.profiles.conf', confidenceProfile([
             'weak' => ['pattern' => '/\bmaybe-\w+/', 'confidence' => 0.2],
         ], ['min_confidence' => 0.5]));
 
-        expect(app(Redactor::class)->redact(['v' => 'maybe-secret'], 'conf'))
+        expect(resolve(Redactor::class)->redact(['v' => 'maybe-secret'], 'conf'))
             ->toBe(['v' => 'maybe-secret']);
     });
 
-    it('acts on the same detection once the floor drops', function () {
+    it('acts on the same detection once the floor drops', function (): void {
         config()->set('redactor.profiles.conf', confidenceProfile([
             'weak' => ['pattern' => '/\bmaybe-\w+/', 'confidence' => 0.2],
         ], ['min_confidence' => 0.1]));
 
-        expect(app(Redactor::class)->redact(['v' => 'maybe-secret'], 'conf'))
+        expect(resolve(Redactor::class)->redact(['v' => 'maybe-secret'], 'conf'))
             ->toBe(['v' => '[REDACTED]']);
     });
 
-    it('does not report a filtered detection as a redaction', function () {
+    it('does not report a filtered detection as a redaction', function (): void {
         config()->set('redactor.profiles.conf', confidenceProfile([
             'weak' => ['pattern' => '/\bmaybe-\w+/', 'confidence' => 0.2],
         ], ['min_confidence' => 0.5]));
 
-        expect(app(Redactor::class)->redactWithMetadata(['v' => 'maybe-secret'], 'conf')->wasRedacted)
+        expect(resolve(Redactor::class)->inspect(['v' => 'maybe-secret'], 'conf')->wasRedacted)
             ->toBeFalse();
     });
 
-    it('lets a weak rule survive the floor when context corroborates it', function () {
+    it('lets a weak rule survive the floor when context corroborates it', function (): void {
         // The whole point of scoring: the same pattern is noise on its own and
         // a finding next to a keyword, without editing the pattern.
         config()->set('redactor.profiles.conf', confidenceProfile([
             'weak' => ['pattern' => '/[a-z0-9]{20,}/', 'confidence' => 0.3],
         ], ['min_confidence' => 0.45]));
 
-        expect(app(Redactor::class)->redact(['note' => 'abcdefghijklmnopqrstuvwxyz'], 'conf'))
+        expect(resolve(Redactor::class)->redact(['note' => 'abcdefghijklmnopqrstuvwxyz'], 'conf'))
             ->toBe(['note' => 'abcdefghijklmnopqrstuvwxyz']);
 
-        expect(app(Redactor::class)->redact(['note' => 'secret=abcdefghijklmnopqrstuvwxyz'], 'conf'))
+        expect(resolve(Redactor::class)->redact(['note' => 'secret=abcdefghijklmnopqrstuvwxyz'], 'conf'))
             ->toBe(['note' => 'secret=[REDACTED]']);
     });
 
-    it('rejects a floor outside 0 to 1', function () {
+    it('rejects a floor outside 0 to 1', function (): void {
         config()->set('redactor.profiles.conf', confidenceProfile([], ['min_confidence' => 1.5]));
 
-        expect(fn () => RedactorConfig::fromConfig('conf'))
+        expect(fn (): RedactorConfig => RedactorConfig::fromConfig('conf'))
             ->toThrow(\InvalidArgumentException::class, 'min_confidence');
     });
 });
 
-describe('Confidence in scan output', function () {
-    beforeEach(function () {
+describe('Confidence in scan output', function (): void {
+    beforeEach(function (): void {
         config(['redactor.scan.profile' => 'file_scan', 'redactor.scan.baseline' => null]);
 
         $this->dir = sys_get_temp_dir().'/redactor_conf_'.uniqid();
@@ -189,7 +189,7 @@ describe('Confidence in scan output', function () {
 
     afterEach(fn () => cleanupDirectory($this->dir));
 
-    it('reports a score, a severity and the signals behind it', function () {
+    it('reports a score, a severity and the signals behind it', function (): void {
         Artisan::call('redactor:scan', ['paths' => [$this->dir], '--output' => 'json']);
 
         $finding = json_decode(Artisan::output(), true)[0]['findings'][0];
@@ -200,7 +200,7 @@ describe('Confidence in scan output', function () {
             ->and($finding['signals'])->not->toBeEmpty();
     });
 
-    it('maps severity onto SARIF levels', function () {
+    it('maps severity onto SARIF levels', function (): void {
         Artisan::call('redactor:scan', ['paths' => [$this->dir], '--output' => 'sarif']);
 
         $results = json_decode(Artisan::output(), true)['runs'][0]['results'];
@@ -211,7 +211,7 @@ describe('Confidence in scan output', function () {
         }
     });
 
-    it('filters by --min-confidence', function () {
+    it('filters by --min-confidence', function (): void {
         Artisan::call('redactor:scan', ['paths' => [$this->dir], '--output' => 'json']);
         $all = count(json_decode(Artisan::output(), true)[0]['findings']);
 
@@ -222,14 +222,14 @@ describe('Confidence in scan output', function () {
             ->and($strict)->toBeLessThanOrEqual($all);
     });
 
-    it('rejects a --min-confidence outside 0 to 1', function () {
+    it('rejects a --min-confidence outside 0 to 1', function (): void {
         $exit = Artisan::call('redactor:scan', ['paths' => [$this->dir], '--min-confidence' => '7']);
 
         expect($exit)->toBe(1)
             ->and(Artisan::output())->toContain('between 0 and 1');
     });
 
-    it('shows a severity column in the table', function () {
+    it('shows a severity column in the table', function (): void {
         Artisan::call('redactor:scan', ['paths' => [$this->dir]]);
 
         expect(Artisan::output())->toContain('Severity');

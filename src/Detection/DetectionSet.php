@@ -29,7 +29,7 @@ class DetectionSet
     {
         $candidates = array_values(array_filter(
             $detections,
-            fn (Detection $d) => $d->value !== '' && ($d->failClosed || $d->confidence->meets($minConfidence))
+            fn (Detection $d): bool => $d->value !== '' && ($d->failClosed || $d->confidence->meets($minConfidence))
         ));
 
         if (count($candidates) < 2) {
@@ -62,7 +62,7 @@ class DetectionSet
             }
         }
 
-        usort($kept, fn (Detection $a, Detection $b) => $a->offset <=> $b->offset);
+        usort($kept, fn (Detection $a, Detection $b): int => $a->offset <=> $b->offset);
 
         return $kept;
     }

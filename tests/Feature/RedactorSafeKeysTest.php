@@ -30,22 +30,22 @@ function safeKeyProfile(array $overrides = []): array
     ], $overrides);
 }
 
-describe('Safe key semantics', function () {
-    it('preserves a scalar under a safe key', function () {
+describe('Safe key semantics', function (): void {
+    it('preserves a scalar under a safe key', function (): void {
         config()->set('redactor.profiles.safe', safeKeyProfile());
 
-        expect(app(Redactor::class)->redact(['trace_id' => 'abc-123'], 'safe'))
+        expect(resolve(Redactor::class)->redact(['trace_id' => 'abc-123'], 'safe'))
             ->toBe(['trace_id' => 'abc-123']);
     });
 
-    it('preserves the whole subtree under a safe key', function () {
+    it('preserves the whole subtree under a safe key', function (): void {
         config()->set('redactor.profiles.safe', safeKeyProfile(['safe_keys' => ['debug_dump']]));
 
         // Preservation is now recursive and deliberate. Previously the walk
         // descended anyway, because the engine compared value identity to
         // decide whether a strategy had handled the value - so "safe" meant
         // one thing for a scalar and the opposite for an array.
-        $result = app(Redactor::class)->redact([
+        $result = resolve(Redactor::class)->redact([
             'debug_dump' => ['password' => 'hunter2', 'nested' => ['api_token' => 'abc']],
         ], 'safe');
 
@@ -55,31 +55,31 @@ describe('Safe key semantics', function () {
         ]);
     });
 
-    it('still redacts the same keys when they are not under a safe key', function () {
+    it('still redacts the same keys when they are not under a safe key', function (): void {
         config()->set('redactor.profiles.safe', safeKeyProfile(['safe_keys' => ['debug_dump']]));
 
-        expect(app(Redactor::class)->redact(['other' => ['password' => 'hunter2']], 'safe'))
+        expect(resolve(Redactor::class)->redact(['other' => ['password' => 'hunter2']], 'safe'))
             ->toBe(['other' => ['password' => '[REDACTED]']]);
     });
 
-    it('matches safe keys case-insensitively', function () {
+    it('matches safe keys case-insensitively', function (): void {
         config()->set('redactor.profiles.safe', safeKeyProfile(['safe_keys' => ['trace_id']]));
 
-        expect(app(Redactor::class)->redact(['TRACE_ID' => 'abc'], 'safe'))
+        expect(resolve(Redactor::class)->redact(['TRACE_ID' => 'abc'], 'safe'))
             ->toBe(['TRACE_ID' => 'abc']);
     });
 
-    it('does not treat a whole-array check as a safe key', function () {
+    it('does not treat a whole-array check as a safe key', function (): void {
         // redactArray() evaluates the array itself with an empty key. An empty
         // key must never match a safe key, or a stray '' entry would preserve
         // the entire payload.
         config()->set('redactor.profiles.safe', safeKeyProfile(['safe_keys' => ['']]));
 
-        expect(app(Redactor::class)->redact(['password' => 'hunter2'], 'safe'))
+        expect(resolve(Redactor::class)->redact(['password' => 'hunter2'], 'safe'))
             ->toBe(['password' => '[REDACTED]']);
     });
 
-    it('supports the wildcard patterns the README documents', function () {
+    it('supports the wildcard patterns the README documents', function (): void {
         // The README's Wildcard Patterns section has always said both
         // BlockedKeysStrategy and SafeKeysStrategy support them. SafeKeys was
         // a strict in_array(), so '*_count' and 'meta_*' were redacted -
@@ -89,7 +89,7 @@ describe('Safe key semantics', function () {
             'blocked_keys' => ['*count*', 'meta*'],
         ]));
 
-        expect(app(Redactor::class)->redact([
+        expect(resolve(Redactor::class)->redact([
             'item_count' => 5,
             'meta_info' => 'x',
             'other_field' => 'y',
@@ -100,13 +100,13 @@ describe('Safe key semantics', function () {
         ]);
     });
 
-    it('supports every wildcard shape in safe_keys', function () {
+    it('supports every wildcard shape in safe_keys', function (): void {
         config()->set('redactor.profiles.safe', safeKeyProfile([
             'safe_keys' => ['exact_ok', '*contains*', 'prefix_*', '*_suffix', 'multi_*_wild'],
             'blocked_keys' => ['*'],
         ]));
 
-        $result = app(Redactor::class)->redact([
+        $result = resolve(Redactor::class)->redact([
             'exact_ok' => 1,
             'a_contains_b' => 2,
             'prefix_thing' => 3,
@@ -125,33 +125,33 @@ describe('Safe key semantics', function () {
         ]);
     });
 
-    it('matches safe-key wildcards case-insensitively', function () {
+    it('matches safe-key wildcards case-insensitively', function (): void {
         config()->set('redactor.profiles.safe', safeKeyProfile([
             'safe_keys' => ['*_COUNT'],
             'blocked_keys' => ['*'],
         ]));
 
-        expect(app(Redactor::class)->redact(['item_count' => 5], 'safe'))
+        expect(resolve(Redactor::class)->redact(['item_count' => 5], 'safe'))
             ->toBe(['item_count' => 5]);
     });
 
-    it('preserves the subtree under a wildcard-matched safe key', function () {
+    it('preserves the subtree under a wildcard-matched safe key', function (): void {
         config()->set('redactor.profiles.safe', safeKeyProfile([
             'safe_keys' => ['debug_*'],
         ]));
 
-        expect(app(Redactor::class)->redact([
+        expect(resolve(Redactor::class)->redact([
             'debug_dump' => ['password' => 'hunter2'],
         ], 'safe'))->toBe(['debug_dump' => ['password' => 'hunter2']]);
     });
 
-    it('declares SafeKeysStrategy as preserving', function () {
+    it('declares SafeKeysStrategy as preserving', function (): void {
         expect(new SafeKeysStrategy)->toBeInstanceOf(PreservingStrategy::class);
     });
 });
 
-describe('Shipped default profile safe keys', function () {
-    it('no longer waves free-text and PII fields through', function () {
+describe('Shipped default profile safe keys', function (): void {
+    it('no longer waves free-text and PII fields through', function (): void {
         $safe = RedactorConfig::fromConfig('default')->safeKeys;
 
         // Each of these used to be safe, so the value was emitted verbatim no
@@ -166,25 +166,25 @@ describe('Shipped default profile safe keys', function () {
             ->and($safe)->not->toContain('target');
     });
 
-    it('actually redacts an email in a message field now', function () {
+    it('actually redacts an email in a message field now', function (): void {
         // The headline symptom: with 'message' safe, this address was emitted
         // in full while the identical string under any other key was redacted.
-        $result = app(Redactor::class)->redact([
+        $result = resolve(Redactor::class)->redact([
             'message' => 'User bob@example.com failed to authenticate',
         ], 'default');
 
         expect($result['message'])->toBe('User [REDACTED] failed to authenticate');
     });
 
-    it('redacts credentials embedded in a url', function () {
-        $result = app(Redactor::class)->redact([
+    it('redacts credentials embedded in a url', function (): void {
+        $result = resolve(Redactor::class)->redact([
             'url' => 'https://admin:s3cr3t@internal.example.com/reports',
         ], 'default');
 
         expect($result['url'])->not->toContain('s3cr3t');
     });
 
-    it('keeps genuinely structural keys safe', function () {
+    it('keeps genuinely structural keys safe', function (): void {
         $safe = RedactorConfig::fromConfig('default')->safeKeys;
 
         expect($safe)->toContain('id')
@@ -194,8 +194,8 @@ describe('Shipped default profile safe keys', function () {
             ->and($safe)->toContain('level');
     });
 
-    it('has no key in both safe_keys and blocked_keys in any shipped profile', function () {
-        foreach (RedactorConfig::getAvailableProfiles() as $profile) {
+    it('has no key in both safe_keys and blocked_keys in any shipped profile', function (): void {
+        foreach (RedactorConfig::profiles() as $profile) {
             $config = RedactorConfig::fromConfig($profile);
 
             // session_id was in both lists in the default profile. SafeKeys
@@ -206,8 +206,8 @@ describe('Shipped default profile safe keys', function () {
     });
 });
 
-describe('redactor:validate catches safe/blocked conflicts', function () {
-    it('fails when a profile lists a key as both safe and blocked', function () {
+describe('redactor:validate catches safe/blocked conflicts', function (): void {
+    it('fails when a profile lists a key as both safe and blocked', function (): void {
         config()->set('redactor.profiles.conflicted', safeKeyProfile([
             'safe_keys' => ['session_id'],
             'blocked_keys' => ['session_id'],

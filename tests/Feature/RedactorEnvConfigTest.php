@@ -15,7 +15,7 @@ use Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
  * or textual environment variable therefore reaches config as a string, so each
  * documented REDACTOR_* variable must survive that form.
  */
-describe('Documented environment variables', function () {
+describe('Documented environment variables', function (): void {
     /**
      * Mirrors config/redactor.php with every value as the string env() produces.
      */
@@ -43,7 +43,7 @@ describe('Documented environment variables', function () {
         ], $overrides);
     }
 
-    it('applies every profile value when it arrives as a string', function () {
+    it('applies every profile value when it arrives as a string', function (): void {
         config()->set('redactor.profiles.env_shaped', envShapedProfile());
 
         $config = RedactorConfig::fromConfig('env_shaped');
@@ -61,7 +61,7 @@ describe('Documented environment variables', function () {
             ->and($config->shannonEntropy['min_length'])->toBe(18);
     });
 
-    it('honours REDACTOR_MAX_OBJECT_SIZE end to end', function () {
+    it('honours REDACTOR_MAX_OBJECT_SIZE end to end', function (): void {
         // is_int() rejected the string form, so this knob always fell back to
         // 100 and arrays of 26-100 items were never redacted.
         config()->set('redactor.profiles.env_shaped', envShapedProfile([
@@ -69,22 +69,22 @@ describe('Documented environment variables', function () {
         ]));
 
         $payload = array_fill_keys(
-            array_map(fn (int $i) => "field_{$i}", range(1, 30)),
+            array_map(fn (int $i): string => "field_{$i}", range(1, 30)),
             'value'
         );
 
-        $result = app(Redactor::class)->redact($payload, 'env_shaped');
+        $result = resolve(Redactor::class)->redact($payload, 'env_shaped');
 
         expect($result)->toHaveKey('_large_object_redacted');
     });
 
-    it('honours REDACTOR_ENABLED=false as a string', function () {
+    it('honours REDACTOR_ENABLED=false as a string', function (): void {
         config()->set('redactor.profiles.env_disabled', envShapedProfile(['enabled' => 'false']));
 
         expect(RedactorConfig::fromConfig('env_disabled')->enabled)->toBeFalse();
     });
 
-    it('accepts the scan max file size as a string', function () {
+    it('accepts the scan max file size as a string', function (): void {
         // Config::integer() threw on this, so setting the documented
         // REDACTOR_SCAN_MAX_FILE_SIZE made redactor:scan fail outright.
         config()->set('redactor.scan.max_file_size', '1024');
@@ -110,27 +110,27 @@ describe('Documented environment variables', function () {
         cleanupDirectory($dir);
     });
 
-    it('rejects an unknown non_redactable_object_behavior rather than ignoring it', function () {
+    it('rejects an unknown non_redactable_object_behavior rather than ignoring it', function (): void {
         config()->set('redactor.profiles.env_bad_behavior', envShapedProfile([
             'non_redactable_object_behavior' => 'delete_everything',
         ]));
 
-        expect(fn () => RedactorConfig::fromConfig('env_bad_behavior'))
+        expect(fn (): RedactorConfig => RedactorConfig::fromConfig('env_bad_behavior'))
             ->toThrow(\InvalidArgumentException::class, 'non_redactable_object_behavior');
     });
 
-    it('rejects a non-numeric entropy threshold', function () {
+    it('rejects a non-numeric entropy threshold', function (): void {
         config()->set('redactor.profiles.env_bad_threshold', envShapedProfile([
             'shannon_entropy' => ['enabled' => 'true', 'threshold' => 'high'],
         ]));
 
-        expect(fn () => RedactorConfig::fromConfig('env_bad_threshold'))
+        expect(fn (): RedactorConfig => RedactorConfig::fromConfig('env_bad_threshold'))
             ->toThrow(\InvalidArgumentException::class, 'shannon_entropy.threshold');
     });
 });
 
-describe('ConfigValue coercion', function () {
-    it('accepts the truthy and falsy spellings env files use', function () {
+describe('ConfigValue coercion', function (): void {
+    it('accepts the truthy and falsy spellings env files use', function (): void {
         foreach (['true', 'TRUE', '1', 'yes', 'on', true, 1] as $truthy) {
             expect(ConfigValue::bool($truthy, false, 'p'))->toBeTrue();
         }
@@ -140,14 +140,14 @@ describe('ConfigValue coercion', function () {
         }
     });
 
-    it('rejects strings that only look numeric', function () {
-        expect(fn () => ConfigValue::positiveInt('12abc', 1, 'p'))
+    it('rejects strings that only look numeric', function (): void {
+        expect(fn (): int => ConfigValue::positiveInt('12abc', 1, 'p'))
             ->toThrow(\InvalidArgumentException::class)
-            ->and(fn () => ConfigValue::positiveInt('1.5', 1, 'p'))
+            ->and(fn (): int => ConfigValue::positiveInt('1.5', 1, 'p'))
             ->toThrow(\InvalidArgumentException::class);
     });
 
-    it('falls back to the default when the value is absent', function () {
+    it('falls back to the default when the value is absent', function (): void {
         expect(ConfigValue::bool(null, true, 'p'))->toBeTrue()
             ->and(ConfigValue::string(null, 'x', 'p'))->toBe('x')
             ->and(ConfigValue::positiveInt(null, 7, 'p'))->toBe(7)
@@ -155,12 +155,12 @@ describe('ConfigValue coercion', function () {
             ->and(ConfigValue::stringList(null, 'p'))->toBe([]);
     });
 
-    it('drops non-string entries from string lists', function () {
+    it('drops non-string entries from string lists', function (): void {
         expect(ConfigValue::stringList(['a', 1, null, 'b', []], 'p'))->toBe(['a', 'b']);
     });
 
-    it('names the offending config path in every message', function () {
-        expect(fn () => ConfigValue::bool('maybe', true, 'profiles.x.enabled'))
+    it('names the offending config path in every message', function (): void {
+        expect(fn (): bool => ConfigValue::bool('maybe', true, 'profiles.x.enabled'))
             ->toThrow(\InvalidArgumentException::class, 'profiles.x.enabled');
     });
 });

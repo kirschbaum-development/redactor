@@ -126,7 +126,7 @@ readonly class RedactorConfig
         $this->blockedKeyMatcher = KeyMatcher::for($this->blockedKeys);
         $this->allowlist = $allowlist ?? AllowList::none();
         $this->buildId = ProfileCache::nextBuildId();
-        $this->rulesetFingerprint = self::fingerprint($this->patterns, $this->shannonEntropy, $this->minConfidence, $this->safeKeys, $this->blockedKeys);
+        $this->rulesetFingerprint = $this->fingerprint($this->patterns, $this->shannonEntropy, $this->minConfidence, $this->safeKeys, $this->blockedKeys);
 
         $ordered = [];
         $position = 0;
@@ -135,7 +135,7 @@ readonly class RedactorConfig
             $ordered[] = [$rule, $position++];
         }
 
-        usort($ordered, fn (array $a, array $b) => $a[0]->minLength <=> $b[0]->minLength ?: $a[1] <=> $b[1]);
+        usort($ordered, fn (array $a, array $b): int => $a[0]->minLength <=> $b[0]->minLength ?: $a[1] <=> $b[1]);
 
         $this->patternsByLength = $ordered;
     }
@@ -146,7 +146,7 @@ readonly class RedactorConfig
     public static function fromConfig(?string $profile = null): self
     {
         $defaultProfile = Configuration::get('redactor.default_profile', 'default');
-        $profile = $profile ?? (is_string($defaultProfile) ? $defaultProfile : 'default');
+        $profile ??= is_string($defaultProfile) ? $defaultProfile : 'default';
 
         $profiles = Configuration::get('redactor.profiles', []);
 
@@ -167,7 +167,7 @@ readonly class RedactorConfig
 
         $cached = ProfileCache::get($profile, $config, $shared);
 
-        if ($cached !== null) {
+        if ($cached instanceof RedactorConfig) {
             return $cached;
         }
 
@@ -188,8 +188,8 @@ readonly class RedactorConfig
 
         $built = new self(
             enabled: ConfigValue::bool($config['enabled'] ?? true, true, "profiles.{$profile}.enabled"),
-            safeKeys: array_map('strtolower', ConfigValue::stringList($config['safe_keys'] ?? [], "profiles.{$profile}.safe_keys")),
-            blockedKeys: array_map('strtolower', ConfigValue::stringList($config['blocked_keys'] ?? [], "profiles.{$profile}.blocked_keys")),
+            safeKeys: array_map(strtolower(...), ConfigValue::stringList($config['safe_keys'] ?? [], "profiles.{$profile}.safe_keys")),
+            blockedKeys: array_map(strtolower(...), ConfigValue::stringList($config['blocked_keys'] ?? [], "profiles.{$profile}.blocked_keys")),
             patterns: self::buildPatternRules(ConfigValue::map($config['patterns'] ?? [], "profiles.{$profile}.patterns"), $profile),
             replacement: ConfigValue::string($config['replacement'] ?? '[REDACTED]', '[REDACTED]', "profiles.{$profile}.replacement"),
             markRedacted: ConfigValue::bool($config['mark_redacted'] ?? true, true, "profiles.{$profile}.mark_redacted"),
@@ -233,7 +233,7 @@ readonly class RedactorConfig
      * @param  array<int, string>  $safeKeys
      * @param  array<int, string>  $blockedKeys
      */
-    private static function fingerprint(array $patterns, array $entropy, float $minConfidence, array $safeKeys, array $blockedKeys): string
+    private function fingerprint(array $patterns, array $entropy, float $minConfidence, array $safeKeys, array $blockedKeys): string
     {
         $rules = [];
 
@@ -359,7 +359,7 @@ readonly class RedactorConfig
         $global = ConfigValue::map(Configuration::get('redactor.pseudonymization', []), 'pseudonymization');
         $local = ConfigValue::map($profileSettings, "profiles.{$profile}.pseudonymization");
 
-        return [...$global, ...array_filter($local, fn ($v) => $v !== null)];
+        return [...$global, ...array_filter($local, fn ($v): bool => $v !== null)];
     }
 
     /**
@@ -434,7 +434,7 @@ readonly class RedactorConfig
                 "profiles.{$profile}.patterns.{$name}"
             );
 
-            if ($rule !== null) {
+            if ($rule instanceof PatternRule) {
                 $rules[(string) $name] = $rule;
             }
         }
@@ -447,7 +447,7 @@ readonly class RedactorConfig
      *
      * @return array<string>
      */
-    public static function getAvailableProfiles(): array
+    public static function profiles(): array
     {
         $profiles = Configuration::get('redactor.profiles', []);
 
@@ -457,7 +457,7 @@ readonly class RedactorConfig
     /**
      * Determine if a profile is configured.
      */
-    public static function profileExists(string $profile): bool
+    public static function hasProfile(string $profile): bool
     {
         $profiles = Configuration::get('redactor.profiles', []);
 

@@ -19,11 +19,11 @@ use Kirschbaum\Redactor\Support\DeterministicRandom;
  */
 class CharacterClassSurrogate implements SurrogateGenerator
 {
-    private const LOWER = 'abcdefghijklmnopqrstuvwxyz';
+    private const string LOWER = 'abcdefghijklmnopqrstuvwxyz';
 
-    private const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    private const string UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-    private const DIGITS = '0123456789';
+    private const string DIGITS = '0123456789';
 
     /**
      * Determine if the generator can stand in for the given value.

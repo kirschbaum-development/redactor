@@ -94,7 +94,7 @@ class LargeObjectStrategy implements Strategy
                 '_large_object_redacted' => sprintf(
                     '%s (Object %s with %s properties)',
                     $context->config->replacement,
-                    get_class($value),
+                    $value::class,
                     $propertyCount
                 ),
             ];

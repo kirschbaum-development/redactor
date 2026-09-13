@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\ServiceProvider;
 use Kirschbaum\Redactor\Console\Commands\RedactorScanCommand;
 use Kirschbaum\Redactor\Redactor;
@@ -33,8 +34,8 @@ class ConfigProbeProvider extends ServiceProvider
     }
 }
 
-describe('RedactorServiceProvider', function () {
-    it('merges package config during register so other providers can read it', function () {
+describe('RedactorServiceProvider', function (): void {
+    it('merges package config during register so other providers can read it', function (): void {
         ConfigProbeProvider::$profileSeenDuringRegister = null;
 
         $app = app();
@@ -44,7 +45,7 @@ describe('RedactorServiceProvider', function () {
         expect(ConfigProbeProvider::$profileSeenDuringRegister)->toBe('default');
     });
 
-    it('binds the redactor early enough to resolve during another register()', function () {
+    it('binds the redactor early enough to resolve during another register()', function (): void {
         ConfigProbeProvider::$redactorResolvableDuringRegister = false;
 
         $app = app();
@@ -54,15 +55,15 @@ describe('RedactorServiceProvider', function () {
         expect(ConfigProbeProvider::$redactorResolvableDuringRegister)->toBeTrue();
     });
 
-    it('publishes the config file under the redactor-config tag', function () {
+    it('publishes the config file under the redactor-config tag', function (): void {
         $paths = ServiceProvider::pathsToPublish(RedactorServiceProvider::class, 'redactor-config');
 
         expect($paths)->not->toBeEmpty()
             ->and(array_values($paths)[0])->toEndWith('redactor.php');
     });
 
-    it('registers the scan command', function () {
-        expect(array_keys(app('Illuminate\Contracts\Console\Kernel')->all()))->toContain('redactor:scan')
-            ->and(app(RedactorScanCommand::class))->toBeInstanceOf(RedactorScanCommand::class);
+    it('registers the scan command', function (): void {
+        expect(array_keys(resolve(Kernel::class)->all()))->toContain('redactor:scan')
+            ->and(resolve(RedactorScanCommand::class))->toBeInstanceOf(RedactorScanCommand::class);
     });
 });

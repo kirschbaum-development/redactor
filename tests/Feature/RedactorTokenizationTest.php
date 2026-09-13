@@ -12,8 +12,8 @@ use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Tokenization\Detokenizer;
 use Kirschbaum\Redactor\Tokenization\TokenStore;
 
-describe('Reversible tokens', function () {
-    beforeEach(function () {
+describe('Reversible tokens', function (): void {
+    beforeEach(function (): void {
         config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
         config()->set('redactor.pseudonymization.key', testPseudonymizationKey());
         config()->set('redactor.profiles.ai', [
@@ -37,7 +37,7 @@ describe('Reversible tokens', function () {
         ]);
     });
 
-    it('replaces a value with a stable, model-friendly token', function () {
+    it('replaces a value with a stable, model-friendly token', function (): void {
         $a = Redactor::redact('write to alice@customer.com today', 'ai');
         $b = Redactor::redact('alice@customer.com again', 'ai');
 
@@ -49,7 +49,7 @@ describe('Reversible tokens', function () {
         expect($ma[0])->toBe($mb[0]);
     });
 
-    it('round-trips through detokenize, in strings and nested arrays', function () {
+    it('round-trips through detokenize, in strings and nested arrays', function (): void {
         $prompt = Redactor::redact(['user' => ['ssn' => '123-45-6789'], 'text' => 'mail alice@customer.com card 4111111111111111'], 'ai');
 
         expect($prompt['user']['ssn'])->toStartWith('tok_ssn_')
@@ -63,12 +63,12 @@ describe('Reversible tokens', function () {
             ->toBe(['user' => ['ssn' => '123-45-6789'], 'text' => 'mail alice@customer.com card 4111111111111111']);
     });
 
-    it('leaves a token it does not know exactly as it is', function () {
+    it('leaves a token it does not know exactly as it is', function (): void {
         expect(Redactor::detokenize('see tok_email_zzzzzzzzzzzz and tok_made_up_by_model_abcdefghijkl'))
             ->toBe('see tok_email_zzzzzzzzzzzz and tok_made_up_by_model_abcdefghijkl');
     });
 
-    it('keeps the original encrypted in the cache and forgets it on demand', function () {
+    it('keeps the original encrypted in the cache and forgets it on demand', function (): void {
         Redactor::redact('alice@customer.com', 'ai');
 
         $keys = [];
@@ -76,7 +76,7 @@ describe('Reversible tokens', function () {
             $keys[$k] = $v;
         }
 
-        $store = app(TokenStore::class);
+        $store = resolve(TokenStore::class);
         $token = (new Detokenizer($store))->tokensIn(Redactor::redact('alice@customer.com', 'ai'))[0];
 
         expect($store->get($token))->toBe('alice@customer.com')
@@ -88,27 +88,27 @@ describe('Reversible tokens', function () {
             ->and(Redactor::detokenize($token))->toBe($token);
     });
 
-    it('falls back to plain redaction when no pseudonymization key is available', function () {
+    it('falls back to plain redaction when no pseudonymization key is available', function (): void {
         config()->set('redactor.pseudonymization', ['enabled' => false]);
 
         expect(Redactor::redact('alice@customer.com', 'ai'))->toBe('[REDACTED]');
     });
 
-    it('honours a per-entity ttl option', function () {
+    it('honours a per-entity ttl option', function (): void {
         config()->set('redactor.profiles.ai.operators', ['default' => 'redact', 'email' => ['tokenize' => ['ttl' => 5]]]);
 
         $out = Redactor::redact('alice@customer.com', 'ai');
-        $token = (new Detokenizer(app(TokenStore::class)))->tokensIn($out)[0];
+        $token = (new Detokenizer(resolve(TokenStore::class)))->tokensIn($out)[0];
 
-        expect(app(TokenStore::class)->get($token))->toBe('alice@customer.com');
+        expect(resolve(TokenStore::class)->get($token))->toBe('alice@customer.com');
 
         $this->travel(6)->seconds();
 
-        expect(app(TokenStore::class)->get($token))->toBeNull();
+        expect(resolve(TokenStore::class)->get($token))->toBeNull();
     });
 
-    it('does not resolve the cache until something is tokenised', function () {
-        $redactor = app(RedactorService::class);
+    it('does not resolve the cache until something is tokenised', function (): void {
+        $redactor = resolve(RedactorService::class);
 
         expect($redactor->operators()->has('tokenize'))->toBeTrue()
             ->and($redactor->redact('nothing sensitive'))->toBe('nothing sensitive');

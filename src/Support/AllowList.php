@@ -39,7 +39,7 @@ class AllowList
                 continue;
             }
 
-            if (self::looksLikeRegex($entry) && Pcre::isValidPattern($entry)) {
+            if ($this->looksLikeRegex($entry) && Pcre::isValidPattern($entry)) {
                 $this->patterns[] = $entry;
 
                 continue;
@@ -103,7 +103,7 @@ class AllowList
     /**
      * Determine if an entry has a leading delimiter that closes before an optional modifier suffix.
      */
-    private static function looksLikeRegex(string $entry): bool
+    private function looksLikeRegex(string $entry): bool
     {
         if (strlen($entry) < 3) {
             return false;

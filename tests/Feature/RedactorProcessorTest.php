@@ -30,14 +30,14 @@ function logRecord(string $message, array $context = [], array $extra = []): Log
     );
 }
 
-describe('RedactorProcessor', function () {
-    it('is a Monolog processor', function () {
-        expect(new RedactorProcessor(app(Redactor::class)))
+describe('RedactorProcessor', function (): void {
+    it('is a Monolog processor', function (): void {
+        expect(new RedactorProcessor(resolve(Redactor::class)))
             ->toBeInstanceOf(ProcessorInterface::class);
     });
 
-    it('redacts the message and leaves the rest of the record intact', function () {
-        $processor = new RedactorProcessor(app(Redactor::class));
+    it('redacts the message and leaves the rest of the record intact', function (): void {
+        $processor = new RedactorProcessor(resolve(Redactor::class));
 
         $result = $processor(logRecord('User bob@example.com signed in'));
 
@@ -46,8 +46,8 @@ describe('RedactorProcessor', function () {
             ->and($result->level)->toBe(Level::Info);
     });
 
-    it('redacts context', function () {
-        $processor = new RedactorProcessor(app(Redactor::class));
+    it('redacts context', function (): void {
+        $processor = new RedactorProcessor(resolve(Redactor::class));
 
         $result = $processor(logRecord('hi', ['password' => 'hunter2', 'keep' => 'visible']));
 
@@ -55,8 +55,8 @@ describe('RedactorProcessor', function () {
             ->and($result->context['keep'])->toBe('visible');
     });
 
-    it('redacts extra, which the formatter dropped entirely', function () {
-        $processor = new RedactorProcessor(app(Redactor::class));
+    it('redacts extra, which the formatter dropped entirely', function (): void {
+        $processor = new RedactorProcessor(resolve(Redactor::class));
 
         $result = $processor(logRecord('hi', [], ['api_token' => 'abc123', 'pid' => 42]));
 
@@ -64,7 +64,7 @@ describe('RedactorProcessor', function () {
             ->and($result->extra['pid'])->toBe(42);
     });
 
-    it('honours a profile override', function () {
+    it('honours a profile override', function (): void {
         config()->set('redactor.profiles.tapped', [
             'enabled' => true,
             'strategies' => [BlockedKeysStrategy::class],
@@ -81,13 +81,13 @@ describe('RedactorProcessor', function () {
             'shannon_entropy' => ['enabled' => false],
         ]);
 
-        $processor = new RedactorProcessor(app(Redactor::class), 'tapped');
+        $processor = new RedactorProcessor(resolve(Redactor::class), 'tapped');
 
         expect($processor(logRecord('hi', ['keep' => 'x']))->context['keep'])->toBe('<gone>');
     });
 
-    it('never throws when the profile is broken', function () {
-        $processor = new RedactorProcessor(app(Redactor::class), 'no_such_profile');
+    it('never throws when the profile is broken', function (): void {
+        $processor = new RedactorProcessor(resolve(Redactor::class), 'no_such_profile');
 
         $result = $processor(logRecord('bob@example.com', ['password' => 'hunter2']));
 
@@ -95,12 +95,12 @@ describe('RedactorProcessor', function () {
             ->and(json_encode($result->context))->not->toContain('hunter2');
     });
 
-    it('preserves the channel output format, unlike the formatter', function () {
+    it('preserves the channel output format, unlike the formatter', function (): void {
         $monolog = new MonologLogger('testing');
         $handler = new TestHandler;
         $handler->setFormatter(new JsonFormatter);
         $monolog->pushHandler($handler);
-        $monolog->pushProcessor(new RedactorProcessor(app(Redactor::class)));
+        $monolog->pushProcessor(new RedactorProcessor(resolve(Redactor::class)));
 
         $monolog->info('User bob@example.com signed in', ['password' => 'hunter2']);
 
@@ -112,8 +112,8 @@ describe('RedactorProcessor', function () {
     });
 });
 
-describe('RedactorTap', function () {
-    it('adds the processor without replacing the formatter', function () {
+describe('RedactorTap', function (): void {
+    it('adds the processor without replacing the formatter', function (): void {
         $monolog = new MonologLogger('testing');
         $handler = new TestHandler;
         $handler->setFormatter($json = new JsonFormatter);
@@ -125,7 +125,7 @@ describe('RedactorTap', function () {
             ->and($monolog->getProcessors()[0])->toBeInstanceOf(RedactorProcessor::class);
     });
 
-    it('redacts records logged through the tapped channel', function () {
+    it('redacts records logged through the tapped channel', function (): void {
         $monolog = new MonologLogger('testing');
         $handler = new TestHandler;
         $monolog->pushHandler($handler);
@@ -141,8 +141,8 @@ describe('RedactorTap', function () {
     });
 });
 
-describe('RedactorFormatter composition', function () {
-    it('formats every record in a batch', function () {
+describe('RedactorFormatter composition', function (): void {
+    it('formats every record in a batch', function (): void {
         $formatter = new RedactorFormatter;
 
         $out = $formatter->formatBatch([
@@ -157,7 +157,7 @@ describe('RedactorFormatter composition', function () {
             ->and(substr_count($out, "\n"))->toBe(3);
     });
 
-    it('delegates to an inner formatter when given one', function () {
+    it('delegates to an inner formatter when given one', function (): void {
         $formatter = new RedactorFormatter(new JsonFormatter);
 
         $out = $formatter->format(logRecord('mail bob@example.com', ['password' => 'hunter2']));
@@ -169,7 +169,7 @@ describe('RedactorFormatter composition', function () {
             ->and($decoded['context']['password'])->toBe('[REDACTED]');
     });
 
-    it('includes extra in its own output', function () {
+    it('includes extra in its own output', function (): void {
         $formatter = new RedactorFormatter;
 
         $out = $formatter->format(logRecord('hi', [], ['pid' => 42]));

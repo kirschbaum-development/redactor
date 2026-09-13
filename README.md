@@ -511,7 +511,7 @@ Every detector goes through the same policy. A value found by its key uses the
 key name as its entity, so `operators.email` applies to `['email' => ...]` and
 to an address inside a message alike, and both produce the same surrogate. A
 high-entropy token has the entity `high_entropy`. A `preserve` operator reports
-the finding through `redactWithMetadata()` without marking the payload redacted,
+the finding through `inspect()` without marking the payload redacted,
 which is what a scan that should only report wants.
 
 Register your own with `Redactor::registerOperator('tokenize', $operator)` and
@@ -1344,7 +1344,8 @@ php artisan vendor:publish --tag=redactor-config
 ```bash
 composer test           # full suite, in parallel
 composer test-coverage  # with the coverage floor enforced
-composer lint           # Pint + PHPStan (level 10, no baseline)
+composer lint           # Pint, Rector, PHPStan (level 10, no baseline)
+composer rector:check   # what Rector would change, without changing it
 composer mutate         # mutation testing (Pest); local only, not run in CI
 composer preflight      # everything CI runs
 ```

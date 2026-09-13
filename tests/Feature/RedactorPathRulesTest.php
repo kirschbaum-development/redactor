@@ -37,13 +37,13 @@ function redactPath(array $paths, array $payload, array $overrides = []): array
 {
     config()->set('redactor.profiles.paths', pathProfile($paths, $overrides));
 
-    $result = app(Redactor::class)->redact($payload, 'paths');
+    $result = resolve(Redactor::class)->redact($payload, 'paths');
 
     return is_array($result) ? $result : [];
 }
 
-describe('Path matching', function () {
-    it('matches an exact path and nothing else', function () {
+describe('Path matching', function (): void {
+    it('matches an exact path and nothing else', function (): void {
         $result = redactPath(
             ['request.headers.authorization' => 'redact'],
             [
@@ -59,7 +59,7 @@ describe('Path matching', function () {
             ->and($result['authorization'])->toBe('top level, different place');
     });
 
-    it('matches a single level with *', function () {
+    it('matches a single level with *', function (): void {
         $result = redactPath(
             ['user.*.email' => 'redact'],
             ['user' => [
@@ -75,7 +75,7 @@ describe('Path matching', function () {
             ->and($result['user']['deep']['nested']['email'])->toBe('e@f.com');
     });
 
-    it('matches any depth with **', function () {
+    it('matches any depth with **', function (): void {
         $result = redactPath(
             ['**.password' => 'redact'],
             [
@@ -92,7 +92,7 @@ describe('Path matching', function () {
             ->and($result['keep'])->toBe('visible');
     });
 
-    it('lets ** match zero segments', function () {
+    it('lets ** match zero segments', function (): void {
         $result = redactPath(
             ['a.**.secret' => 'redact'],
             ['a' => ['secret' => 'immediately below a']],
@@ -101,7 +101,7 @@ describe('Path matching', function () {
         expect($result['a']['secret'])->toBe('[REDACTED]');
     });
 
-    it('walks through lists with either spelling', function () {
+    it('walks through lists with either spelling', function (): void {
         $bracket = redactPath(['users[*].token' => 'redact'], [
             'users' => [['token' => 'one'], ['token' => 'two']],
         ]);
@@ -115,7 +115,7 @@ describe('Path matching', function () {
             ->and($dotted)->toBe($bracket);
     });
 
-    it('matches path segments case-insensitively', function () {
+    it('matches path segments case-insensitively', function (): void {
         $result = redactPath(
             ['request.headers.authorization' => 'redact'],
             ['Request' => ['Headers' => ['Authorization' => 'Bearer abc']]],
@@ -124,15 +124,15 @@ describe('Path matching', function () {
         expect($result['Request']['Headers']['Authorization'])->toBe('[REDACTED]');
     });
 
-    it('leaves a payload with no matching path completely alone', function () {
+    it('leaves a payload with no matching path completely alone', function (): void {
         $payload = ['a' => ['b' => 'value'], 'c' => 'other'];
 
         expect(redactPath(['x.y.z' => 'redact'], $payload))->toBe($payload);
     });
 });
 
-describe('Path precedence', function () {
-    it('prefers the more specific pattern regardless of declaration order', function () {
+describe('Path precedence', function (): void {
+    it('prefers the more specific pattern regardless of declaration order', function (): void {
         $specificLast = redactPath(
             ['**.token' => 'redact', 'auth.token' => ['partial' => ['keep' => 4]]],
             ['auth' => ['token' => 'abcdefgh']],
@@ -147,7 +147,7 @@ describe('Path precedence', function () {
             ->and($specificFirst['auth']['token'])->toBe('****efgh');
     });
 
-    it('beats a key rule that would otherwise fire', function () {
+    it('beats a key rule that would otherwise fire', function (): void {
         // The key rule says redact anything called token; the path rule carves
         // out one location and keeps it.
         $result = redactPath(
@@ -160,7 +160,7 @@ describe('Path precedence', function () {
             ->and($result['private']['token'])->toBe('[REDACTED]');
     });
 
-    it('stops the walk at the matched node', function () {
+    it('stops the walk at the matched node', function (): void {
         // The path names a whole subtree, so nothing beneath it is inspected.
         $result = redactPath(
             ['debug' => 'preserve'],
@@ -172,8 +172,8 @@ describe('Path precedence', function () {
     });
 });
 
-describe('Path operators', function () {
-    it('supports the full operator range on a scalar', function () {
+describe('Path operators', function (): void {
+    it('supports the full operator range on a scalar', function (): void {
         $payload = ['a' => ['v' => 'abcdefgh']];
 
         expect(redactPath(['a.v' => 'mask'], $payload)['a']['v'])->toBe('********')
@@ -181,20 +181,20 @@ describe('Path operators', function () {
             ->and(redactPath(['a.v' => 'preserve'], $payload)['a']['v'])->toBe('abcdefgh');
     });
 
-    it('drops the key entirely under remove', function () {
+    it('drops the key entirely under remove', function (): void {
         $result = redactPath(['a.gone' => 'remove'], ['a' => ['gone' => 'x', 'kept' => 'y']]);
 
         expect($result['a'])->toBe(['kept' => 'y']);
     });
 
-    it('pseudonymises at a path', function () {
+    it('pseudonymises at a path', function (): void {
         $result = redactPath(['user.email' => 'surrogate'], ['user' => ['email' => 'alice@customer.com']]);
 
         expect($result['user']['email'])->toEndWith('@customer.com')
             ->and($result['user']['email'])->not->toContain('alice');
     });
 
-    it('replaces a whole subtree when the operator has no meaning for a container', function () {
+    it('replaces a whole subtree when the operator has no meaning for a container', function (): void {
         // Masking an array has no defensible behaviour, so the subtree is
         // replaced rather than a behaviour being invented for it.
         $result = redactPath(['a.b' => 'mask'], ['a' => ['b' => ['x' => 1, 'y' => 2]]]);
@@ -202,13 +202,13 @@ describe('Path operators', function () {
         expect($result['a']['b'])->toBe('[REDACTED]');
     });
 
-    it('reports the pattern that fired', function () {
+    it('reports the pattern that fired', function (): void {
         config()->set('redactor.profiles.paths', pathProfile(
             ['request.headers.authorization' => 'redact'],
             ['track_redacted_keys' => true, 'mark_redacted' => true],
         ));
 
-        $result = app(Redactor::class)->redactWithMetadata(
+        $result = resolve(Redactor::class)->inspect(
             ['request' => ['headers' => ['authorization' => 'Bearer abc']]],
             'paths',
         );
@@ -218,8 +218,8 @@ describe('Path operators', function () {
     });
 });
 
-describe('Compiled state invalidates on config change', function () {
-    it('rebuilds the trie when a path rule is added', function () {
+describe('Compiled state invalidates on config change', function (): void {
+    it('rebuilds the trie when a path rule is added', function (): void {
         $before = redactPath(['a.one' => 'redact'], ['a' => ['one' => 'x', 'two' => 'y']]);
 
         expect($before['a'])->toBe(['one' => '[REDACTED]', 'two' => 'y']);
@@ -229,7 +229,7 @@ describe('Compiled state invalidates on config change', function () {
         expect($after['a'])->toBe(['one' => '[REDACTED]', 'two' => '[REDACTED]']);
     });
 
-    it('rebuilds when only the operator changes', function () {
+    it('rebuilds when only the operator changes', function (): void {
         // Same pattern, different verb. A cache keyed on patterns alone would
         // serve the old operator and the config change would silently not
         // apply - the failure mode that turns a cache into a security bug.
@@ -240,7 +240,7 @@ describe('Compiled state invalidates on config change', function () {
             ->and($masked['a']['v'])->toBe('********');
     });
 
-    it('rebuilds when only an operator option changes', function () {
+    it('rebuilds when only an operator option changes', function (): void {
         $keepFour = redactPath(['a.v' => ['partial' => ['keep' => 4]]], ['a' => ['v' => 'abcdefgh']]);
         $keepTwo = redactPath(['a.v' => ['partial' => ['keep' => 2]]], ['a' => ['v' => 'abcdefgh']]);
 
@@ -248,7 +248,7 @@ describe('Compiled state invalidates on config change', function () {
             ->and($keepTwo['a']['v'])->toBe('******gh');
     });
 
-    it('rebuilds the profile when an unrelated setting changes', function () {
+    it('rebuilds the profile when an unrelated setting changes', function (): void {
         $first = redactPath(['a.v' => 'redact'], ['a' => ['v' => 'x']]);
 
         expect($first['a']['v'])->toBe('[REDACTED]');
@@ -258,22 +258,22 @@ describe('Compiled state invalidates on config change', function () {
         expect($second['a']['v'])->toBe('<GONE>');
     });
 
-    it('rebuilds when the profile is disabled', function () {
+    it('rebuilds when the profile is disabled', function (): void {
         expect(redactPath(['a.v' => 'redact'], ['a' => ['v' => 'x']])['a']['v'])->toBe('[REDACTED]');
 
         config()->set('redactor.profiles.paths', pathProfile(['a.v' => 'redact'], ['enabled' => false]));
 
-        expect(app(Redactor::class)->redact(['a' => ['v' => 'x']], 'paths'))->toBe(['a' => ['v' => 'x']]);
+        expect(resolve(Redactor::class)->redact(['a' => ['v' => 'x']], 'paths'))->toBe(['a' => ['v' => 'x']]);
     });
 });
 
-describe('Path compilation', function () {
-    it('normalises the two list spellings to the same segments', function () {
+describe('Path compilation', function (): void {
+    it('normalises the two list spellings to the same segments', function (): void {
         expect(PathPattern::parse('users[*].email')->segments)
             ->toBe(PathPattern::parse('users.*.email')->segments);
     });
 
-    it('scores literals above single wildcards above deep wildcards', function () {
+    it('scores literals above single wildcards above deep wildcards', function (): void {
         $literal = PathPattern::parse('a.b.c')->specificity;
         $single = PathPattern::parse('a.*.c')->specificity;
         $deep = PathPattern::parse('a.**.c')->specificity;
@@ -282,7 +282,7 @@ describe('Path compilation', function () {
             ->and($single)->toBeGreaterThan($deep);
     });
 
-    it('accepts a purely numeric pattern, which PHP hands over as an int', function () {
+    it('accepts a purely numeric pattern, which PHP hands over as an int', function (): void {
         // 'items.0' => 'redact' is a reasonable rule, and '0' => 'redact' more
         // so for a list payload. PHP turns a numeric array key into an integer,
         // which used to reach PathPattern::parse() and fail its string type.
@@ -291,7 +291,7 @@ describe('Path compilation', function () {
         expect($result)->toBe(['zero', '[REDACTED]', 'two']);
     });
 
-    it('targets a list index through a longer path', function () {
+    it('targets a list index through a longer path', function (): void {
         $result = redactPath(['items.0.token' => 'redact'], [
             'items' => [['token' => 'first'], ['token' => 'second']],
         ]);
@@ -300,12 +300,12 @@ describe('Path compilation', function () {
             ->and($result['items'][1]['token'])->toBe('second');
     });
 
-    it('rejects an empty pattern', function () {
-        expect(fn () => PathPattern::parse('...'))
+    it('rejects an empty pattern', function (): void {
+        expect(fn (): PathPattern => PathPattern::parse('...'))
             ->toThrow(\InvalidArgumentException::class);
     });
 
-    it('reports an empty trie as empty, and never matches', function () {
+    it('reports an empty trie as empty, and never matches', function (): void {
         $trie = PathTrie::compile([]);
 
         expect($trie->isEmpty())->toBeTrue()
@@ -313,14 +313,14 @@ describe('Path compilation', function () {
             ->and($trie->cursor()->descend('anything')->match())->toBeNull();
     });
 
-    it('exhausts the cursor once no rule can still match', function () {
+    it('exhausts the cursor once no rule can still match', function (): void {
         $trie = PathTrie::compile(['a.b' => new OperatorSpec('redact')]);
 
         expect($trie->cursor()->descend('a')->isExhausted())->toBeFalse()
             ->and($trie->cursor()->descend('z')->isExhausted())->toBeTrue();
     });
 
-    it('keeps a deep-wildcard cursor alive at every level', function () {
+    it('keeps a deep-wildcard cursor alive at every level', function (): void {
         $trie = PathTrie::compile(['**.secret' => new OperatorSpec('redact')]);
 
         $cursor = $trie->cursor()->descend('a')->descend('b')->descend('c');

@@ -68,7 +68,7 @@ class PendingRedaction
      */
     public function inspect(mixed $content): RedactionResult
     {
-        return $this->redactor->redactWithMetadata($content, $this->profile, $this->markers);
+        return $this->redactor->inspect($content, $this->profile, $this->markers);
     }
 
     /**

@@ -14,8 +14,8 @@ use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
-describe('Redactor Strategy Priority Tests', function () {
-    it('prioritizes safe_keys over blocked_keys', function () {
+describe('Redactor Strategy Priority Tests', function (): void {
+    it('prioritizes safe_keys over blocked_keys', function (): void {
         // Explicit profile for priority testing
         config()->set('redactor.default_profile', 'priority_test');
         config()->set('redactor.profiles.priority_test', [
@@ -57,7 +57,7 @@ describe('Redactor Strategy Priority Tests', function () {
             ->and($result)->not->toHaveKey('_redacted');
     });
 
-    it('prioritizes blocked_keys over regex patterns', function () {
+    it('prioritizes blocked_keys over regex patterns', function (): void {
         // Explicit profile for blocked keys vs regex priority
         config()->set('redactor.default_profile', 'blocked_vs_regex_test');
         config()->set('redactor.profiles.blocked_vs_regex_test', [
@@ -104,7 +104,7 @@ describe('Redactor Strategy Priority Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('prioritizes regex patterns over shannon entropy', function () {
+    it('prioritizes regex patterns over shannon entropy', function (): void {
         // Explicit profile for regex vs entropy priority
         config()->set('redactor.default_profile', 'regex_vs_entropy_test');
         config()->set('redactor.profiles.regex_vs_entropy_test', [
@@ -148,8 +148,8 @@ describe('Redactor Strategy Priority Tests', function () {
     });
 });
 
-describe('Redactor Safe Keys Strategy Tests', function () {
-    it('never redacts safe keys', function () {
+describe('Redactor Safe Keys Strategy Tests', function (): void {
+    it('never redacts safe keys', function (): void {
         // Explicit profile for safe keys testing
         config()->set('redactor.default_profile', 'safe_keys_test');
         config()->set('redactor.profiles.safe_keys_test', [
@@ -196,7 +196,7 @@ describe('Redactor Safe Keys Strategy Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles safe keys case-insensitively', function () {
+    it('handles safe keys case-insensitively', function (): void {
         // Explicit profile for case-insensitive safe keys testing
         config()->set('redactor.default_profile', 'safe_keys_case_test');
         config()->set('redactor.profiles.safe_keys_case_test', [
@@ -241,8 +241,8 @@ describe('Redactor Safe Keys Strategy Tests', function () {
     });
 });
 
-describe('Redactor Blocked Keys Strategy Tests', function () {
-    it('always redacts blocked keys', function () {
+describe('Redactor Blocked Keys Strategy Tests', function (): void {
+    it('always redacts blocked keys', function (): void {
         // Explicit profile for blocked keys testing
         config()->set('redactor.default_profile', 'blocked_keys_test');
         config()->set('redactor.profiles.blocked_keys_test', [
@@ -286,7 +286,7 @@ describe('Redactor Blocked Keys Strategy Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles blocked keys case-insensitively', function () {
+    it('handles blocked keys case-insensitively', function (): void {
         // Explicit profile for case-insensitive blocked keys testing
         config()->set('redactor.default_profile', 'blocked_keys_case_test');
         config()->set('redactor.profiles.blocked_keys_case_test', [
@@ -329,8 +329,8 @@ describe('Redactor Blocked Keys Strategy Tests', function () {
     });
 });
 
-describe('Redactor Regex Patterns Strategy Tests', function () {
-    it('redacts strings matching regex patterns', function () {
+describe('Redactor Regex Patterns Strategy Tests', function (): void {
+    it('redacts strings matching regex patterns', function (): void {
         // Explicit profile for regex patterns testing
         config()->set('redactor.default_profile', 'regex_patterns_test');
         config()->set('redactor.profiles.regex_patterns_test', [
@@ -378,7 +378,7 @@ describe('Redactor Regex Patterns Strategy Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles multiple patterns in same string', function () {
+    it('handles multiple patterns in same string', function (): void {
         // Explicit profile for multiple patterns testing
         config()->set('redactor.default_profile', 'multiple_patterns_test');
         config()->set('redactor.profiles.multiple_patterns_test', [
@@ -423,8 +423,8 @@ describe('Redactor Regex Patterns Strategy Tests', function () {
     });
 });
 
-describe('Strategy Management Tests', function () {
-    it('returns all registered strategies via getStrategies method', function () {
+describe('Strategy Management Tests', function (): void {
+    it('returns all registered strategies via getStrategies method', function (): void {
         // Explicit profile for strategy management testing
         config()->set('redactor.default_profile', 'strategy_management_test');
         config()->set('redactor.profiles.strategy_management_test', [
@@ -456,7 +456,7 @@ describe('Strategy Management Tests', function () {
         ]);
 
         $redactor = new Redactor;
-        $strategies = $redactor->getStrategies();
+        $strategies = $redactor->strategies();
 
         expect($strategies)->toBeArray()
             ->and(count($strategies))->toBe(4);
@@ -468,7 +468,7 @@ describe('Strategy Management Tests', function () {
             ->and($strategies[3])->toBeInstanceOf(ShannonEntropyStrategy::class);
     });
 
-    it('demonstrates strategy separation by removing a strategy', function () {
+    it('demonstrates strategy separation by removing a strategy', function (): void {
         // Explicit profile without Shannon entropy strategy
         config()->set('redactor.default_profile', 'strategy_removal_test');
         config()->set('redactor.profiles.strategy_removal_test', [
@@ -517,7 +517,7 @@ describe('Strategy Management Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles edge case where strategy receives unexpected value type', function () {
+    it('handles edge case where strategy receives unexpected value type', function (): void {
         // Explicit profile for edge case testing
         config()->set('redactor.default_profile', 'edge_case_test');
         config()->set('redactor.profiles.edge_case_test', [
@@ -589,8 +589,8 @@ describe('Strategy Management Tests', function () {
     });
 });
 
-describe('Strategy Edge Cases and Coverage Tests', function () {
-    beforeEach(function () {
+describe('Strategy Edge Cases and Coverage Tests', function (): void {
+    beforeEach(function (): void {
         config()->set('redactor.default_profile', 'default');
         config()->set('redactor.profiles.default', [
             'enabled' => true,
@@ -612,7 +612,7 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
         ]);
     });
 
-    it('handles non-string strategy classes in profile configuration', function () {
+    it('handles non-string strategy classes in profile configuration', function (): void {
         // Test when strategy class is not a string
         config()->set('redactor.profiles.default.strategies', [
             SafeKeysStrategy::class,
@@ -622,49 +622,49 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
         ]);
 
         $redactor = new Redactor;
-        $strategies = $redactor->getStrategies('default');
+        $strategies = $redactor->strategies('default');
 
         // Should have 2 strategies (the 2 valid ones), skipping the non-string entries
         expect($strategies)->toHaveCount(2);
     });
 
-    it('handles non-existent strategy classes', function () {
+    it('handles non-existent strategy classes', function (): void {
         // Test createStrategyInstance returning null for non-existent class
         config()->set('redactor.profiles.default.strategies', [
             'NonExistentStrategyClass', // This will return null
         ]);
 
         $redactor = new Redactor;
-        $strategies = $redactor->getStrategies('default');
+        $strategies = $redactor->strategies('default');
 
         // Should have no strategies since the class doesn't exist
         expect($strategies)->toHaveCount(0);
     });
 
-    it('handles classes that exist but do not implement Strategy', function () {
+    it('handles classes that exist but do not implement Strategy', function (): void {
         // Test the case where class exists but doesn't implement Strategy
         config()->set('redactor.profiles.default.strategies', [
             \stdClass::class, // Valid class but not a Strategy
         ]);
 
         $redactor = new Redactor;
-        $strategies = $redactor->getStrategies('default');
+        $strategies = $redactor->strategies('default');
 
         // Should have no strategies since stdClass doesn't implement Strategy
         expect($strategies)->toHaveCount(0);
     });
 
-    it('handles non-array custom_strategies configuration', function () {
+    it('handles non-array custom_strategies configuration', function (): void {
         // Test when custom_strategies config is not an array
         config()->set('redactor.custom_strategies', 'not_an_array');
 
         $redactor = new Redactor;
 
         // Should not throw an error and work normally
-        expect($redactor->getStrategies('default'))->toBeArray();
+        expect($redactor->strategies('default'))->toBeArray();
     });
 
-    it('handles invalid custom strategy configurations', function () {
+    it('handles invalid custom strategy configurations', function (): void {
         // Test various invalid custom strategy configurations
         config()->set('redactor.custom_strategies', [
             'valid_strategy' => TestValidCustomStrategy::class,
@@ -677,11 +677,11 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
         $redactor = new Redactor;
 
         // Should only load the valid strategy
-        $customStrategies = $redactor->getStrategies('default');
+        $customStrategies = $redactor->strategies('default');
         expect($customStrategies)->toBeArray();
     });
 
-    it('handles LargeStringStrategy with non-string input', function () {
+    it('handles LargeStringStrategy with non-string input', function (): void {
         // Test guard clause for non-string values in LargeStringStrategy
         config()->set('redactor.profiles.default.strategies', [
             LargeStringStrategy::class,
@@ -699,7 +699,7 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
         expect($result)->toBe(123); // Should return original value
     });
 
-    it('registers a named custom strategy and uses it in a profile', function () {
+    it('registers a named custom strategy and uses it in a profile', function (): void {
         $redactor = new Redactor;
         $redactor->registerCustomStrategy('valid_custom', new TestValidCustomStrategy);
 
@@ -719,7 +719,7 @@ describe('Strategy Edge Cases and Coverage Tests', function () {
             'shannon_entropy' => ['enabled' => false],
         ]);
 
-        $strategies = $redactor->getStrategies('named_custom');
+        $strategies = $redactor->strategies('named_custom');
 
         expect($strategies)->toHaveCount(1)
             ->and($strategies[0])->toBeInstanceOf(TestValidCustomStrategy::class);

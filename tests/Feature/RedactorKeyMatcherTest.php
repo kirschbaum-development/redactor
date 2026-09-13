@@ -28,10 +28,10 @@ function blockedProfile(array $blockedKeys): array
     ];
 }
 
-describe('KeyMatcher pattern shapes', function () {
+describe('KeyMatcher pattern shapes', function (): void {
     afterEach(fn () => KeyMatcher::flush());
 
-    it('matches exact names case-insensitively', function () {
+    it('matches exact names case-insensitively', function (): void {
         $matcher = KeyMatcher::for(['password']);
 
         expect($matcher->matches('password'))->toBeTrue()
@@ -40,7 +40,7 @@ describe('KeyMatcher pattern shapes', function () {
             ->and($matcher->matches('password_hint'))->toBeFalse();
     });
 
-    it('matches contains patterns', function () {
+    it('matches contains patterns', function (): void {
         $matcher = KeyMatcher::for(['*token*']);
 
         expect($matcher->matches('token'))->toBeTrue()
@@ -50,7 +50,7 @@ describe('KeyMatcher pattern shapes', function () {
             ->and($matcher->matches('tokn'))->toBeFalse();
     });
 
-    it('matches prefix patterns', function () {
+    it('matches prefix patterns', function (): void {
         $matcher = KeyMatcher::for(['password*']);
 
         expect($matcher->matches('password'))->toBeTrue()
@@ -58,7 +58,7 @@ describe('KeyMatcher pattern shapes', function () {
             ->and($matcher->matches('user_password'))->toBeFalse();
     });
 
-    it('matches suffix patterns', function () {
+    it('matches suffix patterns', function (): void {
         $matcher = KeyMatcher::for(['*_key']);
 
         expect($matcher->matches('private_key'))->toBeTrue()
@@ -66,7 +66,7 @@ describe('KeyMatcher pattern shapes', function () {
             ->and($matcher->matches('key_id'))->toBeFalse();
     });
 
-    it('matches multi-wildcard patterns via the regex path', function () {
+    it('matches multi-wildcard patterns via the regex path', function (): void {
         $matcher = KeyMatcher::for(['user_*_token']);
 
         expect($matcher->matches('user_api_token'))->toBeTrue()
@@ -75,26 +75,26 @@ describe('KeyMatcher pattern shapes', function () {
             ->and($matcher->matches('admin_api_token'))->toBeFalse();
     });
 
-    it('treats a lone asterisk as matching everything', function () {
+    it('treats a lone asterisk as matching everything', function (): void {
         $matcher = KeyMatcher::for(['*']);
 
         expect($matcher->matches('anything'))->toBeTrue()
             ->and($matcher->matches('x'))->toBeTrue();
     });
 
-    it('never matches the empty key', function () {
+    it('never matches the empty key', function (): void {
         expect(KeyMatcher::for(['*'])->matches(''))->toBeFalse()
             ->and(KeyMatcher::for([''])->matches(''))->toBeFalse();
     });
 
-    it('reports an empty pattern list as empty and matches nothing', function () {
+    it('reports an empty pattern list as empty and matches nothing', function (): void {
         $matcher = KeyMatcher::for([]);
 
         expect($matcher->isEmpty())->toBeTrue()
             ->and($matcher->matches('password'))->toBeFalse();
     });
 
-    it('combines exact and wildcard patterns in one list', function () {
+    it('combines exact and wildcard patterns in one list', function (): void {
         $matcher = KeyMatcher::for(['password', '*token*', 'user_*_data']);
 
         expect($matcher->matches('password'))->toBeTrue()
@@ -103,16 +103,16 @@ describe('KeyMatcher pattern shapes', function () {
             ->and($matcher->matches('normal_field'))->toBeFalse();
     });
 
-    it('reuses the compiled matcher for an identical pattern list', function () {
+    it('reuses the compiled matcher for an identical pattern list', function (): void {
         expect(KeyMatcher::for(['a', '*b*']))->toBe(KeyMatcher::for(['a', '*b*']))
             ->and(KeyMatcher::for(['a', '*b*']))->not->toBe(KeyMatcher::for(['a', '*c*']));
     });
 });
 
-describe('Blocked keys behaviour is unchanged by compilation', function () {
+describe('Blocked keys behaviour is unchanged by compilation', function (): void {
     afterEach(fn () => KeyMatcher::flush());
 
-    it('matches the same keys through the full redactor', function () {
+    it('matches the same keys through the full redactor', function (): void {
         config()->set('redactor.profiles.blocked', blockedProfile([
             'password',
             '*token*',
@@ -120,7 +120,7 @@ describe('Blocked keys behaviour is unchanged by compilation', function () {
             'user_*_data',
         ]));
 
-        $result = app(Redactor::class)->redact([
+        $result = resolve(Redactor::class)->redact([
             'user_id' => 123,
             'api_token' => 'secret123',
             'access_token' => 'abc123',
@@ -147,23 +147,23 @@ describe('Blocked keys behaviour is unchanged by compilation', function () {
         ]);
     });
 
-    it('picks up a changed blocked_keys list rather than serving a stale matcher', function () {
+    it('picks up a changed blocked_keys list rather than serving a stale matcher', function (): void {
         config()->set('redactor.profiles.blocked', blockedProfile(['password']));
 
-        expect(app(Redactor::class)->redact(['secret' => 'v'], 'blocked'))
+        expect(resolve(Redactor::class)->redact(['secret' => 'v'], 'blocked'))
             ->toBe(['secret' => 'v']);
 
         config()->set('redactor.profiles.blocked', blockedProfile(['password', 'secret']));
 
-        expect(app(Redactor::class)->redact(['secret' => 'v'], 'blocked'))
+        expect(resolve(Redactor::class)->redact(['secret' => 'v'], 'blocked'))
             ->toBe(['secret' => '[REDACTED]']);
     });
 });
 
-describe('Compiled key matchers live on the profile', function () {
+describe('Compiled key matchers live on the profile', function (): void {
     afterEach(fn () => KeyMatcher::flush());
 
-    it('resolves both matchers once with the profile', function () {
+    it('resolves both matchers once with the profile', function (): void {
         config()->set('redactor.profiles.held', blockedProfile(['password', '*token*']));
 
         $config = RedactorConfig::fromConfig('held');
@@ -174,20 +174,20 @@ describe('Compiled key matchers live on the profile', function () {
             ->and($config->blockedKeyMatcher->matches('harmless'))->toBeFalse();
     });
 
-    it('still reflects a changed key list', function () {
+    it('still reflects a changed key list', function (): void {
         // The matcher is resolved with the profile, so a config change has to
         // produce a new profile and a new matcher - otherwise a security
         // setting would silently stop taking effect.
         config()->set('redactor.profiles.held', blockedProfile(['password']));
 
-        expect(app(Redactor::class)->redact(['secret' => 'v'], 'held'))->toBe(['secret' => 'v']);
+        expect(resolve(Redactor::class)->redact(['secret' => 'v'], 'held'))->toBe(['secret' => 'v']);
 
         config()->set('redactor.profiles.held', blockedProfile(['password', 'secret']));
 
-        expect(app(Redactor::class)->redact(['secret' => 'v'], 'held'))->toBe(['secret' => '[REDACTED]']);
+        expect(resolve(Redactor::class)->redact(['secret' => 'v'], 'held'))->toBe(['secret' => '[REDACTED]']);
     });
 
-    it('builds matchers for a directly constructed config too', function () {
+    it('builds matchers for a directly constructed config too', function (): void {
         $config = new RedactorConfig(
             enabled: true,
             safeKeys: ['keep'],

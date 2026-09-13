@@ -11,8 +11,8 @@ use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Monolog\Level;
 use Monolog\LogRecord;
 
-describe('RedactorFormatter Tests', function () {
-    beforeEach(function () {
+describe('RedactorFormatter Tests', function (): void {
+    beforeEach(function (): void {
         // Set up basic redaction profile for testing
         config()->set('redactor.default_profile', 'logging_test');
         config()->set('redactor.profiles.logging_test', [
@@ -40,7 +40,7 @@ describe('RedactorFormatter Tests', function () {
         ]);
     });
 
-    test('formats basic log record with string message', function () {
+    test('formats basic log record with string message', function (): void {
         $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
@@ -57,7 +57,7 @@ describe('RedactorFormatter Tests', function () {
         expect($result)->toBe("[2023-12-25 14:30:45.123456] app.INFO: User logged in successfully\n");
     });
 
-    test('redacts sensitive data in log message', function () {
+    test('redacts sensitive data in log message', function (): void {
         $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
@@ -76,7 +76,7 @@ describe('RedactorFormatter Tests', function () {
             ->and($result)->toContain('[2023-12-25 14:30:45.123456] app.ERROR:');
     });
 
-    test('handles array message by converting to json', function () {
+    test('handles array message by converting to json', function (): void {
         $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
@@ -98,7 +98,7 @@ describe('RedactorFormatter Tests', function () {
             ->and($result)->not->toContain('secret123');
     });
 
-    test('handles object message by converting to json', function () {
+    test('handles object message by converting to json', function (): void {
         $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
@@ -120,7 +120,7 @@ describe('RedactorFormatter Tests', function () {
             ->and($result)->not->toContain('abc123');
     });
 
-    test('formats log record with context data', function () {
+    test('formats log record with context data', function (): void {
         $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
@@ -149,7 +149,7 @@ describe('RedactorFormatter Tests', function () {
             ->and($result)->toEndWith("\n");
     });
 
-    test('handles empty context gracefully', function () {
+    test('handles empty context gracefully', function (): void {
         $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
@@ -167,7 +167,7 @@ describe('RedactorFormatter Tests', function () {
             ->and($result)->not->toContain('{}');
     });
 
-    test('handles different log levels correctly', function () {
+    test('handles different log levels correctly', function (): void {
         $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
@@ -207,7 +207,7 @@ describe('RedactorFormatter Tests', function () {
         }
     });
 
-    test('formatBatch formats every record, not just the first', function () {
+    test('formatBatch formats every record, not just the first', function (): void {
         $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
@@ -238,7 +238,7 @@ describe('RedactorFormatter Tests', function () {
         );
     });
 
-    test('handles null context values', function () {
+    test('handles null context values', function (): void {
         $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.123456');
 
@@ -260,7 +260,7 @@ describe('RedactorFormatter Tests', function () {
         expect($result)->toContain('{"user_id":null,"action":"test"}');
     });
 
-    test('preserves microseconds in timestamp', function () {
+    test('preserves microseconds in timestamp', function (): void {
         $formatter = new RedactorFormatter;
         $datetime = new DateTimeImmutable('2023-12-25 14:30:45.999999');
 

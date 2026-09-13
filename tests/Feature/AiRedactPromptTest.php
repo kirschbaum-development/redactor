@@ -31,8 +31,8 @@ function agentResponse(string $text): AgentResponse
     return new AgentResponse('inv-1', $text, new Usage, new Meta);
 }
 
-describe('RedactPrompt middleware', function () {
-    beforeEach(function () {
+describe('RedactPrompt middleware', function (): void {
+    beforeEach(function (): void {
         config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
         config()->set('redactor.pseudonymization.key', testPseudonymizationKey());
         config()->set('redactor.profiles.ai', [
@@ -53,7 +53,7 @@ describe('RedactPrompt middleware', function () {
         ]);
     });
 
-    it('redacts the prompt the provider sees and resolves tokens in the answer', function () {
+    it('redacts the prompt the provider sees and resolves tokens in the answer', function (): void {
         $seen = null;
 
         $response = RedactPrompt::using('ai')->handle(agentPrompt('Reply to alice@customer.com politely'), function (AgentPrompt $prompt) use (&$seen): AgentResponse {
@@ -69,8 +69,8 @@ describe('RedactPrompt middleware', function () {
             ->and($response->text)->toBe('Dear alice@customer.com, thank you.');
     });
 
-    it('redacts outright with a profile that does not tokenise, and touches nothing on the way back', function () {
-        $middleware = new RedactPrompt(app(Redactor::class), 'default');
+    it('redacts outright with a profile that does not tokenise, and touches nothing on the way back', function (): void {
+        $middleware = new RedactPrompt(resolve(Redactor::class), 'default');
 
         $response = $middleware->handle(agentPrompt('Reply to alice@customer.com'), function (AgentPrompt $prompt): AgentResponse {
             expect($prompt->prompt)->toBe('Reply to [REDACTED]');
@@ -81,10 +81,8 @@ describe('RedactPrompt middleware', function () {
         expect($response->text)->toBe('Done.');
     });
 
-    it('can leave tokens in the answer when asked', function () {
-        $response = RedactPrompt::using('ai', detokenizeResponse: false)->handle(agentPrompt('alice@customer.com'), function (AgentPrompt $prompt): AgentResponse {
-            return agentResponse('echo '.$prompt->prompt);
-        });
+    it('can leave tokens in the answer when asked', function (): void {
+        $response = RedactPrompt::using('ai', detokenizeResponse: false)->handle(agentPrompt('alice@customer.com'), fn (AgentPrompt $prompt): AgentResponse => agentResponse('echo '.$prompt->prompt));
 
         expect($response->text)->toMatch('/^echo tok_email_[a-z0-9]{12}$/');
     });

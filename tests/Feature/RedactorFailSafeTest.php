@@ -44,22 +44,22 @@ function record(string $message, array $context = []): LogRecord
     );
 }
 
-describe('Fail-safe redaction', function () {
-    it('throws from redact() so direct callers learn about a bad profile', function () {
-        expect(fn () => app(Redactor::class)->redact(['a' => 1], 'does_not_exist'))
+describe('Fail-safe redaction', function (): void {
+    it('throws from redact() so direct callers learn about a bad profile', function (): void {
+        expect(fn () => resolve(Redactor::class)->redact(['a' => 1], 'does_not_exist'))
             ->toThrow(ProfileNotFoundException::class, 'Redaction profile [does_not_exist] is not configured.');
     });
 
-    it('does not throw from redactSafely() for an unknown profile', function () {
-        $result = app(Redactor::class)->redactSafely(['secret' => 'value'], 'does_not_exist');
+    it('does not throw from redactSafely() for an unknown profile', function (): void {
+        $result = resolve(Redactor::class)->redactSafely(['secret' => 'value'], 'does_not_exist');
 
         expect($result)->toBe('[REDACTED] (redaction failed)');
     });
 
-    it('replaces rather than passes through when redaction fails', function () {
+    it('replaces rather than passes through when redaction fails', function (): void {
         // The whole point: a failure must not emit the payload it could not
         // verify as safe.
-        $result = app(Redactor::class)->redactSafely(
+        $result = resolve(Redactor::class)->redactSafely(
             ['password' => 'hunter2', 'card' => '4111111111111111'],
             'does_not_exist'
         );
@@ -69,7 +69,7 @@ describe('Fail-safe redaction', function () {
             ->and($result)->not->toContain('4111111111111111');
     });
 
-    it('survives a strategy that throws mid-redaction', function () {
+    it('survives a strategy that throws mid-redaction', function (): void {
         config()->set('redactor.custom_strategies', ['exploding' => ExplodingStrategy::class]);
         config()->set('redactor.profiles.exploding', [
             'enabled' => true,
@@ -87,13 +87,13 @@ describe('Fail-safe redaction', function () {
             'shannon_entropy' => ['enabled' => false],
         ]);
 
-        $result = app(Redactor::class)->redactSafely(['password' => 'hunter2'], 'exploding');
+        $result = resolve(Redactor::class)->redactSafely(['password' => 'hunter2'], 'exploding');
 
         expect($result)->toBe('[REDACTED] (redaction failed)')
             ->and($result)->not->toContain('hunter2');
     });
 
-    it('uses the profile replacement string in the failure marker when it can', function () {
+    it('uses the profile replacement string in the failure marker when it can', function (): void {
         config()->set('redactor.custom_strategies', ['exploding' => ExplodingStrategy::class]);
         config()->set('redactor.profiles.exploding_masked', [
             'enabled' => true,
@@ -111,11 +111,11 @@ describe('Fail-safe redaction', function () {
             'shannon_entropy' => ['enabled' => false],
         ]);
 
-        expect(app(Redactor::class)->redactSafely(['password' => 'x'], 'exploding_masked'))
+        expect(resolve(Redactor::class)->redactSafely(['password' => 'x'], 'exploding_masked'))
             ->toBe('*** (redaction failed)');
     });
 
-    it('keeps the log channel alive when the configured profile is broken', function () {
+    it('keeps the log channel alive when the configured profile is broken', function (): void {
         config()->set('redactor.default_profile', 'missing_profile');
 
         $formatter = new RedactorFormatter;
@@ -130,42 +130,42 @@ describe('Fail-safe redaction', function () {
             ->and($output)->not->toContain('bob@example.com');
     });
 
-    it('does not re-enter the logger while reporting its own failure', function () {
+    it('does not re-enter the logger while reporting its own failure', function (): void {
         expect(InternalLog::isEmitting())->toBeFalse();
 
         $seen = [];
 
         // A logger that calls back into redaction is exactly the re-entrancy
         // that used to loop until the stack ran out.
-        Log::listen(function ($message) use (&$seen) {
+        Log::listen(function ($message) use (&$seen): void {
             $seen[] = $message->message;
             InternalLog::warning('nested diagnostic');
         });
 
-        app(Redactor::class)->redactSafely(['a' => 1], 'does_not_exist');
+        resolve(Redactor::class)->redactSafely(['a' => 1], 'does_not_exist');
 
         expect($seen)->toHaveCount(1)
             ->and(InternalLog::isEmitting())->toBeFalse();
     });
 
-    it('swallows a logger that throws while reporting a failure', function () {
-        Log::listen(function () {
+    it('swallows a logger that throws while reporting a failure', function (): void {
+        Log::listen(function (): void {
             throw new \RuntimeException('logger is down');
         });
 
-        $result = app(Redactor::class)->redactSafely(['a' => 1], 'does_not_exist');
+        $result = resolve(Redactor::class)->redactSafely(['a' => 1], 'does_not_exist');
 
         expect($result)->toBe('[REDACTED] (redaction failed)');
     });
 });
 
-describe('redactor:validate', function () {
-    it('passes when every profile resolves', function () {
+describe('redactor:validate', function (): void {
+    it('passes when every profile resolves', function (): void {
         $this->artisan('redactor:validate')
             ->assertSuccessful();
     });
 
-    it('fails and names a profile whose config is invalid', function () {
+    it('fails and names a profile whose config is invalid', function (): void {
         config()->set('redactor.profiles.broken', [
             'enabled' => true,
             'strategies' => [BlockedKeysStrategy::class],
@@ -178,7 +178,7 @@ describe('redactor:validate', function () {
             ->assertFailed();
     });
 
-    it('fails when a profile lists a strategy that cannot be resolved', function () {
+    it('fails when a profile lists a strategy that cannot be resolved', function (): void {
         config()->set('redactor.profiles.ghost', [
             'enabled' => true,
             'strategies' => ['App\\Nope\\NotARealStrategy'],
@@ -200,7 +200,7 @@ describe('redactor:validate', function () {
             ->assertFailed();
     });
 
-    it('reports no profiles as a failure rather than a pass', function () {
+    it('reports no profiles as a failure rather than a pass', function (): void {
         config()->set('redactor.profiles', []);
 
         $this->artisan('redactor:validate')->assertFailed();

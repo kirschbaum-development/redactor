@@ -123,15 +123,7 @@ class Redactor
      */
     public function redact(mixed $content, ?string $profile = null): mixed
     {
-        return $this->redactWithMetadata($content, $profile)->value;
-    }
-
-    /**
-     * Redact the content and return it with what was found.
-     */
-    public function inspect(mixed $content, ?string $profile = null, ?bool $mark = null): RedactionResult
-    {
-        return $this->redactWithMetadata($content, $profile, $mark);
+        return $this->inspect($content, $profile)->value;
     }
 
     /**
@@ -139,7 +131,7 @@ class Redactor
      *
      * The metadata is kept out of the payload rather than written into it.
      */
-    public function redactWithMetadata(mixed $content, ?string $profile = null, ?bool $mark = null): RedactionResult
+    public function inspect(mixed $content, ?string $profile = null, ?bool $mark = null): RedactionResult
     {
         $config = RedactorConfig::fromConfig($profile);
 
@@ -203,7 +195,7 @@ class Redactor
             event(new RedactionPerformed($profile, $result->redactedKeys, $rules, $entities, count($result->findings)));
         } catch (\Throwable $e) {
             InternalLog::warning('A RedactionPerformed listener failed', [
-                'exception_type' => get_class($e),
+                'exception_type' => $e::class,
                 'exception_message' => $e->getMessage(),
             ]);
         }
@@ -256,7 +248,7 @@ class Redactor
         } catch (\Throwable $e) {
             InternalLog::warning('Redaction failed; content replaced as a precaution', [
                 'profile' => $profile,
-                'exception_type' => get_class($e),
+                'exception_type' => $e::class,
                 'exception_message' => $e->getMessage(),
             ]);
 
@@ -298,7 +290,7 @@ class Redactor
 
                 $this->buildStrategiesForProfile($config);
 
-                $configured = array_values(array_filter($config->strategies, 'is_string'));
+                $configured = array_values(array_filter($config->strategies, is_string(...)));
 
                 $conflicts = array_values(array_intersect($config->safeKeys, $config->blockedKeys));
 
@@ -314,7 +306,7 @@ class Redactor
                 // the profile switched off still resolves but stays out of the chain...
                 $unresolved = array_values(array_filter(
                     $configured,
-                    fn (string $name) => $this->createStrategyInstance($name, $config) === null
+                    fn (string $name): bool => ! $this->createStrategyInstance($name) instanceof Strategy
                 ));
 
                 if ($unresolved !== []) {
@@ -419,9 +411,9 @@ class Redactor
             if (! is_string($strategyClass)) {
                 continue;
             }
-            $strategy = $this->createStrategyInstance($strategyClass, $config);
+            $strategy = $this->createStrategyInstance($strategyClass);
 
-            if ($strategy === null) {
+            if (! $strategy instanceof Strategy) {
                 continue;
             }
 
@@ -439,7 +431,7 @@ class Redactor
     /**
      * Create a strategy instance by custom name or class string.
      */
-    private function createStrategyInstance(string $strategyClass, RedactorConfig $config): ?Strategy
+    private function createStrategyInstance(string $strategyClass): ?Strategy
     {
         $this->loadCustomStrategies();
 
@@ -612,7 +604,7 @@ class Redactor
             ? null
             : $this->applyStrategies($array, '', $context, $strategies);
 
-        if ($outcome !== null && $outcome->value !== $array) {
+        if ($outcome instanceof StrategyOutcome && $outcome->value !== $array) {
             // A strategy replaced the array wholesale...
             if (is_array($outcome->value)) {
                 /** @var array<string, mixed> $typedArray */
@@ -640,7 +632,7 @@ class Redactor
             $childCursor = $cursor?->descend($keyString);
             $pathMatch = $childCursor?->match();
 
-            if ($pathMatch !== null) {
+            if ($pathMatch instanceof PathMatch) {
                 $decided = $this->applyPathRule($value, $keyString, $pathMatch, $context);
 
                 if ($decided === self::REMOVE_MARKER) {
@@ -659,7 +651,7 @@ class Redactor
             }
 
             $outcome = $this->applyStrategies($value, $keyString, $context, $strategies);
-            $processedValue = $outcome !== null ? $outcome->value : $value;
+            $processedValue = $outcome instanceof StrategyOutcome ? $outcome->value : $value;
 
             if ($processedValue === self::REMOVE_MARKER) {
                 unset($result[$key]);
@@ -670,7 +662,7 @@ class Redactor
 
             // No strategy claimed this container, so walk into it without running
             // the chain over it again...
-            if ($outcome === null && (is_array($value) || is_object($value))) {
+            if (! $outcome instanceof StrategyOutcome && (is_array($value) || is_object($value))) {
                 $processedValue = $this->redactRecursively(
                     $value,
                     $keyString,
@@ -705,7 +697,7 @@ class Redactor
     protected function redactObject(object $object, string $key, RedactionContext $context, array $strategies, ?PathCursor $cursor = null): mixed
     {
         $outcome = $this->applyStrategies($object, $key, $context, $strategies);
-        if ($outcome !== null && $outcome->value !== $object) {
+        if ($outcome instanceof StrategyOutcome && $outcome->value !== $object) {
             return $outcome->value;
         }
 
@@ -724,7 +716,7 @@ class Redactor
             return sprintf(
                 '%s (Circular reference to %s)',
                 $context->config->replacement,
-                get_class($object)
+                $object::class
             );
         }
 
@@ -776,7 +768,7 @@ class Redactor
 
             if (! is_array($array)) {
                 InternalLog::warning('Unable to redact object - JSON decode did not return array', [
-                    'object_class' => get_class($object),
+                    'object_class' => $object::class,
                     'reason' => 'json_decode_not_array',
                     'decoded_type' => gettype($array),
                     'behavior' => $context->config->nonRedactableObjectBehavior,
@@ -792,9 +784,9 @@ class Redactor
 
         } catch (\Throwable $e) {
             InternalLog::warning('Exception while trying to redact object', [
-                'object_class' => get_class($object),
+                'object_class' => $object::class,
                 'reason' => 'exception_during_processing',
-                'exception_type' => get_class($e),
+                'exception_type' => $e::class,
                 'exception_message' => $e->getMessage(),
                 'behavior' => $context->config->nonRedactableObjectBehavior,
             ]);
@@ -862,7 +854,7 @@ class Redactor
     {
         $outcome = $this->applyStrategies($value, $key, $context, $strategies);
 
-        return $outcome !== null ? $outcome->value : $value;
+        return $outcome instanceof StrategyOutcome ? $outcome->value : $value;
     }
 
     /**
@@ -907,7 +899,7 @@ class Redactor
     {
         $context->markRedacted();
 
-        return sprintf('%s (Non-redactable object %s)', $context->config->replacement, get_class($object));
+        return sprintf('%s (Non-redactable object %s)', $context->config->replacement, $object::class);
     }
 
     /**
@@ -930,7 +922,7 @@ class Redactor
      */
     public function profiles(): array
     {
-        return array_values(array_map('strval', RedactorConfig::getAvailableProfiles()));
+        return array_values(array_map(strval(...), RedactorConfig::profiles()));
     }
 
     /**
@@ -938,7 +930,7 @@ class Redactor
      */
     public function hasProfile(string $profile): bool
     {
-        return RedactorConfig::profileExists($profile);
+        return RedactorConfig::hasProfile($profile);
     }
 
     /**
@@ -949,33 +941,5 @@ class Redactor
     public function strategies(?string $profile = null): array
     {
         return array_values($this->getStrategiesForProfile(RedactorConfig::fromConfig($profile)));
-    }
-
-    /**
-     * @deprecated Use profiles().
-     *
-     * @return array<int, string>
-     */
-    public function getAvailableProfiles(): array
-    {
-        return $this->profiles();
-    }
-
-    /**
-     * @deprecated Use hasProfile().
-     */
-    public function profileExists(string $profile): bool
-    {
-        return $this->hasProfile($profile);
-    }
-
-    /**
-     * @deprecated Use strategies().
-     *
-     * @return array<int, Strategy>
-     */
-    public function getStrategies(?string $profile = null): array
-    {
-        return $this->strategies($profile);
     }
 }

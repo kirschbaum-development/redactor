@@ -44,7 +44,7 @@ class GitRepository
     public function staged(array $pathspec = []): array
     {
         return PatchParser::parse($this->run([
-            'diff', '--cached', '-U0', '--no-color', '--no-ext-diff', '--diff-filter=ACMR', ...self::spec($pathspec),
+            'diff', '--cached', '-U0', '--no-color', '--no-ext-diff', '--diff-filter=ACMR', ...$this->spec($pathspec),
         ]));
     }
 
@@ -57,7 +57,7 @@ class GitRepository
     public function diff(string $ref, array $pathspec = []): array
     {
         return PatchParser::parse($this->run([
-            'diff', '-U0', '--no-color', '--no-ext-diff', '--diff-filter=ACMR', $ref, ...self::spec($pathspec),
+            'diff', '-U0', '--no-color', '--no-ext-diff', '--diff-filter=ACMR', $ref, ...$this->spec($pathspec),
         ]));
     }
 
@@ -78,14 +78,14 @@ class GitRepository
             $arguments[] = $range;
         }
 
-        return PatchParser::parse($this->run([...$arguments, ...self::spec($pathspec)]));
+        return PatchParser::parse($this->run([...$arguments, ...$this->spec($pathspec)]));
     }
 
     /**
      * @param  array<int, string>  $pathspec
      * @return array<int, string>
      */
-    private static function spec(array $pathspec): array
+    private function spec(array $pathspec): array
     {
         return $pathspec === [] ? [] : ['--', ...$pathspec];
     }

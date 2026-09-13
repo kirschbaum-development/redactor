@@ -98,7 +98,7 @@ class Baseline
             'generated_at' => $generatedAt,
             'ruleset' => $ruleset,
             'findings' => array_values($entries),
-        ], fn ($v) => $v !== null), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], fn ($v): bool => $v !== null), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
         if ($json === false) {
             return false;

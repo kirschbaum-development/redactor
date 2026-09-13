@@ -12,7 +12,7 @@ use Monolog\Processor\ProcessorInterface;
  * Redacts log records as a Monolog processor, the recommended way to redact Laravel logs.
  *
  * Redaction transforms a record's *content*, which is what a Monolog processor
- * is for. Owning the formatter instead - as ReadactFormatter does - means
+ * is for. Owning the formatter instead - as RedactorFormatter does - means
  * dictating the output format, so enabling redaction silently replaces JSON or
  * line formatting with the package's own. A processor composes with whatever
  * formatter the application already uses.

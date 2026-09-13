@@ -45,7 +45,7 @@ class RedactResponse
         if ($response instanceof StreamedResponse) {
             $callback = $response->getCallback();
 
-            if ($callback !== null) {
+            if ($callback instanceof Closure) {
                 $response->setCallback((new StreamRedactor($this->redactor, $profile))->wrap($callback));
             }
 
@@ -57,7 +57,7 @@ class RedactResponse
         } catch (Throwable $e) {
             InternalLog::warning('Response could not be redacted; replaced with an error response', [
                 'profile' => $profile,
-                'exception_type' => get_class($e),
+                'exception_type' => $e::class,
                 'exception_message' => $e->getMessage(),
             ]);
 
@@ -70,7 +70,7 @@ class RedactResponse
         if ($response instanceof JsonResponse) {
             $data = $response->getData(true);
 
-            return $response->setData($this->redactor->redactWithMetadata($data, $profile, mark: false)->value);
+            return $response->setData($this->redactor->inspect($data, $profile, mark: false)->value);
         }
 
         $content = $response->getContent();
@@ -85,7 +85,7 @@ class RedactResponse
             $decoded = json_decode($content, true);
 
             if (json_last_error() === JSON_ERROR_NONE) {
-                $redacted = $this->redactor->redactWithMetadata($decoded, $profile, mark: false)->value;
+                $redacted = $this->redactor->inspect($decoded, $profile, mark: false)->value;
                 $encoded = json_encode($redacted, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
                 if ($encoded !== false) {
@@ -96,7 +96,7 @@ class RedactResponse
             }
         }
 
-        $redacted = $this->redactor->redactWithMetadata($content, $profile, mark: false)->value;
+        $redacted = $this->redactor->inspect($content, $profile, mark: false)->value;
 
         $response->setContent(is_string($redacted) ? $redacted : (string) json_encode($redacted));
 

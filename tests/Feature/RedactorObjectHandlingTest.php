@@ -29,8 +29,8 @@ class TestObjectWithToArray
     }
 }
 
-describe('Redactor Large Object Tests', function () {
-    beforeEach(function () {
+describe('Redactor Large Object Tests', function (): void {
+    beforeEach(function (): void {
         // Set up profile-based configuration for large object tests
         config()->set('redactor.default_profile', 'default');
         config()->set('redactor.profiles.default', [
@@ -62,7 +62,7 @@ describe('Redactor Large Object Tests', function () {
         ]);
     });
 
-    it('redacts large arrays based on size', function () {
+    it('redacts large arrays based on size', function (): void {
         $redactor = new Redactor;
 
         $smallArray = ['a' => 1, 'b' => 2];
@@ -82,7 +82,7 @@ describe('Redactor Large Object Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('redacts large arrays when provided as top-level input', function () {
+    it('redacts large arrays when provided as top-level input', function (): void {
         $redactor = new Redactor;
 
         // Create a large array as the primary input (not nested within another structure)
@@ -99,7 +99,7 @@ describe('Redactor Large Object Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('redacts large objects based on property count', function () {
+    it('redacts large objects based on property count', function (): void {
         $redactor = new Redactor;
 
         // Create an object with many properties
@@ -118,7 +118,7 @@ describe('Redactor Large Object Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('skips large object redaction when feature is disabled', function () {
+    it('skips large object redaction when feature is disabled', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.redact_large_objects', false);
 
@@ -149,7 +149,7 @@ describe('Redactor Large Object Tests', function () {
             ->and($result)->not->toHaveKey('_redacted'); // No redaction occurred
     });
 
-    it('handles large objects that exceed size limits during property counting', function () {
+    it('handles large objects that exceed size limits during property counting', function (): void {
         config()->set('redactor.profiles.default.max_object_size', 1);
 
         $redactor = new Redactor;
@@ -168,7 +168,7 @@ describe('Redactor Large Object Tests', function () {
         expect($message)->toContain('stdClass');
     });
 
-    it('handles large objects detected via JSON encoding when toArray is unavailable', function () {
+    it('handles large objects detected via JSON encoding when toArray is unavailable', function (): void {
         config()->set('redactor.profiles.default.max_object_size', 2);
 
         $redactor = new Redactor;
@@ -193,8 +193,8 @@ describe('Redactor Large Object Tests', function () {
 
 });
 
-describe('Redactor String Length Tests', function () {
-    beforeEach(function () {
+describe('Redactor String Length Tests', function (): void {
+    beforeEach(function (): void {
         // Set up profile-based configuration for string length tests
         config()->set('redactor.default_profile', 'default');
         config()->set('redactor.profiles.default', [
@@ -226,7 +226,7 @@ describe('Redactor String Length Tests', function () {
         ]);
     });
 
-    it('redacts strings that exceed the maximum value length', function () {
+    it('redacts strings that exceed the maximum value length', function (): void {
         $redactor = new Redactor;
 
         $shortString = 'This is a short string';
@@ -245,9 +245,9 @@ describe('Redactor String Length Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles string length redaction when value length is null (no limit)', function () {
+    it('handles string length redaction when value length is null (no limit)', function (): void {
         // Update the profile config to remove length limit
-        config()->set('redactor.profiles.default.max_value_length', null);
+        config()->set('redactor.profiles.default.max_value_length');
 
         $redactor = new Redactor;
 
@@ -260,8 +260,8 @@ describe('Redactor String Length Tests', function () {
     });
 });
 
-describe('Redactor Object Handling Tests', function () {
-    beforeEach(function () {
+describe('Redactor Object Handling Tests', function (): void {
+    beforeEach(function (): void {
         // Set up profile-based configuration for object handling tests
         config()->set('redactor.default_profile', 'default');
         config()->set('redactor.profiles.default', [
@@ -293,7 +293,7 @@ describe('Redactor Object Handling Tests', function () {
         ]);
     });
 
-    it('redacts objects with toArray method', function () {
+    it('redacts objects with toArray method', function (): void {
         $redactor = new Redactor;
 
         $object = new class
@@ -317,7 +317,7 @@ describe('Redactor Object Handling Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('redacts objects via JSON serialization when toArray is not available', function () {
+    it('redacts objects via JSON serialization when toArray is not available', function (): void {
         $redactor = new Redactor;
 
         $object = new \stdClass;
@@ -334,7 +334,7 @@ describe('Redactor Object Handling Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles objects with blocked and safe keys correctly', function () {
+    it('handles objects with blocked and safe keys correctly', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.blocked_keys', ['password', 'secret']);
         config()->set('redactor.profiles.default.safe_keys', ['id']);
@@ -357,12 +357,12 @@ describe('Redactor Object Handling Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles object with toArray method that throws an exception', function () {
+    it('handles object with toArray method that throws an exception', function (): void {
         $redactor = new Redactor;
 
         $objectWithBadToArray = new class
         {
-            public function toArray()
+            public function toArray(): never
             {
                 throw new \Exception('toArray failed');
             }
@@ -374,12 +374,12 @@ describe('Redactor Object Handling Tests', function () {
         expect($result)->toBeArray(); // Should still be processed as an array
     });
 
-    it('handles object with toArray method that returns non-array', function () {
+    it('handles object with toArray method that returns non-array', function (): void {
         $redactor = new Redactor;
 
         $objectWithBadToArray = new class
         {
-            public function toArray()
+            public function toArray(): string
             {
                 return 'not_an_array'; // Invalid return type
             }
@@ -391,7 +391,7 @@ describe('Redactor Object Handling Tests', function () {
         expect($result)->toBeArray();
     });
 
-    it('handles object with circular reference via JSON encoding', function () {
+    it('handles object with circular reference via JSON encoding', function (): void {
         $redactor = new Redactor;
 
         // Create circular reference object that can't be JSON serialized
@@ -405,7 +405,7 @@ describe('Redactor Object Handling Tests', function () {
         expect($result)->toBe($object); // Should preserve the original object
     });
 
-    it('processes JsonSerializable objects correctly', function () {
+    it('processes JsonSerializable objects correctly', function (): void {
         $redactor = new Redactor;
 
         $jsonObject = new class implements \JsonSerializable
@@ -429,7 +429,7 @@ describe('Redactor Object Handling Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles objects that become problematic during toArray conversion', function () {
+    it('handles objects that become problematic during toArray conversion', function (): void {
         $redactor = new Redactor;
 
         // Create an object that has a toArray method but creates issues during conversion
@@ -465,8 +465,8 @@ describe('Redactor Object Handling Tests', function () {
 
 });
 
-describe('Redactor Non-Redactable Object Behavior Tests', function () {
-    beforeEach(function () {
+describe('Redactor Non-Redactable Object Behavior Tests', function (): void {
+    beforeEach(function (): void {
         // Set up profile-based configuration for non-redactable object behavior tests
         config()->set('redactor.default_profile', 'default');
         config()->set('redactor.profiles.default', [
@@ -498,7 +498,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
         ]);
     });
 
-    it('preserves non-redactable objects when behavior is set to preserve', function () {
+    it('preserves non-redactable objects when behavior is set to preserve', function (): void {
         $redactor = new Redactor;
 
         // Create circular reference object that can't be JSON serialized
@@ -510,7 +510,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
         expect($result)->toBe($object); // Should preserve original object
     });
 
-    it('removes non-redactable objects when behavior is set to remove', function () {
+    it('removes non-redactable objects when behavior is set to remove', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'remove');
 
@@ -525,7 +525,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
         expect($result)->toBe('__REDACTOR_REMOVE_OBJECT__');
     });
 
-    it('replaces non-redactable objects with empty array when behavior is set to empty_array', function () {
+    it('replaces non-redactable objects with empty array when behavior is set to empty_array', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'empty_array');
 
@@ -542,7 +542,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('redacts non-redactable objects with replacement text when behavior is set to redact', function () {
+    it('redacts non-redactable objects with replacement text when behavior is set to redact', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'redact');
 
@@ -559,7 +559,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
             ->and($result)->toContain('stdClass');
     });
 
-    it('handles complex objects with nested non-redactable content when behavior is redact', function () {
+    it('handles complex objects with nested non-redactable content when behavior is redact', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'redact');
 
@@ -591,7 +591,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles JsonSerializable objects that return invalid JSON when behavior is redact', function () {
+    it('handles JsonSerializable objects that return invalid JSON when behavior is redact', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'redact');
 
@@ -613,7 +613,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
             ->and($result)->toContain('[REDACTED]');
     });
 
-    it('tracks redacted keys when non-redactable object behavior is remove', function () {
+    it('tracks redacted keys when non-redactable object behavior is remove', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.track_redacted_keys', true);
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'remove');
@@ -643,7 +643,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
             ->and($result['_redacted_keys'])->toContain('password');
     });
 
-    it('handles non-redactable objects within arrays when behavior is empty_array', function () {
+    it('handles non-redactable objects within arrays when behavior is empty_array', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'empty_array');
 
@@ -668,7 +668,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('preserves non-redactable objects by default when behavior is preserve', function () {
+    it('preserves non-redactable objects by default when behavior is preserve', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'preserve');
 
@@ -693,7 +693,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
             ->and($result['problematic'])->toBe($problematic); // Should preserve original
     });
 
-    it('handles deeply nested non-redactable objects when behavior is preserve', function () {
+    it('handles deeply nested non-redactable objects when behavior is preserve', function (): void {
         // Update the profile config for this test
         config()->set('redactor.profiles.default.non_redactable_object_behavior', 'preserve');
 
@@ -718,7 +718,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
             ->and($result['level1']['level2']['problematic'])->toBe($circular); // Should preserve
     });
 
-    it('handles objects that JSON decode to non-array values', function () {
+    it('handles objects that JSON decode to non-array values', function (): void {
         // Test when JSON decode doesn't return an array
         $problematicObject = new class implements \JsonSerializable
         {
@@ -735,7 +735,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
         expect($result)->toBe($problematicObject);
     });
 
-    it('handles LargeObjectStrategy with scalar values passed directly to handle method', function () {
+    it('handles LargeObjectStrategy with scalar values passed directly to handle method', function (): void {
         // Test the final return $value; line in LargeObjectStrategy that can only be reached
         // by calling handle directly with a scalar value (shouldHandle would never allow this)
         $strategy = new LargeObjectStrategy;
@@ -750,7 +750,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
         expect($strategy->handle(null, 'test_key', $context))->toBe(null);
     });
 
-    it('handles LargeObjectStrategy toArray exception in handle method', function () {
+    it('handles LargeObjectStrategy toArray exception in handle method', function (): void {
         // Test exception handling in toArray during handle method
         $strategy = new LargeObjectStrategy;
         $config = RedactorConfig::fromConfig('default');
@@ -758,7 +758,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
 
         $problematicObject = new class
         {
-            public function toArray()
+            public function toArray(): never
             {
                 throw new \Exception('toArray failed in handle');
             }
@@ -772,7 +772,7 @@ describe('Redactor Non-Redactable Object Behavior Tests', function () {
         expect($result['_large_object_redacted'])->toContain('large number of');
     });
 
-    it('handles LargeObjectStrategy JSON encoding exception in handle method', function () {
+    it('handles LargeObjectStrategy JSON encoding exception in handle method', function (): void {
         // Test JSON encoding exception handling in handle method else branch
         $strategy = new LargeObjectStrategy;
         $config = RedactorConfig::fromConfig('default');

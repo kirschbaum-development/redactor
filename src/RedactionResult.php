@@ -41,7 +41,7 @@ final readonly class RedactionResult implements Arrayable, JsonSerializable
             'value' => $this->value,
             'was_redacted' => $this->wasRedacted,
             'redacted_keys' => $this->redactedKeys,
-            'findings' => array_map(fn (MatchFinding $finding) => $finding->toArray(), $this->findings),
+            'findings' => array_map(fn (MatchFinding $finding): array => $finding->toArray(), $this->findings),
         ];
     }
 

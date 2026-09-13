@@ -21,7 +21,7 @@ use Throwable;
 class SecretVerifier
 {
     /** @var array<int, Verifier> */
-    private array $verifiers;
+    private readonly array $verifiers;
 
     /**
      * @param  array<int, string>  $allowed  verifier names permitted to run
@@ -51,7 +51,7 @@ class SecretVerifier
         }
 
         $allowed = $settings['verifiers'] ?? [];
-        $allowed = is_array($allowed) ? array_values(array_filter($allowed, 'is_string')) : [];
+        $allowed = is_array($allowed) ? array_values(array_filter($allowed, is_string(...))) : [];
 
         // An empty allowlist means "none", not "all"; enabling is separate from choosing who to trust...
         return $allowed === [] ? null : new self($allowed, $verifiers);
@@ -66,7 +66,7 @@ class SecretVerifier
     {
         return array_values(array_filter(
             $this->verifiers,
-            fn (Verifier $v) => in_array($v->name(), $this->allowed, true)
+            fn (Verifier $v): bool => in_array($v->name(), $this->allowed, true)
         ));
     }
 
@@ -77,7 +77,7 @@ class SecretVerifier
      */
     public function hosts(): array
     {
-        $hosts = array_map(fn (Verifier $v) => $v->host(), $this->enabled());
+        $hosts = array_map(fn (Verifier $v): string => $v->host(), $this->enabled());
         sort($hosts);
 
         return array_values(array_unique($hosts));
@@ -85,7 +85,7 @@ class SecretVerifier
 
     public function canVerify(string $entity, string $rule): bool
     {
-        return $this->verifierFor($entity, $rule) !== null;
+        return $this->verifierFor($entity, $rule) instanceof Verifier;
     }
 
     /**
@@ -98,7 +98,7 @@ class SecretVerifier
     {
         $verifier = $this->verifierFor($entity, $rule);
 
-        if ($verifier === null) {
+        if (! $verifier instanceof Verifier) {
             return VerificationResult::unknown('No verifier is enabled for this kind of credential.');
         }
 

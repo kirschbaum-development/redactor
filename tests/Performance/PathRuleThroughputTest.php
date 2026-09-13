@@ -21,7 +21,7 @@ function apiPayload(): array
             ],
         ],
         'user' => ['id' => 42, 'email' => 'alice@customer.com', 'name' => 'Alice'],
-        'items' => array_map(fn (int $i) => [
+        'items' => array_map(fn (int $i): array => [
             'sku' => "SKU-{$i}",
             'qty' => $i,
             'note' => 'an ordinary line of descriptive text',
@@ -32,7 +32,7 @@ function apiPayload(): array
 /** The best of several short runs: what the code costs, not what the machine was doing. */
 function timeProfile(string $profile, int $iterations = 100, int $runs = 5): float
 {
-    $redactor = app(Redactor::class);
+    $redactor = resolve(Redactor::class);
     $payload = apiPayload();
 
     $redactor->redact($payload, $profile);
@@ -80,8 +80,8 @@ function throughputProfile(array $overrides): array
     ], $overrides);
 }
 
-describe('Path rules as a fast lane', function () {
-    it('is faster than scanning the same payload for the same values', function () {
+describe('Path rules as a fast lane', function (): void {
+    it('is faster than scanning the same payload for the same values', function (): void {
         // Same payload, same two things removed. One profile finds them by
         // scanning every string; the other is told where they are.
         config()->set('redactor.profiles.by_scanning', throughputProfile([]));
@@ -102,8 +102,8 @@ describe('Path rules as a fast lane', function () {
 
         // Both must actually redact the same two values, or the comparison is
         // meaningless.
-        $scanned = app(Redactor::class)->redact(apiPayload(), 'by_scanning');
-        $pathed = app(Redactor::class)->redact(apiPayload(), 'by_path');
+        $scanned = resolve(Redactor::class)->redact(apiPayload(), 'by_scanning');
+        $pathed = resolve(Redactor::class)->redact(apiPayload(), 'by_path');
 
         expect($scanned['request']['headers']['authorization'])->toBe('[REDACTED]')
             ->and($pathed['request']['headers']['authorization'])->toBe('[REDACTED]')
@@ -112,7 +112,7 @@ describe('Path rules as a fast lane', function () {
             ->and($paths)->toBeLessThan($scanning);
     });
 
-    it('costs almost nothing when no path rule can match', function () {
+    it('costs almost nothing when no path rule can match', function (): void {
         // An exhausted cursor stops being consulted, so a profile carrying path
         // rules that never fire should not pay much for them.
         config()->set('redactor.profiles.no_paths', throughputProfile([]));
@@ -130,7 +130,7 @@ describe('Path rules as a fast lane', function () {
         expect($with)->toBeLessThan($without * 1.5);
     });
 
-    it('does not slow down as the number of path rules grows', function () {
+    it('does not slow down as the number of path rules grows', function (): void {
         // The trie is walked in lockstep with the payload, so cost tracks the
         // rules currently in play - not how many were configured.
         $few = ['request.headers.authorization' => 'redact'];

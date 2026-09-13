@@ -18,7 +18,7 @@ use Kirschbaum\Redactor\Operators\OperatorSpec;
  */
 class PathTrie
 {
-    private const ROOT = 0;
+    private const int ROOT = 0;
 
     /** @var array<int, array<string, int>> literal segment => child node */
     private array $children = [self::ROOT => []];

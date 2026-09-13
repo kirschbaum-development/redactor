@@ -18,13 +18,13 @@ function scan(array $arguments = []): array
     return [$exitCode, Artisan::output()];
 }
 
-describe('RedactorScanCommand output', function () {
-    beforeEach(function () {
+describe('RedactorScanCommand output', function (): void {
+    beforeEach(function (): void {
         config(['redactor.scan.profile' => 'file_scan']);
         config(['redactor.scan.baseline' => null]);
     });
 
-    it('reports a clean file as clean', function () {
+    it('reports a clean file as clean', function (): void {
         [$exitCode, $output] = scan(['paths' => [fixturePath('clean-text-file.txt')]]);
 
         expect($exitCode)->toBe(0)
@@ -33,7 +33,7 @@ describe('RedactorScanCommand output', function () {
             ->and($output)->toContain('Total findings: 0');
     });
 
-    it('names the rule and the line for each finding', function () {
+    it('names the rule and the line for each finding', function (): void {
         // The old output was one opaque row per file - "FINDINGS 1 <path>" -
         // with no way to know which rule fired or where to look.
         [$exitCode, $output] = scan(['paths' => [fixturePath('sensitive-api-keys.txt')]]);
@@ -44,7 +44,7 @@ describe('RedactorScanCommand output', function () {
             ->and($output)->toMatch('/sensitive-api-keys\.txt:\d+:\d+/');
     });
 
-    it('locates a secret on the line it is actually on', function () {
+    it('locates a secret on the line it is actually on', function (): void {
         $dir = sys_get_temp_dir().'/redactor_scan_'.uniqid();
         mkdir($dir);
         file_put_contents($dir.'/app.env', "APP_NAME=demo\nAPP_ENV=local\nAWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n");
@@ -60,7 +60,7 @@ describe('RedactorScanCommand output', function () {
         cleanupDirectory($dir);
     });
 
-    it('shows an excerpt with the secret already redacted', function () {
+    it('shows an excerpt with the secret already redacted', function (): void {
         $dir = sys_get_temp_dir().'/redactor_scan_'.uniqid();
         mkdir($dir);
         file_put_contents($dir.'/app.env', "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n");
@@ -76,7 +76,7 @@ describe('RedactorScanCommand output', function () {
         cleanupDirectory($dir);
     });
 
-    it('reports several findings in one file separately', function () {
+    it('reports several findings in one file separately', function (): void {
         [, $output] = scan(['paths' => [fixturePath('personal-info.txt')], '--output' => 'json']);
 
         $findings = json_decode($output, true)[0]['findings'];
@@ -85,7 +85,7 @@ describe('RedactorScanCommand output', function () {
             ->and(array_unique(array_column($findings, 'rule')))->not->toHaveCount(1);
     });
 
-    it('scans several paths at once', function () {
+    it('scans several paths at once', function (): void {
         [$exitCode, $output] = scan(['paths' => [
             fixturePath('clean-text-file.txt'),
             fixturePath('sensitive-api-keys.txt'),
@@ -96,21 +96,21 @@ describe('RedactorScanCommand output', function () {
             ->and($output)->toContain('Files scanned: 3');
     });
 
-    it('scans a directory', function () {
+    it('scans a directory', function (): void {
         [$exitCode, $output] = scan(['paths' => [fixturePath('subdirectory')]]);
 
         expect($exitCode)->toBe(0)
             ->and($output)->toContain('Files scanned:');
     });
 
-    it('warns about a path that does not exist', function () {
+    it('warns about a path that does not exist', function (): void {
         [$exitCode, $output] = scan(['paths' => ['/no/such/path.txt']]);
 
         expect($exitCode)->toBe(0)
             ->and($output)->toContain('Path not found');
     });
 
-    it('honours --summary-only', function () {
+    it('honours --summary-only', function (): void {
         [, $output] = scan([
             'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--summary-only' => true,
@@ -120,7 +120,7 @@ describe('RedactorScanCommand output', function () {
             ->and($output)->toContain('Total findings:');
     });
 
-    it('honours an explicit --profile', function () {
+    it('honours an explicit --profile', function (): void {
         [$exitCode, $output] = scan([
             'paths' => [fixturePath('clean-text-file.txt')],
             '--profile' => 'default',
@@ -131,19 +131,19 @@ describe('RedactorScanCommand output', function () {
     });
 });
 
-describe('RedactorScanCommand exit codes', function () {
-    beforeEach(function () {
+describe('RedactorScanCommand exit codes', function (): void {
+    beforeEach(function (): void {
         config(['redactor.scan.profile' => 'file_scan']);
         config(['redactor.scan.baseline' => null]);
     });
 
-    it('exits 0 without --bail even when findings exist', function () {
+    it('exits 0 without --bail even when findings exist', function (): void {
         [$exitCode] = scan(['paths' => [fixturePath('sensitive-api-keys.txt')]]);
 
         expect($exitCode)->toBe(0);
     });
 
-    it('exits 1 with --bail when findings exist', function () {
+    it('exits 1 with --bail when findings exist', function (): void {
         [$exitCode] = scan([
             'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--bail' => true,
@@ -152,7 +152,7 @@ describe('RedactorScanCommand exit codes', function () {
         expect($exitCode)->toBe(1);
     });
 
-    it('exits 0 with --bail when the file is clean', function () {
+    it('exits 0 with --bail when the file is clean', function (): void {
         [$exitCode] = scan([
             'paths' => [fixturePath('clean-text-file.txt')],
             '--bail' => true,
@@ -161,7 +161,7 @@ describe('RedactorScanCommand exit codes', function () {
         expect($exitCode)->toBe(0);
     });
 
-    it('rejects an unknown output format rather than silently defaulting', function () {
+    it('rejects an unknown output format rather than silently defaulting', function (): void {
         [$exitCode, $output] = scan([
             'paths' => [fixturePath('clean-text-file.txt')],
             '--output' => 'yaml',
@@ -172,13 +172,13 @@ describe('RedactorScanCommand exit codes', function () {
     });
 });
 
-describe('RedactorScanCommand JSON output', function () {
-    beforeEach(function () {
+describe('RedactorScanCommand JSON output', function (): void {
+    beforeEach(function (): void {
         config(['redactor.scan.profile' => 'file_scan']);
         config(['redactor.scan.baseline' => null]);
     });
 
-    it('emits parseable JSON with no progress chatter', function () {
+    it('emits parseable JSON with no progress chatter', function (): void {
         [, $output] = scan([
             'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--output' => 'json',
@@ -191,7 +191,7 @@ describe('RedactorScanCommand JSON output', function () {
             ->and($decoded[0]['status'])->toBe('findings');
     });
 
-    it('gives every finding a rule, position, excerpt and fingerprint', function () {
+    it('gives every finding a rule, position, excerpt and fingerprint', function (): void {
         [, $output] = scan([
             'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--output' => 'json',
@@ -205,7 +205,7 @@ describe('RedactorScanCommand JSON output', function () {
             ->and($finding['fingerprint'])->toHaveLength(32);
     });
 
-    it('reports a clean file with an empty findings list', function () {
+    it('reports a clean file with an empty findings list', function (): void {
         [, $output] = scan([
             'paths' => [fixturePath('clean-text-file.txt')],
             '--output' => 'json',
@@ -218,13 +218,13 @@ describe('RedactorScanCommand JSON output', function () {
     });
 });
 
-describe('RedactorScanCommand SARIF output', function () {
-    beforeEach(function () {
+describe('RedactorScanCommand SARIF output', function (): void {
+    beforeEach(function (): void {
         config(['redactor.scan.profile' => 'file_scan']);
         config(['redactor.scan.baseline' => null]);
     });
 
-    it('emits a valid SARIF 2.1.0 document', function () {
+    it('emits a valid SARIF 2.1.0 document', function (): void {
         [, $output] = scan([
             'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--output' => 'sarif',
@@ -238,7 +238,7 @@ describe('RedactorScanCommand SARIF output', function () {
             ->and($sarif['runs'][0]['results'])->not->toBeEmpty();
     });
 
-    it('locates each result for GitHub code scanning', function () {
+    it('locates each result for GitHub code scanning', function (): void {
         [, $output] = scan([
             'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--output' => 'sarif',
@@ -253,7 +253,7 @@ describe('RedactorScanCommand SARIF output', function () {
             ->and($result['partialFingerprints'])->toHaveKey('redactorFingerprint/v1');
     });
 
-    it('declares every rule it reports', function () {
+    it('declares every rule it reports', function (): void {
         [, $output] = scan([
             'paths' => [fixturePath('personal-info.txt')],
             '--output' => 'sarif',
@@ -267,7 +267,7 @@ describe('RedactorScanCommand SARIF output', function () {
         expect(array_diff($used, $declared))->toBe([]);
     });
 
-    it('never puts the secret itself in the report', function () {
+    it('never puts the secret itself in the report', function (): void {
         $dir = sys_get_temp_dir().'/redactor_scan_'.uniqid();
         mkdir($dir);
         file_put_contents($dir.'/app.env', "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n");
@@ -282,21 +282,21 @@ describe('RedactorScanCommand SARIF output', function () {
     });
 });
 
-describe('RedactorScanCommand baseline', function () {
-    beforeEach(function () {
+describe('RedactorScanCommand baseline', function (): void {
+    beforeEach(function (): void {
         config(['redactor.scan.profile' => 'file_scan']);
 
         $this->baseline = sys_get_temp_dir().'/redactor_baseline_'.uniqid().'.json';
         config(['redactor.scan.baseline' => $this->baseline]);
     });
 
-    afterEach(function () {
+    afterEach(function (): void {
         if (is_file($this->baseline)) {
             unlink($this->baseline);
         }
     });
 
-    it('writes accepted findings and exits 0', function () {
+    it('writes accepted findings and exits 0', function (): void {
         [$exitCode, $output] = scan([
             'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--update-baseline' => true,
@@ -313,7 +313,7 @@ describe('RedactorScanCommand baseline', function () {
             ->and($decoded['findings'][0])->toHaveKeys(['fingerprint', 'rule', 'path']);
     });
 
-    it('suppresses baselined findings on the next run', function () {
+    it('suppresses baselined findings on the next run', function (): void {
         scan(['paths' => [fixturePath('sensitive-api-keys.txt')], '--update-baseline' => true]);
 
         [$exitCode, $output] = scan([
@@ -328,7 +328,7 @@ describe('RedactorScanCommand baseline', function () {
             ->and($output)->toContain('Suppressed by baseline:');
     });
 
-    it('still fails on a finding the baseline does not cover', function () {
+    it('still fails on a finding the baseline does not cover', function (): void {
         scan(['paths' => [fixturePath('clean-text-file.txt')], '--update-baseline' => true]);
 
         [$exitCode] = scan([
@@ -339,7 +339,7 @@ describe('RedactorScanCommand baseline', function () {
         expect($exitCode)->toBe(1);
     });
 
-    it('never writes the secret into the baseline file', function () {
+    it('never writes the secret into the baseline file', function (): void {
         $dir = sys_get_temp_dir().'/redactor_scan_'.uniqid();
         mkdir($dir);
         file_put_contents($dir.'/app.env', "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n");
@@ -351,7 +351,7 @@ describe('RedactorScanCommand baseline', function () {
         cleanupDirectory($dir);
     });
 
-    it('reports a malformed baseline instead of ignoring it', function () {
+    it('reports a malformed baseline instead of ignoring it', function (): void {
         file_put_contents($this->baseline, '{"nope": true}');
 
         [$exitCode, $output] = scan(['paths' => [fixturePath('clean-text-file.txt')]]);
@@ -360,13 +360,13 @@ describe('RedactorScanCommand baseline', function () {
             ->and($output)->toContain('findings');
     });
 
-    it('treats a missing baseline file as empty', function () {
+    it('treats a missing baseline file as empty', function (): void {
         [$exitCode] = scan(['paths' => [fixturePath('clean-text-file.txt')]]);
 
         expect($exitCode)->toBe(0);
     });
 
-    it('refuses --update-baseline with nowhere to write', function () {
+    it('refuses --update-baseline with nowhere to write', function (): void {
         config(['redactor.scan.baseline' => null]);
 
         [$exitCode, $output] = scan([
@@ -379,15 +379,15 @@ describe('RedactorScanCommand baseline', function () {
     });
 });
 
-describe('Baseline fingerprints', function () {
-    it('survives the finding moving to a different line', function () {
+describe('Baseline fingerprints', function (): void {
+    it('survives the finding moving to a different line', function (): void {
         $first = ScanFinding::fingerprint('aws', 'a.env', 'AKIA123');
         $second = ScanFinding::fingerprint('aws', 'a.env', 'AKIA123');
 
         expect($first)->toBe($second);
     });
 
-    it('differs per rule, per path and per secret', function () {
+    it('differs per rule, per path and per secret', function (): void {
         $base = ScanFinding::fingerprint('aws', 'a.env', 'AKIA123');
 
         expect(ScanFinding::fingerprint('gh', 'a.env', 'AKIA123'))->not->toBe($base)
@@ -395,7 +395,7 @@ describe('Baseline fingerprints', function () {
             ->and(ScanFinding::fingerprint('aws', 'a.env', 'AKIA999'))->not->toBe($base);
     });
 
-    it('accepts a plain list of fingerprints as well as objects', function () {
+    it('accepts a plain list of fingerprints as well as objects', function (): void {
         $path = sys_get_temp_dir().'/redactor_baseline_'.uniqid().'.json';
         file_put_contents($path, json_encode(['findings' => ['abc123', ['fingerprint' => 'def456']]]));
 

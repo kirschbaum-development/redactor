@@ -33,62 +33,62 @@ function allowProfile(array $overrides = []): array
     ], $overrides);
 }
 
-describe('Profile allowlist', function () {
+describe('Profile allowlist', function (): void {
     beforeEach(fn () => config()->set('redactor.profiles.allow', allowProfile()));
 
-    it('lets an allowed value through a pattern', function () {
-        expect(app(Redactor::class)->redact('from noreply@example.com and bob@example.com', 'allow'))
+    it('lets an allowed value through a pattern', function (): void {
+        expect(resolve(Redactor::class)->redact('from noreply@example.com and bob@example.com', 'allow'))
             ->toBe('from noreply@example.com and [REDACTED]');
     });
 
-    it('compares literals case-insensitively and ignores surrounding whitespace', function () {
-        expect(app(Redactor::class)->redact('from NoReply@Example.COM', 'allow'))
+    it('compares literals case-insensitively and ignores surrounding whitespace', function (): void {
+        expect(resolve(Redactor::class)->redact('from NoReply@Example.COM', 'allow'))
             ->toBe('from NoReply@Example.COM');
     });
 
-    it('accepts a regex entry', function () {
-        expect(app(Redactor::class)->redact('test-42@example.com and test-x@example.com', 'allow'))
+    it('accepts a regex entry', function (): void {
+        expect(resolve(Redactor::class)->redact('test-42@example.com and test-x@example.com', 'allow'))
             ->toBe('test-42@example.com and [REDACTED]');
     });
 
-    it('lets an allowed value through a blocked key', function () {
+    it('lets an allowed value through a blocked key', function (): void {
         config()->set('redactor.profiles.allow.allowlist', ['changeme']);
 
-        $result = app(Redactor::class)->redact(['password' => 'changeme', 'other' => ['password' => 'hunter2']], 'allow');
+        $result = resolve(Redactor::class)->redact(['password' => 'changeme', 'other' => ['password' => 'hunter2']], 'allow');
 
         expect($result['password'])->toBe('changeme')
             ->and($result['other']['password'])->toBe('[REDACTED]');
     });
 
-    it('lets an allowed value through a path rule', function () {
+    it('lets an allowed value through a path rule', function (): void {
         config()->set('redactor.profiles.allow.allowlist', ['support']);
 
-        $result = app(Redactor::class)->redact(['meta' => ['contact' => 'support']], 'allow');
+        $result = resolve(Redactor::class)->redact(['meta' => ['contact' => 'support']], 'allow');
 
         expect($result['meta']['contact'])->toBe('support');
     });
 
-    it('lets an allowed value through the entropy detector', function () {
+    it('lets an allowed value through the entropy detector', function (): void {
         config()->set('redactor.profiles.allow.allowlist', ['Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf']);
 
-        expect(app(Redactor::class)->redact('key Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf ok', 'allow'))
+        expect(resolve(Redactor::class)->redact('key Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf ok', 'allow'))
             ->toBe('key Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf ok');
     });
 
-    it('does not report an allowed value as a finding', function () {
-        $result = app(Redactor::class)->redactWithMetadata('noreply@example.com', 'allow');
+    it('does not report an allowed value as a finding', function (): void {
+        $result = resolve(Redactor::class)->inspect('noreply@example.com', 'allow');
 
         expect($result->wasRedacted)->toBeFalse()
             ->and($result->findings)->toBe([]);
     });
 
-    it('never lets an unevaluatable regex entry allow anything', function () {
+    it('never lets an unevaluatable regex entry allow anything', function (): void {
         $list = AllowList::for(['/^\p{L}+$/u']);
 
         expect($list->allows("\xff\xfe"))->toBeFalse();
     });
 
-    it('treats a string that merely starts with a slash as a literal', function () {
+    it('treats a string that merely starts with a slash as a literal', function (): void {
         $list = AllowList::for(['/var/log/app.log']);
 
         expect($list->allows('/var/log/app.log'))->toBeTrue()
@@ -96,8 +96,8 @@ describe('Profile allowlist', function () {
     });
 });
 
-describe('Per-rule allow', function () {
-    it('scopes the exception to the rule that declares it', function () {
+describe('Per-rule allow', function (): void {
+    it('scopes the exception to the rule that declares it', function (): void {
         config()->set('redactor.profiles.allow', allowProfile([
             'allowlist' => [],
             'patterns' => [
@@ -110,13 +110,13 @@ describe('Per-rule allow', function () {
             'shannon_entropy' => ['enabled' => false],
         ]));
 
-        expect(app(Redactor::class)->redact('bob@example.com bob@customer.com tok_abc', 'allow'))
+        expect(resolve(Redactor::class)->redact('bob@example.com bob@customer.com tok_abc', 'allow'))
             ->toBe('bob@example.com [REDACTED] [REDACTED]');
     });
 });
 
-describe('Dictionary rules', function () {
-    it('redacts any listed word, longest first, case-insensitively', function () {
+describe('Dictionary rules', function (): void {
+    it('redacts any listed word, longest first, case-insensitively', function (): void {
         config()->set('redactor.profiles.allow', allowProfile([
             'allowlist' => [],
             'patterns' => [
@@ -125,31 +125,31 @@ describe('Dictionary rules', function () {
             'shannon_entropy' => ['enabled' => false],
         ]));
 
-        expect(app(Redactor::class)->redact('status of project falcon and ORION', 'allow'))
+        expect(resolve(Redactor::class)->redact('status of project falcon and ORION', 'allow'))
             ->toBe('status of [REDACTED] and [REDACTED]');
     });
 
-    it('does not match inside a longer word', function () {
+    it('does not match inside a longer word', function (): void {
         config()->set('redactor.profiles.allow', allowProfile([
             'allowlist' => [],
             'patterns' => ['codenames' => ['words' => ['Orion']]],
             'shannon_entropy' => ['enabled' => false],
         ]));
 
-        expect(app(Redactor::class)->redact('Orionids are meteors', 'allow'))->toBe('Orionids are meteors');
+        expect(resolve(Redactor::class)->redact('Orionids are meteors', 'allow'))->toBe('Orionids are meteors');
     });
 
-    it('rejects an empty word list', function () {
+    it('rejects an empty word list', function (): void {
         config()->set('redactor.profiles.allow', allowProfile([
             'patterns' => ['codenames' => ['words' => []]],
         ]));
 
-        app(Redactor::class)->redact('x', 'allow');
+        resolve(Redactor::class)->redact('x', 'allow');
     })->throws(\InvalidArgumentException::class, 'words');
 });
 
-describe('Entropy tokenising stays flat in memory', function () {
-    it('holds only tokens long enough to qualify', function () {
+describe('Entropy tokenising stays flat in memory', function (): void {
+    it('holds only tokens long enough to qualify', function (): void {
         config()->set('redactor.profiles.allow', allowProfile([
             'patterns' => [],
             'blocked_keys' => [],
@@ -157,7 +157,7 @@ describe('Entropy tokenising stays flat in memory', function () {
         ]));
 
         $subject = str_repeat('lorem ipsum dolor sit amet consectetur ', 25_000); // ~1 MB of short words
-        $redactor = app(Redactor::class);
+        $redactor = resolve(Redactor::class);
         $redactor->redact('warm up', 'allow');
 
         memory_reset_peak_usage();

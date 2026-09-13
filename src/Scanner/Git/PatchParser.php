@@ -64,7 +64,7 @@ class PatchParser
             $target = substr($raw, 4);
 
             // A deleted file has nothing to scan...
-            $this->path = $target === '/dev/null' ? null : self::unquote($target);
+            $this->path = $target === '/dev/null' ? null : $this->unquote($target);
 
             return;
         }
@@ -115,7 +115,7 @@ class PatchParser
     /**
      * Strip the a/ or b/ prefix and undo git's C-style quoting.
      */
-    private static function unquote(string $target): string
+    private function unquote(string $target): string
     {
         if (str_starts_with($target, '"') && str_ends_with($target, '"')) {
             $target = stripcslashes(substr($target, 1, -1));
