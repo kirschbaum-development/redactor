@@ -298,6 +298,25 @@ rules need twenty or more, so this retires most of the list on most values.
 The number must never exceed the true minimum or the rule misses real
 matches; when in doubt leave it out. Every shipped rule declares one.
 
+### Samples
+
+A rule can carry the texts it exists to catch, and texts it must leave alone:
+
+```php
+'order_ref' => [
+    'pattern'         => '/\bORD-\d{6}\b/',
+    'samples'         => ['ref ORD-123456'],
+    'counter_samples' => ['ORD-12', 'ORDER-123456'],
+],
+```
+
+`redactor:validate` runs every sample through the real detection path, with
+the rule's keywords, minimum length, validator and allow-list applied, and
+fails the deploy when a rule no longer detects a sample or detects a
+counter-sample. A regex edit that quietly stops matching the thing it was
+written for then fails CI instead of an audit. Every shipped rule carries
+both.
+
 ### Dictionary rules
 
 A rule can be a list of words instead of a regex. Product codenames, internal
@@ -1140,6 +1159,13 @@ file.
 ```php
 $stripe = 'sk_test_4eC39HqLyjWDarjtT1zdp7dc'; // redactor:allow - Stripe's public test key
 ```
+
+### Ruleset fingerprint
+
+Every scan reports a short fingerprint of the rules it ran: in JSON, in SARIF
+under the tool's properties, and in the baseline it writes. Two runs with the
+same fingerprint are comparable; a baseline generated under a different one is
+warned about, since what it accepted may no longer mean the same thing.
 
 ### Baselines
 
