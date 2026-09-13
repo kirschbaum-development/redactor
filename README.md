@@ -912,6 +912,32 @@ $profiles = Redactor::getAvailableProfiles();
 $exists = Redactor::profileExists('custom_profile');
 ```
 
+## Where Else To Use It
+
+The Monolog tap covers the log channel. The same call covers everything else
+an application emits:
+
+```php
+// A queued export, on a profile that pseudonymises
+ExportRow::create(Redactor::redact($user->toArray(), 'observability'));
+
+// A support transcript before it reaches a third party
+$client->createTicket(Redactor::redact($conversation, 'strict'));
+
+// The prompt sent to a language model
+$prompt = Redactor::redact($userMessage, 'observability');
+
+// An error reporter's outgoing payload, in whichever hook it offers
+$reporter->beforeSend(fn (array $event) => Redactor::redactSafely($event, 'strict'));
+
+// A debug endpoint
+return response()->json(Redactor::redact($state, 'performance'));
+```
+
+`redactSafely()` never throws and fails closed, which is what a hook inside
+someone else's error path needs. Every path above accepts a profile name, so
+the same value can be pseudonymised on one channel and removed on another.
+
 ## Built-in Profiles
 
 - **`default`**: Balanced redaction for general logging and debugging
@@ -1095,6 +1121,10 @@ composer lint           # Pint + PHPStan (level 10, no baseline)
 composer mutate         # mutation testing (Pest); local only, not run in CI
 composer preflight      # everything CI runs
 ```
+
+Coverage and mutation testing need a coverage driver (pcov or Xdebug) loaded
+in the CLI; without one Pest reports no coverage and generates no mutations.
+Both scripts raise the memory limit, which the coverage report needs.
 
 ## Roadmap
 

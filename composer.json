@@ -97,10 +97,10 @@
         ],
         "test-coverage": [
             "@clear",
-            "@php vendor/bin/pest --coverage --min=90"
+            "@php -d memory_limit=2G vendor/bin/pest --coverage --min=90"
         ],
         "mutate": [
-            "@php vendor/bin/pest --mutate --everything --covered-only"
+            "@php -d memory_limit=2G vendor/bin/pest --mutate --everything --covered-only"
         ]
     }
 }
