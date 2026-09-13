@@ -59,6 +59,13 @@ All notable changes to this project will be documented in this file.
   value before its pattern is tried. A prefilter for cost - `['@']` keeps the
   email regex off almost every string in a payload - and for precision, so a
   bare ten-digit run needs a `phone` label somewhere before it is believed.
+- **Allow-lists.** A profile `allowlist` of literals and regexes that are
+  never findings whichever detector reports them, and a per-rule `allow` list
+  scoped to one rule. Checked after detection, so patterns stay as strong as
+  written. An entry that cannot be evaluated allows nothing.
+- **Dictionary rules.** A pattern can be a `words` list - codenames, customer
+  names, anything no regex expresses - compiled into one whole-word,
+  case-insensitive alternation, longest first.
 - **`Detector` contract.** Anything that can report `Detection`s against a
   string - a regex, an entropy measure, a recogniser model in another process
   - plugs into the same resolution and operator pipeline.
@@ -85,6 +92,10 @@ All notable changes to this project will be documented in this file.
   payload that redacts to nothing costs a walk and no copy.
 - Net effect: the default profile went from ~17,600 to ~26,800 redactions/sec,
   and a 2.2KB file-scan subject from ~8,200 to ~26,300.
+- The entropy detector asks PCRE for tokens of at least `min_length` rather
+  than every token, since shorter ones can never qualify. A 1 MB subject of
+  ordinary words held ~180,000 [token, offset] pairs - ten times the input -
+  and now holds none.
 - Resolved profiles are cached and invalidated by comparing the raw config, so
   `fromConfig()` no longer revalidates every pattern and recompiles the path
   trie on every redaction: 0.2285ms -> 0.0011ms for a profile with 200 path

@@ -282,6 +282,43 @@ number in a value that says `phone` and a Unix timestamp almost everywhere
 else, and a keyword lets the rule ask for the label without a regex that has to
 know where the label sits.
 
+### Dictionary rules
+
+A rule can be a list of words instead of a regex. Product codenames, internal
+project names, a customer list: things no pattern can express and no model
+would know.
+
+```php
+'codenames' => ['words' => ['Project Falcon', 'Orion'], 'entity' => 'codename'],
+```
+
+Words are matched whole and case-insensitively, longest first, so `Project
+Falcon` is one finding rather than two and `Orionids` is left alone.
+
+### Allow-lists
+
+Some values look sensitive and are known not to be: the support address on
+every page, the sandbox card in every fixture, the example key in the docs.
+List them rather than weakening the pattern that finds them:
+
+```php
+'allowlist' => [
+    'noreply@example.com',          // a literal, compared case-insensitively
+    '/^test-\d+@example\.com$/',    // or a regex
+],
+```
+
+The allow-list is checked after detection, whichever detector reported the
+value - a pattern, entropy, a blocked key or a path rule - so the rules stay as
+strong as they were written and an allowed value is simply not a finding. A
+regex entry that cannot be evaluated allows nothing.
+
+A rule can carry its own exceptions, scoped to that rule alone:
+
+```php
+'email' => ['pattern' => EMAIL, 'allow' => ['/@example\.com$/']],
+```
+
 ## Path Rules
 
 A path says exactly where a value lives. Every other rule in this package is
