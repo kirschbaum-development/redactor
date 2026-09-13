@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor;
 
+use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
 use Kirschbaum\Redactor\Config\ConfigValue;
 use Kirschbaum\Redactor\Console\Commands\RedactorScanCommand;
 use Kirschbaum\Redactor\Console\Commands\RedactorValidateCommand;
+use Kirschbaum\Redactor\Http\Middleware\RedactResponse;
 use Kirschbaum\Redactor\Scanner\LineWindowReader;
 use Kirschbaum\Redactor\Scanner\Scanner;
 
@@ -50,6 +52,13 @@ class RedactorServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Route::get(...)->middleware('redact:observability')
+        if ($this->app->bound('router')) {
+            /** @var Router $router */
+            $router = $this->app->make('router');
+            $router->aliasMiddleware('redact', RedactResponse::class);
+        }
+
         $this->publishes([
             __DIR__.'/../config/redactor.php' => config_path('redactor.php'),
         ], 'redactor-config');
