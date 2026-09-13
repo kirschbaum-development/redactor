@@ -16,6 +16,17 @@ class Scanner
      */
     private const EXCERPT_LIMIT = 200;
 
+    /**
+     * A marker on the same line that suppresses the finding.
+     *
+     *     $key = 'sk_test_4eC39HqLyjWDarjtT1zdp7dc'; // redactor:allow
+     *
+     * For the fixture, the documented example, the sandbox credential - the
+     * things a baseline would also accept, except that the reason travels with
+     * the code instead of living in a JSON file nobody reads.
+     */
+    public const ALLOW_MARKER = 'redactor:allow';
+
     public function __construct(
         protected Redactor $redactor,
         protected int $windowLines = LineWindowReader::DEFAULT_WINDOW_LINES,
@@ -152,12 +163,17 @@ class Scanner
         // redacted output corresponds to line N of the input - which is what
         // lets the excerpt come from the redacted text.
         $redactedLines = is_string($redacted) ? explode("\n", $redacted) : [];
+        $originalLines = str_contains($original, self::ALLOW_MARKER) ? explode("\n", $original) : null;
 
         $findings = [];
 
         foreach ($matches as $match) {
             $line = self::lineForOffset($lineStarts, $match->offset);
             $column = $match->offset - $lineStarts[$line - 1] + 1;
+
+            if ($originalLines !== null && str_contains($originalLines[$line - 1] ?? '', self::ALLOW_MARKER)) {
+                continue;
+            }
 
             $findings[] = new ScanFinding(
                 path: $path,
