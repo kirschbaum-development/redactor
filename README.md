@@ -1028,6 +1028,17 @@ secrets they report:
 
 Findings are ranked by severity, so the certain ones are read first.
 
+### Looking through encodings
+
+A secret in a repository is often not written plainly. A credential URL in a
+JSON file reads `https:\/\/user:pass@host`, a key in a Kubernetes secret is
+base64, a token in a query string is percent-encoded. The scanner decodes
+those, one layer deep, and scans what comes out; a finding says which encoding
+hid it and its excerpt is taken from the decoded, redacted text. Switch it off
+with `REDACTOR_SCAN_DECODE=false`. Redaction of live payloads does not decode:
+that is a cost on every log line for a case the scanner is the right place to
+catch.
+
 ### Scanning changes, not files
 
 A gate on commits cares about what is being added, not what was already

@@ -92,6 +92,10 @@ All notable changes to this project will be documented in this file.
   numbers, with the commit that added them for history. A secret removed by a
   later commit is still found. Paths given with a git mode act as a pathspec;
   exclude patterns still apply.
+- **Decoding in the scanner.** Base64 tokens, percent-encoded runs and
+  JSON-escaped lines are decoded one layer deep and scanned; a finding names
+  the encoding and its excerpt comes from the decoded, redacted text.
+  `scan.decode` switches it off.
 - **JUnit output** (`--output=junit`), a publishable pre-commit hook and a
   GitHub workflow (`vendor:publish --tag=redactor-ci`) that scans pull
   requests over their base and uploads SARIF.
