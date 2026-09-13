@@ -101,7 +101,7 @@ class Redactor
      * Preferred over redact() when you need to know whether anything matched:
      * the metadata is kept out of the payload rather than written into it.
      */
-    public function redactWithMetadata(mixed $content, ?string $profile = null): RedactionResult
+    public function redactWithMetadata(mixed $content, ?string $profile = null, ?bool $mark = null): RedactionResult
     {
         $config = RedactorConfig::fromConfig($profile);
 
@@ -116,7 +116,9 @@ class Redactor
 
         $redactedKeys = $context->getRedactedKeys();
 
-        if (is_array($redactedContent) && $context->hasRedactions() && $config->markRedacted) {
+        // $mark overrides the profile: a response or an export has consumers
+        // who did not ask for the redactor's bookkeeping in their payload.
+        if (is_array($redactedContent) && $context->hasRedactions() && ($mark ?? $config->markRedacted)) {
             $redactedContent = $this->markResultArray($redactedContent, $redactedKeys, $config);
         }
 
@@ -473,6 +475,12 @@ class Redactor
             $context->recordRedaction($key, 'path:'.$match->pattern);
 
             return self::REMOVE_MARKER;
+        }
+
+        if ($spec->name === OperatorRegistry::NULLIFY) {
+            $context->recordRedaction($key, 'path:'.$match->pattern);
+
+            return null;
         }
 
         if (! is_scalar($value)) {

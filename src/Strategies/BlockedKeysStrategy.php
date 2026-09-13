@@ -6,6 +6,7 @@ namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
+use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\RedactionContext;
 
 /**
@@ -37,16 +38,9 @@ class BlockedKeysStrategy implements RedactionStrategyInterface
 
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
-        // Containers, booleans and nulls have no text an operator could act
-        // on: masking an array or pseudonymising `true` means nothing. They
-        // collapse to the replacement string as they always did.
-        if (! is_string($value) && ! is_int($value) && ! is_float($value)) {
-            $context->recordRedaction($key, 'blocked_key');
+        $scalar = is_string($value) || is_int($value) || is_float($value);
 
-            return $context->config->replacement;
-        }
-
-        if ($context->isAllowed((string) $value)) {
+        if ($scalar && $context->isAllowed((string) $value)) {
             return $value;
         }
 
@@ -54,10 +48,27 @@ class BlockedKeysStrategy implements RedactionStrategyInterface
             entity: strtolower($key),
             rule: 'blocked_key',
             offset: 0,
-            value: (string) $value,
+            value: $scalar ? (string) $value : '',
             confidence: self::$certain ??= Confidence::of(Confidence::CERTAIN, 'the key is in blocked_keys'),
             key: $key,
         );
+
+        // Nullify keeps the key and drops the value, whatever the value was:
+        // it is the operator for a typed field that must stay a field.
+        if ($context->operatorSpecFor($detection)->name === OperatorRegistry::NULLIFY) {
+            $context->recordDetection($detection);
+
+            return null;
+        }
+
+        // Containers, booleans and nulls have no text an operator could act
+        // on: masking an array or pseudonymising `true` means nothing. They
+        // collapse to the replacement string as they always did.
+        if (! $scalar) {
+            $context->recordRedaction($key, 'blocked_key');
+
+            return $context->config->replacement;
+        }
 
         $context->recordDetection($detection);
 

@@ -30,6 +30,8 @@ final class OperatorRegistry
 
     public const SURROGATE = 'surrogate';
 
+    public const NULLIFY = 'nullify';
+
     /** @var array<string, Operator> */
     private array $operators;
 
@@ -43,6 +45,7 @@ final class OperatorRegistry
             self::PRESERVE => new PreserveOperator,
             self::HASH => new HashOperator,
             self::SURROGATE => new SurrogateOperator($surrogates ?? new SurrogateFactory),
+            self::NULLIFY => new NullifyOperator,
         ];
     }
 

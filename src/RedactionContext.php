@@ -183,6 +183,18 @@ class RedactionContext
     }
 
     /**
+     * The operator the policy chooses for a detection, without applying it.
+     *
+     * For the whole-value sites - a blocked key, a path rule - where `remove`
+     * and `nullify` change the record rather than the text and have to be
+     * acted on by the walk itself.
+     */
+    public function operatorSpecFor(Detection $detection, ?OperatorSpec $atLocation = null): OperatorSpec
+    {
+        return $this->config->policy->operatorFor($detection, $atLocation);
+    }
+
+    /**
      * Whether a detection clears the profile's confidence floor.
      */
     public function accepts(Detection $detection): bool

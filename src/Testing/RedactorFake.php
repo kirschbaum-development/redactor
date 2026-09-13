@@ -26,9 +26,9 @@ class RedactorFake extends Redactor
      */
     protected array $calls = [];
 
-    public function redactWithMetadata(mixed $content, ?string $profile = null): RedactionResult
+    public function redactWithMetadata(mixed $content, ?string $profile = null, ?bool $mark = null): RedactionResult
     {
-        $result = parent::redactWithMetadata($content, $profile);
+        $result = parent::redactWithMetadata($content, $profile, $mark);
 
         $this->calls[] = ['profile' => $profile, 'input' => $content, 'result' => $result];
 
