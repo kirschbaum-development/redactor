@@ -138,10 +138,14 @@ readonly class RedactorConfig
             throw new \InvalidArgumentException("Invalid configuration for profile '".$profile."'.");
         }
 
-        // The global pseudonymization block is folded into every profile, so
-        // a change to it must rebuild the profile too - a rotated salt that
-        // did not take effect would keep old and new logs joinable.
-        $shared = ConfigValue::map(Config::get('redactor.pseudonymization', []), 'pseudonymization');
+        // Settings read from outside the profile are folded into it at build
+        // time, so a change to any of them must rebuild the profile too: a
+        // rotated salt that did not take effect would keep old and new logs
+        // joinable, and a rotated APP_KEY would go unredacted.
+        $shared = [
+            'pseudonymization' => ConfigValue::map(Config::get('redactor.pseudonymization', []), 'pseudonymization'),
+            'known_secrets' => self::knownSecretSources($config['known_secrets'] ?? []),
+        ];
 
         $cached = ProfileCache::get($profile, $config, $shared);
 
@@ -256,6 +260,29 @@ readonly class RedactorConfig
         }
 
         return $registry;
+    }
+
+    /**
+     * The current values behind the profile's known-secret config keys, so the
+     * cache can tell when one of them changes.
+     *
+     * @return array<string, mixed>
+     */
+    private static function knownSecretSources(mixed $settings): array
+    {
+        if (! is_array($settings) || ! isset($settings['config']) || ! is_array($settings['config'])) {
+            return [];
+        }
+
+        $sources = [];
+
+        foreach ($settings['config'] as $key) {
+            if (is_string($key)) {
+                $sources[$key] = Config::get($key);
+            }
+        }
+
+        return $sources;
     }
 
     private static function registerLeaves(SecretRegistry $registry, mixed $value): void
