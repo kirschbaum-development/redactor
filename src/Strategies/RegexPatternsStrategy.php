@@ -66,14 +66,14 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, RedactionStr
         $lowered = null;
         $length = strlen($subject);
 
-        foreach ($context->config->patterns as $rule) {
+        foreach ($context->config->patternsByLength as [$rule, $priority]) {
             // The cheapest test first: a rule whose shortest possible match is
-            // longer than the whole subject cannot match it. Most values in a
-            // log payload are a few bytes, and most credential rules need
-            // twenty or more, so this one integer compare retires most of
-            // the rule list before PCRE is involved at all.
+            // longer than the whole subject cannot match it, and neither can
+            // any rule after it in this order. Most values in a log payload
+            // are a few bytes and most credential rules need twenty or more,
+            // so this retires most of the list before PCRE is involved.
             if ($rule->minLength > $length) {
-                continue;
+                break;
             }
 
             // A rule that names keywords only runs on a subject containing one.
@@ -103,7 +103,7 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, RedactionStr
 
             $found = $any === false || preg_last_error() !== PREG_NO_ERROR
                 ? null
-                : $this->detectRule($rule, $subject, $key);
+                : $this->detectRule($rule, $subject, $key, $priority);
 
             if ($found === null) {
                 // The engine gave up partway through. Emitting a partially
@@ -135,7 +135,7 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, RedactionStr
      *
      * @return array<int, Detection>|null
      */
-    private function detectRule(PatternRule $rule, string $subject, string $key): ?array
+    private function detectRule(PatternRule $rule, string $subject, string $key, int $priority): ?array
     {
         $found = @preg_match_all($rule->pattern, $subject, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
 
@@ -174,6 +174,7 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, RedactionStr
                     confidence: $confidence,
                     key: $key,
                     operator: $operator,
+                    priority: $priority,
                 )];
             }
 
@@ -185,6 +186,7 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, RedactionStr
                 confidence: $confidence,
                 key: $key,
                 operator: $operator,
+                priority: $priority,
             );
         }
 

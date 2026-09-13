@@ -21,11 +21,11 @@ final class DetectionSet
      *
      * Of two overlapping reports the higher score wins: a Luhn-validated card
      * outranks the bare digit run that also matched it. On an equal score the
-     * one reported first wins, which is the rule listed first in the profile -
-     * so `url_with_auth` declared ahead of `email` takes the password out of
-     * `https://user:pass@host` and leaves the host, exactly as the config
-     * comments promise. Length is deliberately not a criterion: it would let a
-     * greedy general rule swallow the precise one beside it.
+     * rule declared first wins - so `url_with_auth` listed ahead of `email`
+     * takes the password out of `https://user:pass@host` and leaves the host,
+     * exactly as the config comments promise - and failing that, the report
+     * that arrived first. Length is deliberately not a criterion: it would let
+     * a greedy general rule swallow the precise one beside it.
      *
      * @param  array<int, Detection>  $detections
      * @return array<int, Detection> non-overlapping, ordered by offset
@@ -52,7 +52,9 @@ final class DetectionSet
                 }
 
                 $otherWins = $other->confidence->score > $candidate->confidence->score
-                    || ($other->confidence->score === $candidate->confidence->score && $j < $i);
+                    || ($other->confidence->score === $candidate->confidence->score
+                        && ($other->priority < $candidate->priority
+                            || ($other->priority === $candidate->priority && $j < $i)));
 
                 if ($otherWins) {
                     $beaten = true;

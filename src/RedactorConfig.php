@@ -52,6 +52,26 @@ readonly class RedactorConfig
     public KeyMatcher $blockedKeyMatcher;
 
     /**
+     * The pattern rules ordered by min_length, shortest first, each paired
+     * with its declared position.
+     *
+     * Lets the regex strategy stop at the first rule too long to match the
+     * subject instead of testing every rule's minimum. Declared order still
+     * decides an equal-score overlap, through the priority on each detection.
+     *
+     * @var array<int, array{0: PatternRule, 1: int}>
+     */
+    public array $patternsByLength;
+
+    /**
+     * A number unique to this built profile, changing on every rebuild.
+     *
+     * Anything cached against a profile - the strategy chain, say - can key on
+     * it and be sure a rebuilt profile is never served a stale derivative.
+     */
+    public int $buildId;
+
+    /**
      * Values that are never redacted, whichever detector reports them.
      *
      * Checked after detection rather than instead of it, so a finding for an
@@ -116,6 +136,18 @@ readonly class RedactorConfig
         $this->safeKeyMatcher = KeyMatcher::for($this->safeKeys);
         $this->blockedKeyMatcher = KeyMatcher::for($this->blockedKeys);
         $this->allowlist = $allowlist ?? AllowList::none();
+        $this->buildId = ProfileCache::nextBuildId();
+
+        $ordered = [];
+        $position = 0;
+
+        foreach ($this->patterns as $rule) {
+            $ordered[] = [$rule, $position++];
+        }
+
+        usort($ordered, fn (array $a, array $b) => $a[0]->minLength <=> $b[0]->minLength ?: $a[1] <=> $b[1]);
+
+        $this->patternsByLength = $ordered;
     }
 
     /**

@@ -49,6 +49,14 @@ final readonly class Detection
          * operator policy says. A surrogate of "we do not know" is meaningless.
          */
         public bool $failClosed = false,
+        /**
+         * Where the finding rule sits in the profile's declared order.
+         *
+         * Settles an equal-score overlap: the rule listed first wins. Carried
+         * on the detection so detectors are free to evaluate rules in
+         * whatever order is cheapest without changing the outcome.
+         */
+        public int $priority = PHP_INT_MAX,
     ) {}
 
     public function length(): int
@@ -72,6 +80,7 @@ final readonly class Detection
             key: $this->key,
             operator: $this->operator,
             failClosed: $this->failClosed,
+            priority: $this->priority,
         );
     }
 

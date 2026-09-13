@@ -26,6 +26,17 @@ final class ProfileCache
     /** @var array<string, array{raw: array<mixed>, shared: array<mixed>, built: RedactorConfig}> */
     private static array $entries = [];
 
+    private static int $builds = 0;
+
+    /**
+     * A number no previously built profile has had. RedactorConfig is a
+     * readonly class and cannot hold the counter itself.
+     */
+    public static function nextBuildId(): int
+    {
+        return ++self::$builds;
+    }
+
     /**
      * @param  array<mixed>  $raw  the profile's own config
      * @param  array<mixed>  $shared  package-level settings the profile was built with
