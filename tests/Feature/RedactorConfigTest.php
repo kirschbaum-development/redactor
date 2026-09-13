@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Kirschbaum\Redactor\Exceptions\ConfigurationException;
+use Kirschbaum\Redactor\Exceptions\ProfileNotFoundException;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
@@ -183,7 +185,7 @@ describe('RedactorConfig DTO Tests', function () {
         config()->set('redactor.profiles', []); // Empty profiles
 
         expect(fn () => RedactorConfig::fromConfig('non_existent'))
-            ->toThrow(\InvalidArgumentException::class, "Redaction profile 'non_existent' not found in configuration.");
+            ->toThrow(ProfileNotFoundException::class, 'Redaction profile [non_existent] is not configured.');
     });
 
     it('can list available profiles', function () {
@@ -219,7 +221,7 @@ describe('RedactorConfig DTO Tests', function () {
 
         expect(function () {
             RedactorConfig::fromConfig('invalid_profile');
-        })->toThrow(\InvalidArgumentException::class, "Invalid configuration for profile 'invalid_profile'");
+        })->toThrow(ConfigurationException::class, 'Redaction profile [invalid_profile] must be an array.');
     });
 
     it('rejects zero and negative max_value_length', function () {

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Scanner\Git;
 
-use RuntimeException;
+use Kirschbaum\Redactor\Exceptions\GitException;
 use Symfony\Component\Process\Process;
 
 /**
@@ -100,7 +100,7 @@ class GitRepository
         $process->run();
 
         if (! $process->isSuccessful()) {
-            throw new RuntimeException(sprintf(
+            throw new GitException(sprintf(
                 'git %s failed: %s',
                 $arguments[0],
                 trim($process->getErrorOutput()) ?: 'exit code '.$process->getExitCode()

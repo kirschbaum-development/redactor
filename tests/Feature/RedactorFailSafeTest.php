@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\Log;
-use Kirschbaum\Redactor\Logging\ReadactFormatter;
+use Kirschbaum\Redactor\Exceptions\ProfileNotFoundException;
+use Kirschbaum\Redactor\Logging\RedactorFormatter;
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
-use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Monolog\DateTimeImmutable;
 use Monolog\Level;
@@ -18,7 +19,7 @@ use Monolog\LogRecord;
 /**
  * A strategy that fails on the exact value it is meant to protect.
  */
-class ExplodingStrategy implements RedactionStrategyInterface
+class ExplodingStrategy implements Strategy
 {
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
@@ -46,7 +47,7 @@ function record(string $message, array $context = []): LogRecord
 describe('Fail-safe redaction', function () {
     it('throws from redact() so direct callers learn about a bad profile', function () {
         expect(fn () => app(Redactor::class)->redact(['a' => 1], 'does_not_exist'))
-            ->toThrow(\InvalidArgumentException::class, "Redaction profile 'does_not_exist' not found");
+            ->toThrow(ProfileNotFoundException::class, 'Redaction profile [does_not_exist] is not configured.');
     });
 
     it('does not throw from redactSafely() for an unknown profile', function () {
@@ -117,7 +118,7 @@ describe('Fail-safe redaction', function () {
     it('keeps the log channel alive when the configured profile is broken', function () {
         config()->set('redactor.default_profile', 'missing_profile');
 
-        $formatter = new ReadactFormatter;
+        $formatter = new RedactorFormatter;
 
         // Previously this propagated InvalidArgumentException out of Monolog and
         // killed every subsequent write to the channel.

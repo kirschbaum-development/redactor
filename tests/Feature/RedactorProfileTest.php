@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Kirschbaum\Redactor\Exceptions\ProfileNotFoundException;
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
-use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 
 describe('Redactor Profile Tests', function () {
@@ -139,7 +140,7 @@ describe('Redactor Profile Tests', function () {
         $redactor = new Redactor;
 
         expect(fn () => $redactor->redact(['test' => 'data'], 'non_existent'))
-            ->toThrow(\InvalidArgumentException::class, "Redaction profile 'non_existent' not found in configuration.");
+            ->toThrow(ProfileNotFoundException::class, 'Redaction profile [non_existent] is not configured.');
     });
 
     test('it can list available profiles', function () {
@@ -185,7 +186,7 @@ describe('Redactor Profile Tests', function () {
     test('it can register custom strategies', function () {
         $redactor = new Redactor;
 
-        $customStrategy = new class implements RedactionStrategyInterface
+        $customStrategy = new class implements Strategy
         {
             public function getPriority(): int
             {

@@ -6,6 +6,8 @@ namespace Kirschbaum\Redactor;
 
 use Kirschbaum\Redactor\Config\ConfigValue;
 use Kirschbaum\Redactor\Config\ProfileCache;
+use Kirschbaum\Redactor\Exceptions\ConfigurationException;
+use Kirschbaum\Redactor\Exceptions\ProfileNotFoundException;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\Operators\OperatorSpec;
 use Kirschbaum\Redactor\Operators\RedactionPolicy;
@@ -171,13 +173,13 @@ readonly class RedactorConfig
         $profiles = config('redactor.profiles', []);
 
         if (! is_array($profiles) || ! isset($profiles[$profile])) {
-            throw new \InvalidArgumentException("Redaction profile '".$profile."' not found in configuration.");
+            throw ProfileNotFoundException::named($profile);
         }
 
         $config = $profiles[$profile];
 
         if (! is_array($config)) {
-            throw new \InvalidArgumentException("Invalid configuration for profile '".$profile."'.");
+            throw new ConfigurationException("Redaction profile [{$profile}] must be an array.");
         }
 
         // Settings read from outside the profile are folded into it at build
@@ -402,7 +404,7 @@ readonly class RedactorConfig
         $floor = ConfigValue::float($value, 0.0, $path);
 
         if ($floor < 0.0 || $floor > 1.0) {
-            throw new \InvalidArgumentException(sprintf(
+            throw new ConfigurationException(sprintf(
                 'Redactor config [%s] must be between 0 and 1, got %s.',
                 $path,
                 (string) $floor

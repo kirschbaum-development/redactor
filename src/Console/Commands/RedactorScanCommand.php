@@ -8,6 +8,8 @@ use Illuminate\Console\Command;
 use Illuminate\Container\Container;
 use Illuminate\Support\Collection;
 use Kirschbaum\Redactor\Config\ConfigValue;
+use Kirschbaum\Redactor\Exceptions\ConfigurationException;
+use Kirschbaum\Redactor\Exceptions\GitException;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Scanner\Baseline;
 use Kirschbaum\Redactor\Scanner\FileCollector;
@@ -94,7 +96,7 @@ class RedactorScanCommand extends Command
 
         try {
             $ruleset = RedactorConfig::fromConfig($profile)->rulesetFingerprint;
-        } catch (\InvalidArgumentException $e) {
+        } catch (ConfigurationException $e) {
             $this->components->error($e->getMessage());
 
             return Command::FAILURE;
@@ -165,7 +167,7 @@ class RedactorScanCommand extends Command
         if ($gitMode !== null) {
             try {
                 $patches = $this->collectPatches($gitMode, $this->argument('paths'), $ignorePatterns);
-            } catch (\RuntimeException $e) {
+            } catch (GitException $e) {
                 $this->components->error($e->getMessage());
 
                 return Command::FAILURE;
@@ -256,7 +258,7 @@ class RedactorScanCommand extends Command
         $git = new GitRepository(base_path());
 
         if (! $git->isRepository()) {
-            throw new \RuntimeException(base_path().' is not inside a git repository.');
+            throw new GitException('['.base_path().'] is not inside a git repository.');
         }
 
         $patches = match (true) {

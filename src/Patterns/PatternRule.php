@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Patterns;
 
-use InvalidArgumentException;
 use Kirschbaum\Redactor\Config\ConfigValue;
 use Kirschbaum\Redactor\Detection\Confidence;
+use Kirschbaum\Redactor\Exceptions\ConfigurationException;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\Operators\OperatorSpec;
 use Kirschbaum\Redactor\Support\AllowList;
@@ -214,7 +214,7 @@ final readonly class PatternRule
             ));
 
             if ($words === []) {
-                throw new InvalidArgumentException(sprintf(
+                throw new ConfigurationException(sprintf(
                     'Redactor config [%s] lists no words.',
                     $path
                 ));
@@ -228,7 +228,7 @@ final readonly class PatternRule
         }
 
         if (! is_string($pattern)) {
-            throw new InvalidArgumentException(sprintf(
+            throw new ConfigurationException(sprintf(
                 'Redactor config [%s] must define a "pattern" string or a "words" list.',
                 $path
             ));

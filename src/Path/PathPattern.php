@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Path;
 
-use InvalidArgumentException;
+use Kirschbaum\Redactor\Exceptions\ConfigurationException;
 
 /**
  * A location in a payload, expressed as a dotted path.
@@ -42,7 +42,7 @@ final readonly class PathPattern
         $normalised = self::normalise($pattern);
 
         if ($normalised === []) {
-            throw new InvalidArgumentException(sprintf(
+            throw new ConfigurationException(sprintf(
                 'Redactor path pattern [%s] is empty.',
                 $pattern
             ));

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Operators;
 
-use InvalidArgumentException;
+use Kirschbaum\Redactor\Exceptions\ConfigurationException;
 
 /**
  * A named operator plus its options, as configured.
@@ -37,7 +37,7 @@ final readonly class OperatorSpec
         }
 
         if (! is_array($definition) || $definition === []) {
-            throw new InvalidArgumentException(sprintf(
+            throw new ConfigurationException(sprintf(
                 'Redactor config [%s] must name an operator.',
                 $path
             ));
@@ -54,7 +54,7 @@ final readonly class OperatorSpec
         $name = array_key_first($definition);
 
         if (! is_string($name)) {
-            throw new InvalidArgumentException(sprintf(
+            throw new ConfigurationException(sprintf(
                 'Redactor config [%s] must name an operator.',
                 $path
             ));

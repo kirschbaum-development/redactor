@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Operators;
 
-use InvalidArgumentException;
+use Kirschbaum\Redactor\Exceptions\ConfigurationException;
 use Kirschbaum\Redactor\Operators\Surrogates\SurrogateFactory;
 
 /**
@@ -61,7 +61,7 @@ class OperatorRegistry
 
     public function get(string $name): Operator
     {
-        return $this->operators[$name] ?? throw new InvalidArgumentException(sprintf(
+        return $this->operators[$name] ?? throw new ConfigurationException(sprintf(
             'Unknown redaction operator [%s]. Available: %s.',
             $name,
             implode(', ', $this->names())

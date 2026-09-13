@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Support;
 
-use RuntimeException;
+use Kirschbaum\Redactor\Exceptions\PseudonymizationKeyException;
 
 /**
  * Turns a sensitive value into a stable stand-in.
@@ -33,7 +33,7 @@ class Pseudonymizer
     public static function fromKey(string $key, string $salt = ''): self
     {
         if (strlen($key) < self::MIN_KEY_BYTES) {
-            throw new RuntimeException(sprintf(
+            throw new PseudonymizationKeyException(sprintf(
                 'Redactor pseudonymization key must be at least %d bytes; got %d. '
                 .'Set redactor.pseudonymization.key, or leave it null to derive one from APP_KEY.',
                 self::MIN_KEY_BYTES,

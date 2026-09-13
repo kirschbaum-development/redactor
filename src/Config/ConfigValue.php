@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Config;
 
-use InvalidArgumentException;
+use Kirschbaum\Redactor\Exceptions\ConfigurationException;
 
 /**
  * Coercion helpers for profile configuration.
@@ -44,7 +44,7 @@ class ConfigValue
             }
         }
 
-        throw new InvalidArgumentException(sprintf(
+        throw new ConfigurationException(sprintf(
             'Redactor config [%s] must be a boolean, got %s.',
             $path,
             self::describe($value)
@@ -65,7 +65,7 @@ class ConfigValue
             return (string) $value;
         }
 
-        throw new InvalidArgumentException(sprintf(
+        throw new ConfigurationException(sprintf(
             'Redactor config [%s] must be a string, got %s.',
             $path,
             self::describe($value)
@@ -88,7 +88,7 @@ class ConfigValue
         $int = self::toInt($value, $path);
 
         if ($int <= 0) {
-            throw new InvalidArgumentException(sprintf(
+            throw new ConfigurationException(sprintf(
                 'Redactor config [%s] must be a positive integer or null, got %d.',
                 $path,
                 $int
@@ -117,7 +117,7 @@ class ConfigValue
             return (float) trim($value);
         }
 
-        throw new InvalidArgumentException(sprintf(
+        throw new ConfigurationException(sprintf(
             'Redactor config [%s] must be a number, got %s.',
             $path,
             self::describe($value)
@@ -132,7 +132,7 @@ class ConfigValue
         $string = self::string($value, $default, $path);
 
         if (! in_array($string, $allowed, true)) {
-            throw new InvalidArgumentException(sprintf(
+            throw new ConfigurationException(sprintf(
                 'Redactor config [%s] must be one of [%s], got "%s".',
                 $path,
                 implode(', ', $allowed),
@@ -153,7 +153,7 @@ class ConfigValue
         }
 
         if (! is_array($value)) {
-            throw new InvalidArgumentException(sprintf(
+            throw new ConfigurationException(sprintf(
                 'Redactor config [%s] must be an array, got %s.',
                 $path,
                 self::describe($value)
@@ -181,7 +181,7 @@ class ConfigValue
         }
 
         if (! is_array($value)) {
-            throw new InvalidArgumentException(sprintf(
+            throw new ConfigurationException(sprintf(
                 'Redactor config [%s] must be an array, got %s.',
                 $path,
                 self::describe($value)
@@ -217,7 +217,7 @@ class ConfigValue
             }
         }
 
-        throw new InvalidArgumentException(sprintf(
+        throw new ConfigurationException(sprintf(
             'Redactor config [%s] must be an integer, got %s.',
             $path,
             self::describe($value)
