@@ -14,6 +14,7 @@ use Kirschbaum\Redactor\Path\PathMatch;
 use Kirschbaum\Redactor\Recognition\Recognizer;
 use Kirschbaum\Redactor\Recognition\RecognizerRegistry;
 use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\ConditionalStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
 use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
@@ -217,7 +218,7 @@ class Redactor
             try {
                 $config = RedactorConfig::fromConfig($profile);
 
-                $strategies = $this->buildStrategiesForProfile($config);
+                $this->buildStrategiesForProfile($config);
 
                 $configured = array_values(array_filter($config->strategies, 'is_string'));
 
@@ -232,15 +233,15 @@ class Redactor
                     continue;
                 }
 
-                if (count($strategies) !== count($configured)) {
-                    $resolved = array_map(fn ($s) => get_class($s), $strategies);
+                // Resolved one by one rather than by comparing counts: a
+                // conditional strategy the profile has switched off is
+                // resolvable, it just stays out of the chain.
+                $unresolved = array_values(array_filter(
+                    $configured,
+                    fn (string $name) => $this->createStrategyInstance($name, $config) === null
+                ));
 
-                    $unresolved = array_values(array_filter(
-                        $configured,
-                        fn (string $name) => ! in_array($name, $resolved, true)
-                            && ! isset($this->customStrategies[$name])
-                    ));
-
+                if ($unresolved !== []) {
                     $errors[$profile] = 'Unresolvable strategies: '.implode(', ', $unresolved);
                 }
             } catch (\Throwable $e) {
@@ -259,11 +260,20 @@ class Redactor
     private function getStrategiesForProfile(RedactorConfig $config): array
     {
         // The redactor is a singleton, so the cache outlives any one call and
-        // must not go stale when a profile's strategy list changes underneath
-        // it. Keying on the resolved class list makes that impossible.
-        $cacheKey = $config->profile.'|'.implode(',', array_filter($config->strategies, 'is_string'));
+        // must not go stale when the profile changes underneath it. A built
+        // profile carries a number that changes on every rebuild, so keying
+        // on it makes a stale chain impossible - including one that left a
+        // conditional strategy out because the old profile had it off.
+        $cacheKey = $config->profile.'|'.$config->buildId;
 
         if (! isset($this->profileStrategies[$cacheKey])) {
+            // Drop chains built for earlier builds of the same profile.
+            foreach (array_keys($this->profileStrategies) as $key) {
+                if (str_starts_with($key, $config->profile.'|')) {
+                    unset($this->profileStrategies[$key]);
+                }
+            }
+
             $this->profileStrategies[$cacheKey] = $this->buildStrategiesForProfile($config);
         }
 
@@ -287,9 +297,17 @@ class Redactor
             }
             $strategy = $this->createStrategyInstance($strategyClass, $config);
 
-            if ($strategy !== null) {
-                $strategies[] = $strategy;
+            if ($strategy === null) {
+                continue;
             }
+
+            // A strategy that can see from the profile that it has nothing to
+            // do stays out of the chain, so it costs nothing per value.
+            if ($strategy instanceof ConditionalStrategy && ! $strategy->appliesTo($config)) {
+                continue;
+            }
+
+            $strategies[] = $strategy;
         }
 
         return $strategies;

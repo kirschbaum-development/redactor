@@ -13,6 +13,8 @@ use Kirschbaum\Redactor\Recognition\RecognizedSpan;
 use Kirschbaum\Redactor\Recognition\Recognizer;
 use Kirschbaum\Redactor\Recognition\Recognizers\PresidioRecognizer;
 use Kirschbaum\Redactor\RedactionContext;
+use Kirschbaum\Redactor\RedactorConfig;
+use Kirschbaum\Redactor\Strategies\Contracts\ConditionalStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Throwable;
@@ -38,9 +40,14 @@ use Throwable;
  * few failures not asked again for a while - the output is then rules-only,
  * which is what it would have been without this strategy at all.
  */
-class EntityRecognitionStrategy implements DetectingStrategy, Detector, RedactionStrategyInterface
+class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrategy, Detector, RedactionStrategyInterface
 {
     public const RULE = 'entity_recognition';
+
+    public function appliesTo(RedactorConfig $config): bool
+    {
+        return ($config->recognition['enabled'] ?? false) === true;
+    }
 
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {

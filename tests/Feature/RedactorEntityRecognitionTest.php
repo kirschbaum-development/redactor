@@ -202,3 +202,24 @@ describe('Entity recognition', function () {
             ->and(implode(' ', $result->findings[0]->confidence?->explain() ?? []))->toContain('presidio');
     });
 });
+
+describe('Conditional strategies', function () {
+    it('leaves a disabled recognition strategy out of the chain and brings it back when enabled', function () {
+        config()->set('redactor.profiles.ner', nerProfile(['recognition' => ['enabled' => false]]));
+        $redactor = app(Redactor::class);
+
+        $classes = fn () => array_map(fn ($s) => $s::class, $redactor->getStrategies('ner'));
+
+        expect($classes())->not->toContain(EntityRecognitionStrategy::class);
+
+        config()->set('redactor.profiles.ner.recognition', nerProfile()['recognition']);
+
+        expect($classes())->toContain(EntityRecognitionStrategy::class);
+    });
+
+    it('does not report a disabled strategy as unresolvable', function () {
+        config()->set('redactor.profiles.ner', nerProfile(['recognition' => ['enabled' => false]]));
+
+        expect(app(Redactor::class)->validateProfiles())->not->toHaveKey('ner');
+    });
+});
