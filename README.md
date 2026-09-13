@@ -1028,6 +1028,37 @@ secrets they report:
 
 Findings are ranked by severity, so the certain ones are read first.
 
+### Scanning changes, not files
+
+A gate on commits cares about what is being added, not what was already
+there. Three modes scan only the lines a change adds, so a pre-existing finding
+never blocks a commit and a secret is caught on the line that introduces it:
+
+```bash
+php artisan redactor:scan --staged                 # what is about to be committed
+php artisan redactor:scan --diff=origin/main       # what this branch adds over main
+php artisan redactor:scan --history                # every line every commit ever added
+php artisan redactor:scan --history=main..HEAD app/  # a range, and a pathspec
+```
+
+History mode finds a secret that a later commit removed: it is still in the
+repository. Each finding names the commit that added it.
+
+### As a gate
+
+Publish the hook and the workflow:
+
+```bash
+php artisan vendor:publish --tag=redactor-ci
+git config core.hooksPath .githooks
+```
+
+The hook runs `redactor:scan --staged --bail` before every commit. The
+workflow scans a pull request's changes over its base and uploads SARIF, and
+scans the whole tree against the baseline on `main`. `--output=junit` produces
+JUnit XML for a CI dashboard that already renders test results: one test case
+per file, one failure per finding, with the excerpt already redacted.
+
 Files that are binary, larger than `max_file_size`, matched by an exclude
 pattern, or already ignored by git are skipped. Everything else is read as
 overlapping windows of lines, so memory stays flat whatever the file size — the

@@ -87,6 +87,14 @@ All notable changes to this project will be documented in this file.
   verified against the value before replacement; failures degrade to
   rules-only and a circuit breaker stops a dead sidecar being asked on every
   log line. Present in the shipped profiles and inert until enabled.
+- **Git-aware scanning.** `redactor:scan --staged`, `--diff=<ref>` and
+  `--history[=<range>]` scan only the lines a change adds, on their real line
+  numbers, with the commit that added them for history. A secret removed by a
+  later commit is still found. Paths given with a git mode act as a pathspec;
+  exclude patterns still apply.
+- **JUnit output** (`--output=junit`), a publishable pre-commit hook and a
+  GitHub workflow (`vendor:publish --tag=redactor-ci`) that scans pull
+  requests over their base and uploads SARIF.
 - **`Detector` contract.** Anything that can report `Detection`s against a
   string - a regex, an entropy measure, a recogniser model in another process
   - plugs into the same resolution and operator pipeline.
@@ -111,8 +119,15 @@ All notable changes to this project will be documented in this file.
   copied it several times.
 - An unchanged subtree is returned as it arrived rather than rebuilt, so a
   payload that redacts to nothing costs a walk and no copy.
-- Net effect: the default profile went from ~17,600 to ~26,800 redactions/sec,
-  and a 2.2KB file-scan subject from ~8,200 to ~26,300.
+- Net effect, measured on PHP 8.5.8 with opcache and the PCRE JIT off
+  (production is faster in absolute terms): a 31-leaf request payload through
+  the `default` profile costs 68us against 48us before this work, with the
+  profile now running 20 detection rules instead of 6, scrubbing the
+  application's own secrets and scoring entropy hits; a Monolog record through
+  the processor 84us against 59us; a 1 MB free-text subject 24ms against 38ms
+  with peak memory down from 10 MB to 1 MB; a 64 KB subject with twenty
+  secrets 2.8ms against 4.7ms. Scaling is linear in both dimensions. A
+  profile that wants the old cost back removes the rules it does not need.
 - The pseudonymizer is resolved lazily by the operators that need it. Routing
   blocked keys through operators had made every redaction with a blocked key
   derive an HMAC key it then never used.
