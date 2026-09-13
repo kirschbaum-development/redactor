@@ -290,6 +290,9 @@ packaging and conventions. Each item is one commit, with tests.
 - Entropy detections bypassed `operators`, `min_confidence` and confidence
   scoring entirely, and the scanner ranked their null score as `high` - above a
   Luhn-validated card. They now carry a score and go through the same policy.
+- The scanner skipped every text file in a legacy encoding as binary: the
+  printable-ratio check ran a Unicode regex over a sample it already knew was
+  not UTF-8. Non-UTF-8 samples are now judged by their control bytes.
 - On PHP 8.5 every object walked raised three `SplObjectStorage` deprecations,
   which Laravel logs - and a log record raised from inside a log tap is redacted,
   which raises them again. Active objects are now tracked by `spl_object_id`.
@@ -330,6 +333,14 @@ packaging and conventions. Each item is one commit, with tests.
 
 ### Packaging and CI
 
+- Line coverage is 100% and the CI floor is set there. Dead code the detection
+  seam had left behind is gone, including `Operator::isPreserving()`, which
+  nothing read: whether an operator preserved a value is derived from its
+  output.
+- Documentation moved from the README into `docs/`: getting started,
+  configuration reference, rules, operators and pseudonymisation, boundaries,
+  scanning, entity recognition, testing, extending and upgrading from 0.1.0.
+  The README is an overview and index.
 - Rector with the PHP 8.3, dead-code, code-quality, type-declaration,
   early-return and Laravel sets, applied to the tree and enforced by the
   pre-commit hook, `composer preflight` and the static-analysis workflow.
