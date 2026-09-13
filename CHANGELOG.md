@@ -92,6 +92,11 @@ All notable changes to this project will be documented in this file.
   numbers, with the commit that added them for history. A secret removed by a
   later commit is still found. Paths given with a git mode act as a pathspec;
   exclude patterns still apply.
+- **`redact` middleware.** `->middleware('redact:profile')` redacts a
+  response before it is sent: JSON as data, text as text, files untouched,
+  never writing `_redacted` markers into a payload, failing closed to a 500.
+- **`nullify` operator.** Replaces a value with null so a typed field keeps
+  its type and its key; inside a string it deletes the span.
 - **`Redactor::fake()`** for application test suites: a redactor that still
   redacts but records every call, with `assertNeverEmitted()`,
   `assertRedacted()`, `assertFinding()`, `assertProfileUsed()` and friends,

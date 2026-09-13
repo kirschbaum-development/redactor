@@ -486,6 +486,7 @@ separate because the right answer differs by context for the very same value.
 | `remove` | deleted |
 | `hash` | `[email:k4m9rp2xzq]` — stable, obviously not real |
 | `surrogate` | `u_7f3ac9@customer.com` — stable, same shape |
+| `nullify` | `null` — the key stays, a typed field stays typed |
 | `preserve` | detected and reported, unchanged |
 
 Precedence runs most specific first: the path it was found at, then the entity
@@ -944,6 +945,31 @@ $result = $redactor->redact($data, 'profile_name');
 $profiles = Redactor::getAvailableProfiles();
 $exists = Redactor::profileExists('custom_profile');
 ```
+
+## HTTP Responses
+
+Data that leaves through an API needs the same boundary as data that leaves
+through a log. The `redact` middleware redacts a response before it is sent,
+with a profile per route:
+
+```php
+Route::get('/export', ExportController::class)->middleware('redact:observability');
+Route::get('/me', MeController::class)->middleware('redact');
+```
+
+JSON responses are redacted as data, so structure and types survive; text
+responses are redacted as text; file responses pass through. The profile's
+`_redacted` markers are never written into a response. Where a consumer has
+typed the field - an API contract, MCP structured content - use `nullify` so
+the field stays a field and keeps its type:
+
+```php
+'operators' => ['ssn' => 'nullify', 'age' => 'nullify'],
+```
+
+The middleware fails closed: a response that cannot be redacted becomes a 500
+with none of the original body, not the original body. Run `redactor:validate`
+at deploy time so that never happens in production.
 
 ## Where Else To Use It
 
