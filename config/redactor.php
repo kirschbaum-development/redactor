@@ -8,6 +8,167 @@ use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
+/*
+|--------------------------------------------------------------------------
+| Shared patterns
+|--------------------------------------------------------------------------
+|
+| Listed once and spread into each profile below, so the profiles cannot
+| drift apart: a credential the default profile catches is caught by the
+| strict and observability profiles too.
+|
+| Order matters where two rules can match the same text. On an equal score
+| the rule listed first wins the overlap, which is why url_with_auth sits
+| ahead of email (the password in "https://user:pass@host" looks like an
+| address) and anthropic ahead of openai (both begin "sk-").
+|
+| `keywords` is a prefilter: the pattern is only tried on a value containing
+| one of the literals, compared case-insensitively. It keeps expensive rules
+| off values that cannot match, and lets a rule like phone_bare demand a
+| label before it believes a bare run of digits.
+|
+*/
+
+$credentialPatterns = [
+    'url_with_auth' => [
+        // Any scheme - postgres://, redis://, amqp://, https:// - and only the
+        // password is replaced, so the host and path stay readable.
+        'pattern' => '/([a-z][a-z0-9+.-]*:\/\/[^:\/\s@]*:)([^@\/\s]+)(@)/i',
+        'capture' => 2,
+        'entity' => 'url_credentials',
+        'confidence' => 0.9,
+        'keywords' => ['://'],
+    ],
+    'private_key_block' => [
+        'pattern' => '/-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+ )?PRIVATE KEY-----/',
+        'entity' => 'private_key',
+        'confidence' => 1.0,
+        'keywords' => ['private key'],
+    ],
+    'jwt' => [
+        'pattern' => '/\beyJ[A-Za-z0-9_-]{5,}\.eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\b/',
+        'entity' => 'jwt',
+        'confidence' => 0.9,
+        'keywords' => ['eyj'],
+    ],
+    'bearer_token' => [
+        'pattern' => '/(bearer\s+)([A-Za-z0-9._~+\/=-]{16,})/i',
+        'capture' => 2,
+        'entity' => 'bearer_token',
+        'confidence' => 0.85,
+        'keywords' => ['bearer'],
+    ],
+    'aws_access_key' => [
+        'pattern' => '/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/',
+        'entity' => 'aws_access_key',
+        'confidence' => 0.9,
+        'keywords' => ['akia', 'asia'],
+    ],
+    'github_token' => [
+        'pattern' => '/\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b/',
+        'entity' => 'github_token',
+        'confidence' => 0.95,
+        'keywords' => ['ghp_', 'gho_', 'ghu_', 'ghs_', 'ghr_', 'github_pat_'],
+    ],
+    'stripe_key' => [
+        // Secret and restricted keys only; publishable keys are meant to be seen.
+        'pattern' => '/\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{10,99}\b/',
+        'entity' => 'stripe_key',
+        'confidence' => 0.95,
+        'keywords' => ['sk_', 'rk_'],
+    ],
+    'slack_token' => [
+        'pattern' => '/\bxox[abpors]-[A-Za-z0-9-]{10,}\b/',
+        'entity' => 'slack_token',
+        'confidence' => 0.9,
+        'keywords' => ['xox'],
+    ],
+    'anthropic_key' => [
+        'pattern' => '/\bsk-ant-[A-Za-z0-9_-]{20,}\b/',
+        'entity' => 'anthropic_key',
+        'confidence' => 0.95,
+        'keywords' => ['sk-ant-'],
+    ],
+    'openai_key' => [
+        'pattern' => '/\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/',
+        'entity' => 'openai_key',
+        'confidence' => 0.9,
+        'keywords' => ['sk-'],
+    ],
+    'google_api_key' => [
+        'pattern' => '/\bAIza[0-9A-Za-z_-]{35}\b/',
+        'entity' => 'google_api_key',
+        'confidence' => 0.9,
+        'keywords' => ['aiza'],
+    ],
+    'sendgrid_key' => [
+        'pattern' => '/\bSG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}\b/',
+        'entity' => 'sendgrid_key',
+        'confidence' => 0.95,
+        'keywords' => ['sg.'],
+    ],
+];
+
+$identityPatterns = [
+    'email' => [
+        // Byte-level rather than /u so a non-ASCII local part or domain
+        // matches without PCRE validating the whole value as UTF-8 first.
+        'pattern' => '/[A-Za-z0-9_.+\-\x80-\xff]+@[A-Za-z0-9\-\x80-\xff]+(?:\.[A-Za-z0-9\-\x80-\xff]+)+/',
+        'entity' => 'email',
+        'confidence' => 0.8,
+        'keywords' => ['@'],
+    ],
+    'phone_formatted' => [
+        // Needs separators or parentheses, so a date, a version or a card
+        // number is not mistaken for a phone number.
+        'pattern' => '/(?<!\d)(?<!\d[\s.-])(?:\+\d{1,3}[\s.-]?)?(?:\(\d{2,4}\)|\d{2,4})[\s.-]\d{3,4}[\s.-]\d{3,4}(?![\s.-]?\d)/',
+        'entity' => 'phone',
+        'confidence' => 0.6,
+    ],
+    'phone_e164' => [
+        'pattern' => '/(?<!\d)\+\d{9,15}(?!\d)/',
+        'entity' => 'phone',
+        'confidence' => 0.7,
+        'keywords' => ['+'],
+    ],
+    'phone_bare' => [
+        // A bare ten-digit run is a Unix timestamp or an order number far
+        // more often than a phone number, so it needs a label nearby.
+        'pattern' => '/(?<!\d)\d{10}(?!\d)/',
+        'entity' => 'phone',
+        'confidence' => 0.5,
+        'keywords' => ['phone', 'tel', 'mobile', 'cell', 'fax'],
+    ],
+    'ssn' => [
+        'pattern' => '/\b\d{3}-\d{2}-\d{4}\b/',
+        // Rejects the never-issued area/group/serial values, which is most
+        // of what matches this shape by accident.
+        'validator' => 'ssn',
+        'entity' => 'ssn',
+        'confidence' => 0.7,
+    ],
+    'ssn_bare' => [
+        'pattern' => '/(?<!\d)\d{9}(?!\d)/',
+        'validator' => 'ssn',
+        'entity' => 'ssn',
+        'confidence' => 0.4,
+        'keywords' => ['ssn', 'social security', 'tax id', 'tin'],
+    ],
+    'credit_card' => [
+        'pattern' => '/\b(?:\d[ -]*?){13,16}\b/',
+        // Without the Luhn check this matches any 13-16 digit run: order
+        // numbers, tracking codes, concatenated timestamps.
+        'validator' => 'luhn',
+        'entity' => 'credit_card',
+    ],
+    'iban' => [
+        // Accepts the spaced form banks print as well as the compact one.
+        'pattern' => '/\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}(?:[ ]?[A-Z0-9]{1,4})?\b/',
+        'validator' => 'iban',
+        'entity' => 'iban',
+    ],
+];
+
 return [
     /*
     |--------------------------------------------------------------------------
@@ -123,6 +284,15 @@ return [
     'pseudonymization' => [
         'enabled' => env('REDACTOR_PSEUDONYMIZATION', true),
         'key' => env('REDACTOR_PSEUDONYMIZATION_KEY'),
+
+        /*
+        | Mixed into every surrogate. Shared by every profile, so the same
+        | user gets the same surrogate on every channel and the logs stay
+        | joinable across them. A profile may set its own `pseudonymization`
+        | `salt` to deliberately break that correlation - an export that must
+        | not be linkable back to the application logs, say.
+        */
+        'salt' => env('REDACTOR_PSEUDONYMIZATION_SALT'),
     ],
 
     /*
@@ -247,36 +417,13 @@ return [
             ],
 
             /*
-            | Rules are applied in the order listed. url_with_auth must come
-            | before email: the email rule would otherwise match "user@host"
-            | inside a credential URL and take the hostname with it.
+            | The shared credential and identity rules, in that order. See
+            | the top of this file for why the order matters and what
+            | `keywords` does.
             */
             'patterns' => [
-                'url_with_auth' => [
-                    // Replace the credentials, keep the host and path.
-                    'pattern' => '/(https?:\/\/[^:\/\s]+:)([^@\/\s]+)(@)/',
-                    'capture' => 2,
-                ],
-                'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
-                'phone_simple' => '/\b\d{3}[.-]?\d{3}[.-]?\d{4}\b/',
-                'ssn' => [
-                    'pattern' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
-                    // Rejects the never-issued area/group/serial values, which
-                    // is most of what matches this shape by accident.
-                    'validator' => 'ssn',
-                ],
-                'credit_card' => [
-                    'pattern' => '/\b(?:\d[ -]*?){13,16}\b/',
-                    // Without the Luhn check this matches any 13-16 digit run:
-                    // order numbers, tracking codes, concatenated timestamps.
-                    'validator' => 'luhn',
-                    'mode' => 'partial',
-                    'keep' => 4,
-                ],
-                'iban' => [
-                    'pattern' => '/\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/',
-                    'validator' => 'iban',
-                ],
+                ...$credentialPatterns,
+                ...$identityPatterns,
             ],
 
             /*
@@ -458,18 +605,18 @@ return [
             ],
 
             'patterns' => [
-                'url_with_auth' => [
-                    'pattern' => '/(https?:\/\/[^:\/\s]+:)([^@\/\s]+)(@)/',
-                    'capture' => 2,
+                ...$credentialPatterns,
+                ...$identityPatterns,
+                'ipv4' => [
+                    'pattern' => '/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/',
+                    'entity' => 'ip',
+                    'confidence' => 0.8,
                 ],
-                'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
-                'phone' => '/\+?[\d\s\-\(\)]{7,15}/',
-                'ssn' => ['pattern' => '/\b\d{3}-?\d{2}-?\d{4}\b/', 'validator' => 'ssn'],
-                'credit_card' => ['pattern' => '/\b(?:\d[ -]*?){13,16}\b/', 'validator' => 'luhn'],
-                'iban' => ['pattern' => '/\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/', 'validator' => 'iban'],
-                'ipv4' => '/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/',
-                'uuid' => '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i',
-                'jwt' => '/^[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]*$/',
+                'uuid' => [
+                    'pattern' => '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i',
+                    'entity' => 'uuid',
+                    'confidence' => 0.8,
+                ],
             ],
 
             'replacement' => '[REDACTED]',
@@ -525,32 +672,8 @@ return [
             | replaced: "aws_secret_access_key = [REDACTED]", not "[REDACTED]".
             */
             'patterns' => [
-                'url_with_auth' => [
-                    // Replace the credentials, keep the host and path. Must
-                    // precede 'email', which would otherwise match "user@host"
-                    // inside the credential and take the hostname with it.
-                    'pattern' => '/(https?:\/\/[^:\/\s]+:)([^@\/\s]+)(@)/',
-                    'capture' => 2,
-                ],
-
-                'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
-                'phone_simple' => '/\b\d{3}[.-]?\d{3}[.-]?\d{4}\b/',
-                'ssn' => [
-                    'pattern' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
-                    'validator' => 'ssn',
-                ],
-
-                'credit_card' => [
-                    'pattern' => '/\b(?:\d[ -]*?){13,16}\b/',
-                    'validator' => 'luhn',
-                    'mode' => 'partial',
-                    'keep' => 4,
-                ],
-
-                'api_key_stripe' => ['pattern' => '/sk_(?:test_|live_)[a-zA-Z0-9]{24,}/', 'entity' => 'stripe_key', 'confidence' => 0.95],
-                'jwt_token' => '/eyJ[a-zA-Z0-9_-]*\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]+/',
-                'aws_access_key' => '/\bAKIA[0-9A-Z]{16}\b/',
-                'github_token' => '/\bgh[pousr]_[A-Za-z0-9_]{36}\b/',
+                ...$credentialPatterns,
+                ...$identityPatterns,
 
                 'api_key_generic' => [
                     'pattern' => '/(?:api[_-]?key|access[_-]?token|secret[_-]?key)([\s=:]+["\']?)([a-zA-Z0-9_\/+-]{16,})/i',
@@ -578,6 +701,11 @@ return [
                     'pattern' => '/(password["\']?[\s=:]+["\']?)([^\s\n\r"\']+)/i',
                     'capture' => 2,
                 ],
+            ],
+
+            'operators' => [
+                'default' => 'redact',
+                'credit_card' => ['partial' => ['keep' => 4]],
             ],
 
             'replacement' => '[REDACTED]',
@@ -659,23 +787,10 @@ return [
             ],
 
             'patterns' => [
-                'email' => [
-                    'pattern' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+/',
-                    'entity' => 'email',
-                    'confidence' => 0.95,
-                ],
-                'credit_card' => [
-                    'pattern' => '/\\b(?:\\d[ -]*?){13,16}\\b/',
-                    'entity' => 'credit_card',
-                    'validator' => 'luhn',
-                ],
-                'phone_simple' => [
-                    'pattern' => '/\\b\\d{3}[.-]?\\d{3}[.-]?\\d{4}\\b/',
-                    'entity' => 'phone',
-                    'confidence' => 0.5,
-                ],
+                ...$credentialPatterns,
+                ...$identityPatterns,
                 'ipv4' => [
-                    'pattern' => '/\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b/',
+                    'pattern' => '/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/',
                     'entity' => 'ip',
                     'confidence' => 0.8,
                 ],
@@ -791,9 +906,11 @@ return [
                 'client_secret',
             ],
 
-            // Minimal, fast patterns only
+            // Minimal, fast patterns only. Every rule here is gated on a
+            // literal, so a value without one costs a str_contains() and
+            // nothing more.
             'patterns' => [
-                'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
+                'email' => $identityPatterns['email'],
                 'simple_token' => '/^[A-Za-z0-9]{32,}$/',
             ],
 
