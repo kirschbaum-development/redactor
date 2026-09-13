@@ -537,6 +537,14 @@ class Redactor
             return $outcome->value;
         }
 
+        // Some objects are values in their own right, not bags of values, and
+        // taking them apart destroys them: a Throwable has no public
+        // properties and encodes to {}, so the stack trace Laravel's formatter
+        // would have rendered becomes an empty array. Hand them on untouched.
+        if ($this->isOpaque($object)) {
+            return $object;
+        }
+
         // An object already on the stack means following it again would loop.
         // json_encode() catches this for itself, but the toArray() path below
         // is tried first and has no such protection.
@@ -555,6 +563,23 @@ class Redactor
         } finally {
             $context->leaveObject($object);
         }
+    }
+
+    /**
+     * Whether an object should pass through the walk whole.
+     *
+     * Throwables, dates, enums and closures carry no user-supplied fields to
+     * inspect, and every logging formatter already knows how to render them.
+     * A key-based rule still applies to them - `['secret' => $enum]` is
+     * redacted - because the strategy chain runs before this check.
+     */
+    protected function isOpaque(object $object): bool
+    {
+        return $object instanceof \Throwable
+            || $object instanceof \DateTimeInterface
+            || $object instanceof \DateTimeZone
+            || $object instanceof \UnitEnum
+            || $object instanceof \Closure;
     }
 
     /**
