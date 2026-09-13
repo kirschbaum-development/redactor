@@ -33,17 +33,37 @@ final class LineWindowReader implements IteratorAggregate
         private readonly string $path,
         private readonly int $windowLines = self::DEFAULT_WINDOW_LINES,
         private readonly int $overlapLines = self::DEFAULT_OVERLAP_LINES,
+        private readonly ?string $content = null,
     ) {}
+
+    /**
+     * Read in-memory text - a git patch, say - through the same windows.
+     */
+    public static function ofString(string $content, int $windowLines = self::DEFAULT_WINDOW_LINES, int $overlapLines = self::DEFAULT_OVERLAP_LINES): self
+    {
+        return new self('php://temp', $windowLines, $overlapLines, $content);
+    }
 
     /**
      * @return Generator<int, array{0: int, 1: string}> [first line number, window text]
      */
     public function getIterator(): Generator
     {
-        $handle = @fopen($this->path, 'rb');
+        if ($this->content !== null) {
+            $handle = fopen('php://temp', 'r+b');
 
-        if ($handle === false) {
-            return;
+            if ($handle === false) {
+                return;
+            }
+
+            fwrite($handle, $this->content);
+            rewind($handle);
+        } else {
+            $handle = @fopen($this->path, 'rb');
+
+            if ($handle === false) {
+                return;
+            }
         }
 
         // Overlap has to be smaller than the window, or the reader never

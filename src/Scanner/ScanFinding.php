@@ -31,6 +31,8 @@ final readonly class ScanFinding
         public array $signals = [],
         /** Set only when verification ran; never carries the secret itself. */
         public ?VerificationResult $verification = null,
+        /** The commit that added the line, when scanning git history. */
+        public ?string $commit = null,
     ) {}
 
     public function withVerification(VerificationResult $result): self
@@ -47,7 +49,40 @@ final readonly class ScanFinding
             confidence: $this->confidence,
             signals: $this->signals,
             verification: $result,
+            commit: $this->commit,
         );
+    }
+
+    /**
+     * The finding relocated to its real place in the file, for a scan that
+     * ran over a patch: the line it is on and the commit that added it.
+     */
+    public function at(int $line, ?string $commit): self
+    {
+        return new self(
+            path: $this->path,
+            rule: $this->rule,
+            line: $line,
+            column: $this->column,
+            excerpt: $this->excerpt,
+            profile: $this->profile,
+            fingerprint: $this->fingerprint,
+            entity: $this->entity,
+            confidence: $this->confidence,
+            signals: $this->signals,
+            verification: $this->verification,
+            commit: $commit,
+        );
+    }
+
+    /**
+     * Where the finding is, as a human reads it.
+     */
+    public function location(): string
+    {
+        $where = sprintf('%s:%d:%d', $this->path, $this->line, $this->column);
+
+        return $this->commit === null ? $where : substr($this->commit, 0, 8).':'.$where;
     }
 
     /**
@@ -87,6 +122,7 @@ final readonly class ScanFinding
             // evidence rather than by trial and error.
             'signals' => $this->signals,
             'verification' => $this->verification?->toArray(),
+            'commit' => $this->commit,
             'profile' => $this->profile,
             'fingerprint' => $this->fingerprint,
         ];

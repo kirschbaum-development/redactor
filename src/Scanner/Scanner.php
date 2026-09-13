@@ -6,6 +6,7 @@ namespace Kirschbaum\Redactor\Scanner;
 
 use Kirschbaum\Redactor\Findings\MatchFinding;
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\Scanner\Git\Patch;
 use Kirschbaum\Redactor\Verification\SecretVerifier;
 use Kirschbaum\Redactor\Verification\VerificationResult;
 
@@ -64,16 +65,65 @@ class Scanner
             );
         }
 
-        $profileName = $profile ?? 'default';
-
         $reportedPath = $relativeTo !== null
             ? self::relativePath($filePath, $relativeTo)
             : $filePath;
 
+        return $this->scanWindows(
+            new LineWindowReader($filePath, $this->windowLines, $this->overlapLines),
+            $filePath,
+            $reportedPath,
+            $profile
+        );
+    }
+
+    /**
+     * Scan text held in memory as though it were a file at the given path.
+     */
+    public function scanText(string $content, string $path, ?string $profile = null): ScanResult
+    {
+        return $this->scanWindows(
+            LineWindowReader::ofString($content, $this->windowLines, $this->overlapLines),
+            $path,
+            $path,
+            $profile
+        );
+    }
+
+    /**
+     * Scan the lines a change added, reporting each finding on the line it
+     * really occupies in the file and, for history, the commit that added it.
+     *
+     * The added lines are scanned as one text so a secret that spans two
+     * adjacent added lines is still found; the line numbers are then mapped
+     * back through the patch.
+     */
+    public function scanPatch(Patch $patch, ?string $profile = null): ScanResult
+    {
+        $result = $this->scanText($patch->text(), $patch->path, $profile);
+
+        if (! $result->hasFindings()) {
+            return $result;
+        }
+
+        return new ScanResult(
+            path: $result->path,
+            findings: array_map(
+                fn (ScanFinding $finding) => $finding->at($patch->lineAt($finding->line), $patch->commit),
+                $result->findings
+            ),
+            profile: $result->profile,
+        );
+    }
+
+    private function scanWindows(LineWindowReader $reader, string $filePath, string $reportedPath, ?string $profile): ScanResult
+    {
+        $profileName = $profile ?? 'default';
+
         /** @var array<string, ScanFinding> $findings */
         $findings = [];
 
-        foreach (new LineWindowReader($filePath, $this->windowLines, $this->overlapLines) as [$startLine, $window]) {
+        foreach ($reader as [$startLine, $window]) {
             $result = $this->redactor->redactWithMetadata($window, $profile);
 
             if ($result->findings === []) {

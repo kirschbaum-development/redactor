@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\Config;
 use Kirschbaum\Redactor\Config\ConfigValue;
 use Kirschbaum\Redactor\Scanner\Baseline;
 use Kirschbaum\Redactor\Scanner\FileCollector;
+use Kirschbaum\Redactor\Scanner\Git\GitRepository;
+use Kirschbaum\Redactor\Scanner\Git\Patch;
+use Kirschbaum\Redactor\Scanner\JunitReport;
 use Kirschbaum\Redactor\Scanner\SarifReport;
 use Kirschbaum\Redactor\Scanner\ScanFinding;
 use Kirschbaum\Redactor\Scanner\Scanner;
@@ -21,11 +24,14 @@ use Symfony\Component\Console\Attribute\AsCommand;
 class RedactorScanCommand extends Command
 {
     protected $signature = 'redactor:scan
-                            {paths?* : Paths to scan (files or directories, defaults to base_path)}
+                            {paths?* : Paths to scan (files or directories, defaults to base_path); with a git mode, a pathspec}
                             {--profile=file_scan : Redaction profile to use}
                             {--bail : Exit with code 1 if findings are detected}
                             {--summary-only : Do not display per-file results}
-                            {--output=table : Output format (table|json|sarif)}
+                            {--output=table : Output format (table|json|sarif|junit)}
+                            {--staged : Scan only the lines staged for commit}
+                            {--diff= : Scan only the lines the working tree adds over this ref, e.g. origin/main}
+                            {--history= : Scan the lines added by every commit, optionally in a range like main..HEAD}
                             {--min-confidence= : Ignore findings scoring below this (0-1)}
                             {--verify : Check detected credentials against their providers (sends them off this machine)}
                             {--baseline= : Path to a baseline file of accepted findings}
@@ -49,11 +55,13 @@ class RedactorScanCommand extends Command
         /** @var string $outputFormat */
         $outputFormat = $this->option('output') ?? 'table';
 
-        if (! in_array($outputFormat, ['table', 'json', 'sarif'], true)) {
-            $this->components->error("Unknown --output format [{$outputFormat}]. Use table, json or sarif.");
+        if (! in_array($outputFormat, ['table', 'json', 'sarif', 'junit'], true)) {
+            $this->components->error("Unknown --output format [{$outputFormat}]. Use table, json, sarif or junit.");
 
             return Command::FAILURE;
         }
+
+        $gitMode = $this->gitMode();
 
         $minConfidence = $this->option('min-confidence');
 
@@ -84,7 +92,9 @@ class RedactorScanCommand extends Command
         $quiet = $outputFormat !== 'table';
 
         if (! $quiet) {
-            $this->components->info('Scanning paths: '.implode(', ', $paths)." with profile: {$profile}");
+            $this->components->info($gitMode === null
+                ? 'Scanning paths: '.implode(', ', $paths)." with profile: {$profile}"
+                : "Scanning {$gitMode} with profile: {$profile}");
         }
 
         $ignorePatterns = ConfigValue::stringList(
@@ -102,8 +112,6 @@ class RedactorScanCommand extends Command
 
         $skipBinary = ConfigValue::bool(Config::get('redactor.scan.skip_binary'), true, 'scan.skip_binary');
         $respectGitignore = ConfigValue::bool(Config::get('redactor.scan.respect_gitignore'), true, 'scan.respect_gitignore');
-
-        $files = $this->collectFiles($paths, $ignorePatterns, $maxFileSize, $skipBinary, $respectGitignore, $quiet);
 
         $scanner = resolve(Scanner::class);
 
@@ -134,13 +142,27 @@ class RedactorScanCommand extends Command
             $scanner = $scanner->withVerifier($verifier);
         }
 
-        $relativeTo = base_path();
-
         /** @var Collection<int, ScanResult> $results */
         $results = collect();
 
-        foreach ($files as $file) {
-            $results->push($scanner->scanFile($file, $profile, $relativeTo));
+        if ($gitMode !== null) {
+            try {
+                $patches = $this->collectPatches($gitMode, $this->argument('paths'), $ignorePatterns);
+            } catch (\RuntimeException $e) {
+                $this->components->error($e->getMessage());
+
+                return Command::FAILURE;
+            }
+
+            foreach ($patches as $patch) {
+                $results->push($scanner->scanPatch($patch, $profile));
+            }
+        } else {
+            $relativeTo = base_path();
+
+            foreach ($this->collectFiles($paths, $ignorePatterns, $maxFileSize, $skipBinary, $respectGitignore, $quiet) as $file) {
+                $results->push($scanner->scanFile($file, $profile, $relativeTo));
+            }
         }
 
         /** @var Collection<int, ScanFinding> $allFindings */
@@ -165,7 +187,9 @@ class RedactorScanCommand extends Command
 
         if (! $quiet) {
             $this->newLine();
-            $this->components->info("Scan complete. Files scanned: {$results->count()}");
+            $this->components->info($gitMode === null
+                ? "Scan complete. Files scanned: {$results->count()}"
+                : "Scan complete. Changes scanned: {$results->count()}");
             $this->components->info("Files with findings: {$filesWithFindings->count()}");
             $this->components->info("Total findings: {$allFindings->count()}");
 
@@ -175,6 +199,59 @@ class RedactorScanCommand extends Command
         }
 
         return ($bail && $allFindings->isNotEmpty()) ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    /**
+     * Which git mode was asked for, described for the operator, or null.
+     */
+    protected function gitMode(): ?string
+    {
+        if ((bool) $this->option('staged')) {
+            return 'staged changes';
+        }
+
+        $diff = $this->option('diff');
+
+        if (is_string($diff) && $diff !== '') {
+            return "changes over {$diff}";
+        }
+
+        if ($this->input->hasParameterOption('--history')) {
+            $range = $this->option('history');
+
+            return is_string($range) && $range !== '' ? "history {$range}" : 'full history';
+        }
+
+        return null;
+    }
+
+    /**
+     * The patches the chosen git mode produces, minus excluded paths.
+     *
+     * @param  array<int, string>  $pathspec
+     * @param  array<int, string>  $ignorePatterns
+     * @return array<int, Patch>
+     *
+     * @throws \RuntimeException when this is not a git repository or git fails
+     */
+    protected function collectPatches(string $mode, array $pathspec, array $ignorePatterns): array
+    {
+        $git = new GitRepository(base_path());
+
+        if (! $git->isRepository()) {
+            throw new \RuntimeException(base_path().' is not inside a git repository.');
+        }
+
+        $patches = match (true) {
+            (bool) $this->option('staged') => $git->staged($pathspec),
+            is_string($this->option('diff')) && $this->option('diff') !== '' => $git->diff((string) $this->option('diff'), $pathspec),
+            default => $git->history(is_string($this->option('history')) ? $this->option('history') : null, $pathspec),
+        };
+
+        return array_values(array_filter(
+            $patches,
+            fn (Patch $patch) => ! FileCollector::matchesExclude($patch->path, $ignorePatterns)
+        ));
     }
 
     protected function baselinePath(): ?string
@@ -259,6 +336,7 @@ class RedactorScanCommand extends Command
         match ($format) {
             'json' => $this->displayJsonResults($results),
             'sarif' => $this->displaySarifResults($findings),
+            'junit' => $this->output->writeln(JunitReport::build($results->all())),
             default => $this->displayTableResults($results, $findings, $summaryOnly),
         };
     }
@@ -334,7 +412,7 @@ class RedactorScanCommand extends Command
                     default => '<fg=gray>VERY LOW</>',
                 },
                 $f->rule,
-                self::shorten($f->path, 44).":{$f->line}:{$f->column}",
+                self::shorten($f->location(), 52),
                 self::shorten($f->excerpt, 48),
             ], $findings)
         );

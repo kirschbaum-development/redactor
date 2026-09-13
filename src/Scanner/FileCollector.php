@@ -134,6 +134,28 @@ class FileCollector
     }
 
     /**
+     * Whether a repository-relative path is excluded by any pattern.
+     *
+     * The same test isExcluded() applies to walked files, for paths that
+     * arrive from git rather than from the filesystem.
+     *
+     * @param  array<int, string>  $excludePatterns
+     */
+    public static function matchesExclude(string $relativePath, array $excludePatterns): bool
+    {
+        $relativePath = str_replace('\\', '/', $relativePath);
+        $basename = basename($relativePath);
+
+        foreach ($excludePatterns as $pattern) {
+            if ($pattern !== '' && (fnmatch($pattern, $basename) || fnmatch($pattern, $relativePath))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Directory prefixes that can be pruned during traversal.
      *
      * 'vendor/*' and 'node_modules/**' both mean "skip that directory".
