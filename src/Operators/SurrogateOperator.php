@@ -26,7 +26,7 @@ final class SurrogateOperator implements Operator
 
     public function apply(Detection $detection, OperatorContext $context): string
     {
-        $pseudonymizer = $context->pseudonymizer;
+        $pseudonymizer = $context->pseudonymizer();
 
         if ($pseudonymizer === null) {
             // Without a key there is no stable mapping to produce, and an

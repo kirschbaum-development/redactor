@@ -172,7 +172,7 @@ class RedactionContext
 
         return $this->operators->get($spec->name)->apply(
             $detection,
-            new OperatorContext($this->config->replacement, $spec->options, $this->pseudonymizer()),
+            new OperatorContext($this->config->replacement, $spec->options, fn () => $this->pseudonymizer()),
         );
     }
 

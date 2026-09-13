@@ -19,7 +19,7 @@ final class HashOperator implements Operator
 {
     public function apply(Detection $detection, OperatorContext $context): string
     {
-        $pseudonymizer = $context->pseudonymizer;
+        $pseudonymizer = $context->pseudonymizer();
 
         if ($pseudonymizer === null) {
             // No key configured. Fail closed to a plain redaction rather than

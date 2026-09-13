@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Operators;
 
+use Closure;
 use Kirschbaum\Redactor\Support\Pseudonymizer;
 
 /**
@@ -14,16 +15,42 @@ use Kirschbaum\Redactor\Support\Pseudonymizer;
  * payload, the profile or the container, which keeps them pure enough to test
  * in isolation and impossible to turn into a second detection layer.
  */
-final readonly class OperatorContext
+final class OperatorContext
 {
+    private ?Pseudonymizer $resolved = null;
+
+    private bool $isResolved = false;
+
     /**
      * @param  array<string, mixed>  $options
+     * @param  Pseudonymizer|Closure(): ?Pseudonymizer|null  $pseudonymizer  the pseudonymizer, or a
+     *                                                                       resolver for one - deriving a
+     *                                                                       key costs an HMAC, and most
+     *                                                                       operators never need it
      */
     public function __construct(
-        public string $replacement,
-        public array $options = [],
-        public ?Pseudonymizer $pseudonymizer = null,
+        public readonly string $replacement,
+        public readonly array $options = [],
+        private readonly Pseudonymizer|Closure|null $pseudonymizer = null,
     ) {}
+
+    /**
+     * The pseudonymizer, resolved on first use and only by operators that
+     * pseudonymise; a plain redaction never pays for a key derivation.
+     */
+    public function pseudonymizer(): ?Pseudonymizer
+    {
+        if ($this->isResolved) {
+            return $this->resolved;
+        }
+
+        $this->isResolved = true;
+        $this->resolved = $this->pseudonymizer instanceof Closure
+            ? ($this->pseudonymizer)()
+            : $this->pseudonymizer;
+
+        return $this->resolved;
+    }
 
     public function option(string $key, mixed $default = null): mixed
     {
