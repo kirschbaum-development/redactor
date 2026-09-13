@@ -142,24 +142,24 @@ return [
             'safe_keys' => ['id', 'user_id', 'uuid', 'created_at', 'updated_at'],
             'blocked_keys' => ['password', 'secret', 'token', 'api_key', 'authorization'],
             'patterns' => [
+                // The shipped config defines two lists at the top of the file
+                // and spreads them into every profile, so the profiles cannot
+                // drift apart. $credentialPatterns: credential URLs, PEM
+                // blocks, JWTs, bearer tokens, and AWS, GitHub, Stripe, Slack,
+                // OpenAI, Anthropic, Google and SendGrid keys.
+                // $identityPatterns: emails, phones, SSNs, cards and IBANs.
+                ...$credentialPatterns,
+                ...$identityPatterns,
+
                 // Shorthand: matched span replaced with the replacement string
-                'email' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/',
-                'phone_simple' => '/\b\d{3}[.-]?\d{3}[.-]?\d{4}\b/',
+                'internal_id' => '/\bINT-\d{8}\b/',
 
                 // Full rule form - see "Pattern Rules" below
                 'credit_card' => [
                     'pattern' => '/\b(?:\d[ -]*?){13,16}\b/',
                     'validator' => 'luhn',    // reject non-cards of the same shape
-                    'mode' => 'partial',      // ************1111
-                    'keep' => 4,
-                ],
-                'ssn' => [
-                    'pattern' => '/\b\d{3}-?\d{2}-?\d{4}\b/',
-                    'validator' => 'ssn',
-                ],
-                'url_with_auth' => [
-                    'pattern' => '/(https?:\/\/[^:\/\s]+:)([^@\/\s]+)(@)/',
-                    'capture' => 2,           // replace the credentials, keep the host
+                    'entity' => 'credit_card',
+                    'keywords' => [],         // literals that must be present first
                 ],
             ],
             'replacement' => '[REDACTED]',
@@ -387,6 +387,17 @@ already exported.
 
 Without a usable key, `surrogate` and `hash` fall back to plain redaction rather
 than emitting an unkeyed stand-in that would look joinable and silently not be.
+
+Surrogates are the same on every profile, so an audit channel on `strict` and an
+application channel on `observability` can still be joined on the same user. A
+profile that must not be linkable back sets its own salt:
+
+```php
+'export' => [
+    'pseudonymization' => ['salt' => 'export-2026'],
+    // ...
+],
+```
 
 The shipped `observability` profile is set up for this.
 
@@ -808,6 +819,7 @@ REDACTOR_MAX_DEPTH=32
 REDACTOR_MIN_CONFIDENCE=0.0
 REDACTOR_PSEUDONYMIZATION=true
 REDACTOR_PSEUDONYMIZATION_KEY=
+REDACTOR_PSEUDONYMIZATION_SALT=
 REDACTOR_SHANNON_ENABLED=true
 REDACTOR_SHANNON_THRESHOLD=4.8
 REDACTOR_SHANNON_MIN_LENGTH=25

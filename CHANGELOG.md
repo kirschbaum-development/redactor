@@ -42,6 +42,19 @@ All notable changes to this project will be documented in this file.
   The command names every host before contacting any. The secret never reaches
   a finding, so it cannot escape through JSON, SARIF or a baseline.
 - **`observability` profile**, set up to pseudonymise rather than redact.
+- **Provider credentials in every profile.** JWTs, bearer tokens, PEM private
+  key blocks, credential URLs for any scheme, and AWS, GitHub, Stripe, Slack,
+  OpenAI, Anthropic, Google and SendGrid keys were only recognised by the
+  `file_scan` profile; the `default`, `strict` and `observability` profiles
+  relied on entropy, which misses a 20-character AWS key outright and a GitHub
+  token by a tenth of a bit. The rules are defined once at the top of the
+  config and spread into each profile.
+- **Identity patterns that match what people actually write.** Non-ASCII
+  emails, IBANs in the spaced form banks print, international and E.164 phone
+  numbers. A bare ten-digit run is only a phone number next to a label such as
+  `phone` or `tel`; before, every Unix timestamp and ten-digit order number in
+  a log message was redacted as one. The `strict` profile's phone rule, which
+  matched any run of seven digits and spaces, is gone.
 - **Pattern `keywords`.** A rule can name literals that must appear in the
   value before its pattern is tried. A prefilter for cost - `['@']` keeps the
   email regex off almost every string in a payload - and for precision, so a
@@ -88,6 +101,10 @@ item below is one commit, with tests.
   value is rewritten in one pass. Of two overlapping reports the higher score
   wins, then the rule listed first. Findings for a `preserve` operator are now
   reported without marking the payload redacted.
+- **The pseudonymisation salt is shared across profiles.** It defaulted to the
+  profile name, so two channels on different profiles produced different
+  surrogates for the same user and could not be joined. Set a profile's own
+  `pseudonymization.salt` to break correlation on purpose.
 - **Blocked keys go through operators.** The key name is the entity, so
   `operators.email` applies to a value under an `email` key. Findings from a
   blocked key now carry the value they matched and a certain score.
