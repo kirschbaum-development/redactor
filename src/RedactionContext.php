@@ -25,9 +25,14 @@ class RedactionContext
     /**
      * Objects currently on the recursion stack, used to break reference cycles.
      *
-     * @var \SplObjectStorage<object, null>
+     * Keyed by spl_object_id rather than held in an SplObjectStorage: the
+     * contains()/attach()/detach() trio is deprecated in PHP 8.5, and a
+     * deprecation raised inside a log tap becomes a log record, which is
+     * redacted, which raises the deprecation again.
+     *
+     * @var array<int, true>
      */
-    private \SplObjectStorage $activeObjects;
+    private array $activeObjects = [];
 
     private int $depth = 0;
 
@@ -43,11 +48,7 @@ class RedactionContext
     public function __construct(
         public readonly RedactorConfig $config,
         public readonly OperatorRegistry $operators = new OperatorRegistry,
-    ) {
-        /** @var \SplObjectStorage<object, null> $storage */
-        $storage = new \SplObjectStorage;
-        $this->activeObjects = $storage;
-    }
+    ) {}
 
     /**
      * Enter one level of nesting. Returns false when the configured max depth
@@ -82,18 +83,20 @@ class RedactionContext
      */
     public function enterObject(object $object): bool
     {
-        if ($this->activeObjects->contains($object)) {
+        $id = spl_object_id($object);
+
+        if (isset($this->activeObjects[$id])) {
             return false;
         }
 
-        $this->activeObjects->attach($object);
+        $this->activeObjects[$id] = true;
 
         return true;
     }
 
     public function leaveObject(object $object): void
     {
-        $this->activeObjects->detach($object);
+        unset($this->activeObjects[spl_object_id($object)]);
     }
 
     /**
