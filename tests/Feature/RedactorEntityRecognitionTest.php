@@ -8,10 +8,14 @@ use Illuminate\Support\Facades\Http;
 use Kirschbaum\Redactor\Recognition\CircuitBreaker;
 use Kirschbaum\Redactor\Recognition\RecognizedSpan;
 use Kirschbaum\Redactor\Recognition\Recognizer;
+use Kirschbaum\Redactor\Recognition\Recognizers\PresidioRecognizer;
+use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Strategies\EntityRecognitionStrategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
+use RuntimeException;
 
 const NER_URL = 'http://presidio.test/analyze';
 
@@ -222,5 +226,86 @@ describe('Conditional strategies', function (): void {
         config()->set('redactor.profiles.ner', nerProfile(['recognition' => ['enabled' => false]]));
 
         expect(resolve(Redactor::class)->validateProfiles())->not->toHaveKey('ner');
+    });
+});
+
+describe('Entity recognition at its edges', function (): void {
+    beforeEach(function (): void {
+        CircuitBreaker::reset();
+        config()->set('redactor.profiles.ner', nerProfile());
+    });
+
+    it('skips a span that covers only whitespace', function (): void {
+        Http::fake([NER_URL => Http::response(presidio([['PERSON', 11, 12, 0.9]]))]);
+        $text = 'Please call John Smith about the invoice';
+
+        $result = resolve(Redactor::class)->inspect($text, 'ner');
+
+        expect($result->value)->toBe($text)
+            ->and($result->findings)->toBe([]);
+    });
+
+    it('maps a label through entity_map, and falls back to the lowercased label when the map is not a map', function (): void {
+        Http::fake([NER_URL => Http::response(presidio([['PERSON', 12, 22, 0.85]]))]);
+        $text = 'Please call John Smith about the invoice';
+
+        config()->set('redactor.profiles.ner.recognition.entity_map', ['PERSON' => 'customer']);
+        $mapped = resolve(Redactor::class)->inspect($text, 'ner')->findings[0]->entity;
+
+        config()->set('redactor.profiles.ner.recognition.entity_map', 'customer');
+        $unmapped = resolve(Redactor::class)->inspect($text, 'ner')->findings[0]->entity;
+
+        expect($mapped)->toBe('customer')
+            ->and($unmapped)->toBe('person');
+    });
+
+    it('declines prose when the profile has recognition switched off, even when asked directly', function (): void {
+        config()->set('redactor.profiles.ner.recognition.enabled', false);
+        $context = new RedactionContext(RedactorConfig::fromConfig('ner'));
+
+        expect((new EntityRecognitionStrategy)->shouldHandle('Please call John Smith about the invoice', 'k', $context))->toBeFalse();
+    });
+
+    it('rejects a Presidio body that is not a list', function (): void {
+        Http::fake([NER_URL => Http::response('"just a string"', 200, ['Content-Type' => 'application/json'])]);
+
+        expect(fn (): array => (new PresidioRecognizer(NER_URL, 1.0))->recognize('Please call John Smith', 'en', [], 0.5))
+            ->toThrow(RuntimeException::class, 'non-list');
+    });
+
+    it('skips malformed Presidio items and keeps the well-formed ones', function (): void {
+        Http::fake([NER_URL => Http::response([
+            'nope',
+            ['entity_type' => 'PERSON', 'start' => 'x', 'end' => 4, 'score' => 0.9],
+            ['entity_type' => 'PERSON', 'start' => 12, 'end' => 22, 'score' => 0.9],
+        ])]);
+
+        $spans = (new PresidioRecognizer(NER_URL, 1.0))->recognize('Please call John Smith', 'en', ['PERSON'], 0.5);
+
+        expect($spans)->toHaveCount(1)
+            ->and($spans[0]->start)->toBe(12)
+            ->and($spans[0]->end)->toBe(22);
+    });
+
+    it('exposes the recogniser registry with the built-in and anything registered since', function (): void {
+        $redactor = resolve(Redactor::class);
+
+        expect($redactor->recognizers()->has('presidio'))->toBeTrue()
+            ->and($redactor->recognizers()->has('stub'))->toBeFalse();
+
+        $redactor->registerRecognizer(new class implements Recognizer
+        {
+            public function name(): string
+            {
+                return 'stub';
+            }
+
+            public function recognize(string $text, string $language, array $entities, float $scoreThreshold): array
+            {
+                return [];
+            }
+        });
+
+        expect($redactor->recognizers()->has('stub'))->toBeTrue();
     });
 });

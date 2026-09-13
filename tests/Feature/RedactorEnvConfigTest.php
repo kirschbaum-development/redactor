@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Kirschbaum\Redactor\Config\ConfigValue;
+use Kirschbaum\Redactor\Exceptions\ConfigurationException;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Scanner\FileCollector;
@@ -162,5 +163,35 @@ describe('ConfigValue coercion', function (): void {
     it('names the offending config path in every message', function (): void {
         expect(fn (): bool => ConfigValue::bool('maybe', true, 'profiles.x.enabled'))
             ->toThrow(\InvalidArgumentException::class, 'profiles.x.enabled');
+    });
+});
+
+describe('ConfigValue coercion of the other shapes', function (): void {
+    it('stringifies a number, since a replacement of 0 is still a replacement', function (): void {
+        expect(ConfigValue::string(5, 'x', 'p'))->toBe('5')
+            ->and(ConfigValue::string(1.5, 'x', 'p'))->toBe('1.5');
+    });
+
+    it('rejects anything else as a string and says what it got', function (): void {
+        expect(fn (): string => ConfigValue::string(true, 'x', 'p'))
+            ->toThrow(ConfigurationException::class, 'got true')
+            ->and(fn (): string => ConfigValue::string(['a'], 'x', 'p'))
+            ->toThrow(ConfigurationException::class, 'got array')
+            ->and(fn (): string => ConfigValue::string(new \stdClass, 'x', 'p'))
+            ->toThrow(ConfigurationException::class, 'got stdClass');
+    });
+
+    it('describes a scalar of the wrong kind with its type', function (): void {
+        expect(fn (): bool => ConfigValue::bool(2, true, 'p'))
+            ->toThrow(ConfigurationException::class, 'got integer(2)')
+            ->and(fn (): bool => ConfigValue::bool(1.5, true, 'p'))
+            ->toThrow(ConfigurationException::class, 'got double(1.5)')
+            ->and(fn (): array => ConfigValue::map('nope', 'p'))
+            ->toThrow(ConfigurationException::class, 'got string("nope")');
+    });
+
+    it('reads a missing map as empty and a whole-number float as an integer', function (): void {
+        expect(ConfigValue::map(null, 'p'))->toBe([])
+            ->and(ConfigValue::positiveInt(3.0, 1, 'p'))->toBe(3);
     });
 });

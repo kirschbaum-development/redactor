@@ -79,14 +79,6 @@ class PathTrie
     }
 
     /**
-     * Flush the compiled trie cache.
-     */
-    public static function flush(): void
-    {
-        self::$memo = [];
-    }
-
-    /**
      * Identify a rule set by its patterns and what they do.
      *
      * Both halves matter: changing an operator without changing a pattern

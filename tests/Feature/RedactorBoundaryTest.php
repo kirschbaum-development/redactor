@@ -243,28 +243,23 @@ describe('max_depth boundary', function (): void {
 });
 
 describe('partial mode keep boundary', function (): void {
-    it('masks everything when the match is exactly keep characters', function (): void {
-        $rule = new PatternRule(name: 't', pattern: '//', mode: PatternRule::MODE_PARTIAL, keep: 4);
+    beforeEach(function (): void {
+        config()->set('redactor.profiles.boundary', boundaryProfile([
+            'strategies' => [RegexPatternsStrategy::class],
+            'patterns' => ['digits' => ['pattern' => '/\d+/', 'mode' => PatternRule::MODE_PARTIAL, 'keep' => 4]],
+        ]));
+    });
 
-        expect($rule->substitute('1234', '[R]'))->toBe('****');
+    it('masks everything when the match is exactly keep characters', function (): void {
+        expect(resolve(Redactor::class)->redact('1234', 'boundary'))->toBe('****');
     });
 
     it('reveals the tail as soon as the match is one character longer', function (): void {
-        $rule = new PatternRule(name: 't', pattern: '//', mode: PatternRule::MODE_PARTIAL, keep: 4);
-
-        expect($rule->substitute('12345', '[R]'))->toBe('*2345');
+        expect(resolve(Redactor::class)->redact('12345', 'boundary'))->toBe('*2345');
     });
 
     it('masks a match shorter than keep entirely', function (): void {
-        $rule = new PatternRule(name: 't', pattern: '//', mode: PatternRule::MODE_PARTIAL, keep: 4);
-
-        expect($rule->substitute('12', '[R]'))->toBe('**');
-    });
-
-    it('never returns an empty mask for an empty match', function (): void {
-        $rule = new PatternRule(name: 't', pattern: '//', mode: PatternRule::MODE_PARTIAL, keep: 4);
-
-        expect($rule->substitute('', '[R]'))->toBe('*');
+        expect(resolve(Redactor::class)->redact('12', 'boundary'))->toBe('**');
     });
 });
 

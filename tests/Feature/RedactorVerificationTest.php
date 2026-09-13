@@ -311,3 +311,53 @@ describe('The scan command gate', function (): void {
         Http::assertNothingSent();
     });
 });
+
+describe('Built-in verifiers on unexpected answers', function (): void {
+    it('reads a non-2xx from Slack, a Slack body without ok, and a non-401 failure from Stripe as unknown', function (): void {
+        Http::fake([
+            'slack.com/*' => Http::sequence()->push([], 500)->push(['team' => 'acme'], 200),
+            'api.stripe.com/*' => Http::response([], 503),
+        ]);
+
+        $slackDown = (new SlackTokenVerifier)->verify('xoxb-x');
+        $slackOdd = (new SlackTokenVerifier)->verify('xoxb-x');
+        $stripe = (new StripeKeyVerifier)->verify('sk_live_x');
+
+        expect($slackDown->status)->toBe(VerificationStatus::Unknown)
+            ->and($slackDown->note)->toContain('Slack returned 500')
+            ->and($slackOdd->status)->toBe(VerificationStatus::Unknown)
+            ->and($slackOdd->note)->toContain('unexpected')
+            ->and($stripe->status)->toBe(VerificationStatus::Unknown)
+            ->and($stripe->note)->toContain('Stripe returned 503');
+    });
+
+    it('leaves a finding unverified when no enabled verifier understands its entity', function (): void {
+        Http::fake();
+        $path = secretFile("STRIPE_KEY=sk_live_4eC39HqLyjWDarjtT1zdp7dc\n");
+
+        $scanner = (new Scanner(resolve(Redactor::class)))
+            ->withVerifier(new SecretVerifier(['github_token'], [new GitHubTokenVerifier]));
+
+        $result = $scanner->scanFile($path, 'file_scan');
+
+        expect($result->findings)->not->toBeEmpty()
+            ->and($result->findings[0]->verification)->toBeNull();
+
+        Http::assertNothingSent();
+
+        cleanupDirectory(dirname($path));
+    });
+
+    it('marks a confirmed-live credential LIVE in the table', function (): void {
+        config(['redactor.scan.profile' => 'file_scan', 'redactor.scan.baseline' => null]);
+        config(['redactor.scan.verification' => ['enabled' => true, 'verifiers' => ['github_token']]]);
+        Http::fake(['api.github.com/*' => Http::response(['login' => 'someone'], 200)]);
+        $path = secretFile("GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789\n");
+
+        Artisan::call('redactor:scan', ['paths' => [$path], '--verify' => true]);
+
+        expect(Artisan::output())->toContain('LIVE');
+
+        cleanupDirectory(dirname($path));
+    });
+});

@@ -49,22 +49,4 @@ final readonly class RedactionPolicy
 
         return $this->byEntity['default'] ?? $this->default;
     }
-
-    /**
-     * Get the profile's default operator.
-     */
-    public function defaultSpec(): OperatorSpec
-    {
-        return $this->byEntity['default'] ?? $this->default;
-    }
-
-    /**
-     * Get the entities with a configured operator.
-     *
-     * @return array<int, string>
-     */
-    public function entities(): array
-    {
-        return array_values(array_filter(array_keys($this->byEntity), fn (string $k): bool => $k !== 'default'));
-    }
 }

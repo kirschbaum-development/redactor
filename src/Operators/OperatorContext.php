@@ -53,14 +53,6 @@ class OperatorContext
     }
 
     /**
-     * Get an option value.
-     */
-    public function option(string $key, mixed $default = null): mixed
-    {
-        return $this->options[$key] ?? $default;
-    }
-
-    /**
      * Get an integer option, or the default.
      */
     public function intOption(string $key, int $default): int
@@ -88,15 +80,5 @@ class OperatorContext
         $value = $this->options[$key] ?? null;
 
         return is_string($value) && $value !== '' ? $value : $default;
-    }
-
-    /**
-     * Create a copy of the context with the given options.
-     *
-     * @param  array<string, mixed>  $options
-     */
-    public function withOptions(array $options): self
-    {
-        return new self($this->replacement, $options, $this->pseudonymizer);
     }
 }

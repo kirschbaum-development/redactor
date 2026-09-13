@@ -10,6 +10,7 @@ use Kirschbaum\Redactor\Exceptions\ProfileNotFoundException;
 use Kirschbaum\Redactor\Exceptions\PseudonymizationKeyException;
 use Kirschbaum\Redactor\Exceptions\RedactorException;
 use Kirschbaum\Redactor\Facades\Redactor;
+use Kirschbaum\Redactor\Findings\MatchFinding;
 use Kirschbaum\Redactor\PendingRedaction;
 use Kirschbaum\Redactor\RedactionResult;
 use Kirschbaum\Redactor\Redactor as RedactorService;
@@ -100,5 +101,26 @@ describe('Package exceptions', function (): void {
 
     it('marks git failures', function (): void {
         expect(new GitException('x'))->toBeInstanceOf(RedactorException::class);
+    });
+});
+
+describe('Findings are JSON-friendly on their own', function (): void {
+    it('serialises a finding the same way as toArray, without the matched text', function (): void {
+        $finding = new MatchFinding(rule: 'email', key: 'contact', offset: 2, length: 3, matched: 'bob');
+
+        expect(json_decode((string) json_encode($finding), true))->toBe($finding->toArray())
+            ->and((string) json_encode($finding))->not->toContain('bob');
+    });
+});
+
+describe('Markers through the fluent entry point', function (): void {
+    it('writes the markers when asked, whatever the profile says', function (): void {
+        config()->set('redactor.profiles.default.mark_redacted', false);
+
+        $plain = Redactor::redact(['password' => 'hunter2']);
+        $marked = Redactor::profile('default')->withMarkers()->redact(['password' => 'hunter2']);
+
+        expect($plain)->not->toHaveKey('_redacted')
+            ->and($marked['_redacted'])->toBeTrue();
     });
 });

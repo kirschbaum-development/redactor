@@ -108,14 +108,6 @@ class RedactionContext
     }
 
     /**
-     * Get the current nesting depth.
-     */
-    public function currentDepth(): int
-    {
-        return $this->depth;
-    }
-
-    /**
      * Mark an object as being processed, returning false if it is already on the stack.
      */
     public function enterObject(object $object): bool
@@ -137,15 +129,6 @@ class RedactionContext
     public function leaveObject(object $object): void
     {
         unset($this->activeObjects[spl_object_id($object)]);
-    }
-
-    /**
-     * Add a key to the list of redacted keys.
-     */
-    public function addRedactedKey(string $key): void
-    {
-        $this->redactedKeys[] = $key;
-        $this->wasRedacted = true;
     }
 
     /**
@@ -199,14 +182,6 @@ class RedactionContext
     public function operatorSpecFor(Detection $detection, ?OperatorSpec $atLocation = null): OperatorSpec
     {
         return $this->config->policy->operatorFor($detection, $atLocation);
-    }
-
-    /**
-     * Determine if a detection clears the profile's confidence floor.
-     */
-    public function accepts(Detection $detection): bool
-    {
-        return $detection->confidence->meets($this->config->minConfidence);
     }
 
     /**

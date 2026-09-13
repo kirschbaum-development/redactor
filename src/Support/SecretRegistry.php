@@ -25,18 +25,6 @@ class SecretRegistry
     private int $shortest = PHP_INT_MAX;
 
     /**
-     * Create a new secret registry instance.
-     *
-     * @param  array<int, string>  $values
-     */
-    public function __construct(array $values = [], string $entity = 'known_secret')
-    {
-        foreach ($values as $value) {
-            $this->add($value, $entity);
-        }
-    }
-
-    /**
      * Register one value, returning false if it was too short to be safe.
      */
     public function add(string $value, string $entity = 'known_secret'): bool
@@ -57,14 +45,6 @@ class SecretRegistry
     public function couldContainOne(string $subject): bool
     {
         return $this->secrets !== [] && strlen($subject) >= $this->shortest;
-    }
-
-    /**
-     * Determine if the registry has no values.
-     */
-    public function isEmpty(): bool
-    {
-        return $this->secrets === [];
     }
 
     /**

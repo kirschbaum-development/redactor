@@ -222,20 +222,6 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, Strategy
     }
 
     /**
-     * Split a value into the tokens entropy is measured over.
-     *
-     * @return array<int, string>
-     */
-    protected function tokenize(string $value): array
-    {
-        $tokens = $this->isAscii($value)
-            ? preg_split('/\s+/', $value, -1, PREG_SPLIT_NO_EMPTY)
-            : preg_split('/\s+/u', $value, -1, PREG_SPLIT_NO_EMPTY);
-
-        return $tokens === false ? [$value] : $tokens;
-    }
-
-    /**
      * The charsets a token can be drawn from, most restrictive first.
      *
      * A 40-character hex digest tops out at 4 bits per character because it

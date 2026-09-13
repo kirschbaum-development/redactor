@@ -329,3 +329,11 @@ describe('Path compilation', function (): void {
             ->and($cursor->descend('secret')->match())->not->toBeNull();
     });
 });
+
+describe('Path trie states', function (): void {
+    it('keeps an exhausted state set exhausted, whatever segment follows', function (): void {
+        $trie = PathTrie::compile(['a.b' => new OperatorSpec('redact')]);
+
+        expect($trie->advance([], 'a'))->toBe([]);
+    });
+});

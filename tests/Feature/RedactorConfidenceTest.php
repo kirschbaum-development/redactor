@@ -235,3 +235,39 @@ describe('Confidence in scan output', function (): void {
         expect(Artisan::output())->toContain('Severity');
     });
 });
+
+describe('Low confidence in scan output', function (): void {
+    beforeEach(function (): void {
+        config(['redactor.scan.profile' => 'file_scan', 'redactor.scan.baseline' => null]);
+        config(['redactor.profiles.file_scan.min_confidence' => 0.0]);
+        config(['redactor.profiles.file_scan.patterns.weak' => ['pattern' => '/demo-secret-\d+/', 'confidence' => 0.4]]);
+
+        $this->dir = sys_get_temp_dir().'/redactor_weak_'.uniqid();
+        mkdir($this->dir);
+        file_put_contents($this->dir.'/weak.txt', "note demo-secret-12345\n");
+    });
+
+    afterEach(fn () => cleanupDirectory($this->dir));
+
+    it('reports a weak rule as low severity', function (): void {
+        Artisan::call('redactor:scan', ['paths' => [$this->dir.'/weak.txt'], '--output' => 'json']);
+
+        $finding = json_decode(Artisan::output(), true)[0]['findings'][0];
+
+        expect($finding['rule'])->toBe('weak')
+            ->and($finding['severity'])->toBe('low');
+    });
+
+    it('maps low severity onto a SARIF note, so it never blocks a merge', function (): void {
+        Artisan::call('redactor:scan', ['paths' => [$this->dir.'/weak.txt'], '--output' => 'sarif']);
+
+        expect(json_decode(Artisan::output(), true)['runs'][0]['results'][0]['level'])->toBe('note');
+    });
+
+    it('labels low severity LOW in the table', function (): void {
+        Artisan::call('redactor:scan', ['paths' => [$this->dir.'/weak.txt']]);
+
+        expect(Artisan::output())->toContain('LOW')
+            ->and(Artisan::output())->not->toContain('VERY LOW');
+    });
+});

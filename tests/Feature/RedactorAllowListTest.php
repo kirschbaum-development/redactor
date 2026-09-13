@@ -170,3 +170,30 @@ describe('Entropy tokenising stays flat in memory', function (): void {
         expect($delta)->toBeLessThan(strlen($subject));
     });
 });
+
+describe('Allow list entries', function (): void {
+    it('ignores blank entries rather than allowing an empty value', function (): void {
+        $list = AllowList::for(['', '  ', 'noreply@example.com']);
+
+        expect($list->allows(''))->toBeFalse()
+            ->and($list->allows('noreply@example.com'))->toBeTrue();
+    });
+
+    it('treats an entry too short to be a regex as a literal', function (): void {
+        $list = AllowList::for(['//', '~']);
+
+        expect($list->allows('//'))->toBeTrue()
+            ->and($list->allows('~'))->toBeTrue()
+            ->and($list->allows('anything'))->toBeFalse();
+    });
+
+    it('accepts bracket-delimited regex entries', function (): void {
+        $list = AllowList::for(['(^test-\d+$)i', '[^sandbox-\w+$]', '{^demo-\d+$}', '<^sample-\d+$>']);
+
+        expect($list->allows('TEST-42'))->toBeTrue()
+            ->and($list->allows('sandbox-abc'))->toBeTrue()
+            ->and($list->allows('demo-1'))->toBeTrue()
+            ->and($list->allows('sample-2'))->toBeTrue()
+            ->and($list->allows('test-x'))->toBeFalse();
+    });
+});

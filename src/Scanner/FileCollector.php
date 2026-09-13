@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Scanner;
 
-use SplFileInfo;
 use Symfony\Component\Finder\Finder;
+use Symfony\Component\Finder\SplFileInfo;
 
 class FileCollector
 {
@@ -101,10 +101,7 @@ class FileCollector
         }
 
         $basename = $file->getFilename();
-
-        $relativePath = $file instanceof \Symfony\Component\Finder\SplFileInfo
-            ? str_replace('\\', '/', $file->getRelativePathname())
-            : $basename;
+        $relativePath = str_replace('\\', '/', $file->getRelativePathname());
 
         foreach ($excludePatterns as $pattern) {
             if ($pattern === '') {
@@ -191,14 +188,7 @@ class FileCollector
      */
     private static function looksBinary(string $filePath): bool
     {
-        $handle = @fopen($filePath, 'rb');
-
-        if ($handle === false) {
-            return false;
-        }
-
-        $sample = fread($handle, self::BINARY_SNIFF_BYTES);
-        fclose($handle);
+        $sample = @file_get_contents($filePath, false, null, 0, self::BINARY_SNIFF_BYTES);
 
         if ($sample === false || $sample === '') {
             return false;
@@ -209,13 +199,14 @@ class FileCollector
             return true;
         }
 
-        // Treat content that is neither valid UTF-8 nor predominantly printable as binary...
         if (mb_check_encoding($sample, 'UTF-8')) {
             return false;
         }
 
-        $printable = strlen((string) preg_replace('/[^\P{C}\n\r\t]/u', '', $sample));
+        // Not UTF-8, so judge it by bytes: text in a legacy encoding has almost no
+        // C0 or C1 control bytes, while random binary is a quarter of them...
+        $control = preg_match_all('/[\x00-\x08\x0E-\x1F\x7F-\x9F]/', $sample);
 
-        return $printable < strlen($sample) * 0.7;
+        return $control > strlen($sample) * 0.05;
     }
 }

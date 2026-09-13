@@ -78,3 +78,14 @@ describe('Redactor::fake()', function (): void {
             ->and($fake->recorded())->toBe([]);
     });
 });
+
+describe('Redactor::fake() findings', function (): void {
+    it('fails when no call produced a finding from the named rule', function (): void {
+        $fake = Redactor::fake();
+
+        Redactor::redact(['password' => 'hunter2']);
+
+        expect(fn () => $fake->assertFinding('credit_card'))
+            ->toThrow(AssertionFailedError::class, 'No finding from rule [credit_card]');
+    });
+});

@@ -20,12 +20,4 @@ class MaskOperator implements Operator
 
         return str_repeat($char, max(1, mb_strlen($detection->value)));
     }
-
-    /**
-     * Determine if the operator leaves the value as it found it.
-     */
-    public function isPreserving(): bool
-    {
-        return false;
-    }
 }

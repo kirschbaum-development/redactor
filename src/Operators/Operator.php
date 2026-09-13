@@ -21,11 +21,4 @@ interface Operator
      * Produce the text that replaces the detected span.
      */
     public function apply(Detection $detection, OperatorContext $context): string;
-
-    /**
-     * Determine if the operator leaves the value as it found it.
-     *
-     * This decides whether anything changed, which drives the redaction flag.
-     */
-    public function isPreserving(): bool;
 }

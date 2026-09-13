@@ -37,12 +37,4 @@ class HashOperator implements Operator
             ? sprintf('[%s:%s]', $detection->entity, $token)
             : $token;
     }
-
-    /**
-     * Determine if the operator leaves the value as it found it.
-     */
-    public function isPreserving(): bool
-    {
-        return false;
-    }
 }

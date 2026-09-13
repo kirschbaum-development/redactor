@@ -13,9 +13,12 @@ use Kirschbaum\Redactor\Operators\OperatorSpec;
 use Kirschbaum\Redactor\Operators\Surrogates\CharacterClassSurrogate;
 use Kirschbaum\Redactor\Operators\Surrogates\CreditCardSurrogate;
 use Kirschbaum\Redactor\Operators\Surrogates\EmailSurrogate;
+use Kirschbaum\Redactor\Operators\Surrogates\SurrogateFactory;
+use Kirschbaum\Redactor\Operators\Surrogates\SurrogateGenerator;
 use Kirschbaum\Redactor\Patterns\Validator;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
+use Kirschbaum\Redactor\Support\DeterministicRandom;
 use Kirschbaum\Redactor\Support\Pseudonymizer;
 
 function detection(string $value, string $entity = 'generic'): Detection
@@ -69,8 +72,7 @@ describe('Operators', function (): void {
     });
 
     it('preserves a value while still reporting it', function (): void {
-        expect(operate('preserve', 'hunter2'))->toBe('hunter2')
-            ->and((new OperatorRegistry)->get('preserve')->isPreserving())->toBeTrue();
+        expect(operate('preserve', 'hunter2'))->toBe('hunter2');
     });
 
     it('names the unknown operator rather than failing silently', function (): void {
@@ -85,11 +87,6 @@ describe('Operators', function (): void {
             public function apply(Detection $d, OperatorContext $c): string
             {
                 return strtoupper($d->value);
-            }
-
-            public function isPreserving(): bool
-            {
-                return false;
             }
         });
 
@@ -361,5 +358,114 @@ describe('Pseudonymization end to end', function (): void {
 
         expect(resolve(Redactor::class)->redact('mail a@b.com now', 'pseudo'))
             ->toBe('mail [REDACTED] now');
+    });
+});
+
+describe('Operator specs in their other shapes', function (): void {
+    it('rejects a list that names no operator', function (): void {
+        expect(fn (): OperatorSpec => OperatorSpec::parse(['partial'], 'p'))
+            ->toThrow(\InvalidArgumentException::class, 'must name an operator');
+    });
+
+    it('hands back a spec that is already parsed, so config built in PHP can pass one', function (): void {
+        $spec = new OperatorSpec('mask', ['mask_character' => '#']);
+
+        config()->set('redactor.profiles.pseudo', pseudoProfile([
+            'patterns' => ['email' => ['pattern' => '/[a-z]+@[a-z.]+/', 'entity' => 'email', 'operator' => $spec]],
+        ]));
+
+        expect(OperatorSpec::parse($spec, 'p'))->toBe($spec)
+            ->and(resolve(Redactor::class)->redact('mail bob@example.com', 'pseudo'))->toBe('mail ###############');
+    });
+
+    it('falls back to the replacement when a profile names an operator nobody registered', function (): void {
+        config()->set('redactor.profiles.pseudo', pseudoProfile(['operators' => ['default' => 'teleport']]));
+
+        $result = resolve(Redactor::class)->inspect('mail bob@example.com', 'pseudo');
+
+        expect($result->value)->toBe('mail [REDACTED]')
+            ->and($result->wasRedacted)->toBeTrue();
+    });
+});
+
+describe('Operator context', function (): void {
+    it('redacts plainly in hash mode when there is no key, rather than emit an unkeyed token', function (): void {
+        $hashed = (new OperatorRegistry)->get('hash')->apply(detection('hunter2'), new OperatorContext('[REDACTED]'));
+
+        expect($hashed)->toBe('[REDACTED]');
+    });
+
+    it('resolves the pseudonymizer once, however many times it is asked', function (): void {
+        $resolved = 0;
+        $context = new OperatorContext('[REDACTED]', [], function () use (&$resolved): Pseudonymizer {
+            $resolved++;
+
+            return Pseudonymizer::fromKey(testPseudonymizationKey());
+        });
+
+        $first = $context->pseudonymizer();
+
+        expect($context->pseudonymizer())->toBe($first)
+            ->and($resolved)->toBe(1);
+    });
+});
+
+describe('Pseudonymization key fallbacks', function (): void {
+    beforeEach(fn () => config()->set('redactor.profiles.pseudo', pseudoProfile([
+        'operators' => ['default' => 'surrogate'],
+        'pseudonymization' => ['enabled' => true],
+    ])));
+
+    it('redacts plainly when neither a key nor APP_KEY is configured', function (): void {
+        config()->set('redactor.pseudonymization.key');
+        config()->set('app.key', '');
+
+        expect(resolve(Redactor::class)->redact('mail bob@example.com', 'pseudo'))->toBe('mail [REDACTED]');
+    });
+
+    it('redacts plainly when the configured key is unusable, rather than throwing mid-log-line', function (): void {
+        config()->set('redactor.pseudonymization.key', 'short');
+
+        expect(resolve(Redactor::class)->redact('mail bob@example.com', 'pseudo'))->toBe('mail [REDACTED]');
+    });
+});
+
+describe('Surrogate generators at their edges', function (): void {
+    it('leaves a card with fewer than two digits alone, since there is nothing to keep Luhn-valid', function (): void {
+        expect((new CreditCardSurrogate)->generate('7', new DeterministicRandom('k', 's')))->toBe('7');
+    });
+
+    it('invents a whole address when an email entity carries no @', function (): void {
+        expect((new EmailSurrogate)->generate('not-an-address', new DeterministicRandom('k', 's')))
+            ->toMatch('/^u_[a-z0-9]{6}@example\.invalid$/');
+    });
+
+    it('lets a registered generator claim a value ahead of the built-ins, and shapes the rest', function (): void {
+        $factory = new SurrogateFactory;
+        $factory->register(new class implements SurrogateGenerator
+        {
+            public function supports(string $entity, string $value): bool
+            {
+                return $entity === 'email';
+            }
+
+            public function generate(string $value, DeterministicRandom $random, array $options = []): string
+            {
+                return 'claimed';
+            }
+        });
+
+        expect($factory->generate('email', 'bob@example.com', new DeterministicRandom('k', 's')))->toBe('claimed')
+            ->and($factory->generate('policy', 'AB-1234', new DeterministicRandom('k', 's')))->toMatch('/^[A-Z]{2}-\d{4}$/');
+    });
+});
+
+describe('Deterministic random', function (): void {
+    it('answers zero for a bound of one without drawing a byte', function (): void {
+        $random = new DeterministicRandom('k', 's');
+
+        expect($random->below(1))->toBe(0)
+            ->and($random->below(0))->toBe(0)
+            ->and($random->token(3, 'a'))->toBe('aaa');
     });
 });

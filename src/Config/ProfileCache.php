@@ -60,12 +60,4 @@ class ProfileCache
 
         return $built;
     }
-
-    /**
-     * Flush every cached profile.
-     */
-    public static function flush(): void
-    {
-        self::$entries = [];
-    }
 }

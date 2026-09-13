@@ -22,12 +22,4 @@ class PreserveOperator implements Operator
     {
         return $detection->value;
     }
-
-    /**
-     * Determine if the operator leaves the value as it found it.
-     */
-    public function isPreserving(): bool
-    {
-        return true;
-    }
 }

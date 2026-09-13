@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Kirschbaum\Redactor\Http\Middleware\RedactResponse;
 use Kirschbaum\Redactor\Redactor;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 describe('The redact middleware', function (): void {
@@ -114,5 +115,19 @@ describe('The nullify operator', function (): void {
         ]));
 
         expect(resolve(Redactor::class)->redact('mail bob@example.com now', 'api'))->toBe('mail  now');
+    });
+});
+
+describe('The redact middleware and file downloads', function (): void {
+    it('leaves a file download alone rather than read the file into memory', function (): void {
+        $path = tempnam(sys_get_temp_dir(), 'redactor');
+        file_put_contents($path, 'bob@example.com');
+        $download = new BinaryFileResponse($path);
+
+        $middleware = new RedactResponse(resolve(Redactor::class));
+
+        expect($middleware->handle(Request::create('/'), fn (): BinaryFileResponse => $download))->toBe($download);
+
+        unlink($path);
     });
 });

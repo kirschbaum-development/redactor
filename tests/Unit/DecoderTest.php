@@ -45,3 +45,22 @@ describe('Decoder', function (): void {
         expect(Decoder::derive("just a line\nand another\n"))->toBe([]);
     });
 });
+
+describe('Decoder when the engine gives up', function (): void {
+    it('derives nothing rather than throwing or returning half a result', function (): void {
+        $window = 'GET /cb?token=%73%6b%5f%6c%69%76%65 '.str_repeat('A', 25)."\n";
+
+        expect(Decoder::derive($window))->not->toBe([]);
+
+        $limit = (string) ini_get('pcre.backtrack_limit');
+        ini_set('pcre.backtrack_limit', '1');
+
+        try {
+            // Sanity check: with the limit this low the engine really does give up on anything that backtracks.
+            expect(@preg_match('/a*ab/', 'aaab'))->toBeFalse()
+                ->and(Decoder::derive($window))->toBe([]);
+        } finally {
+            ini_set('pcre.backtrack_limit', $limit);
+        }
+    });
+});

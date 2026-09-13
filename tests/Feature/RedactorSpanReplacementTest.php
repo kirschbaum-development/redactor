@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Findings\MatchFinding;
 use Kirschbaum\Redactor\Patterns\PatternRule;
 use Kirschbaum\Redactor\Redactor;
@@ -236,9 +237,11 @@ describe('Pattern rule modes', function (): void {
     });
 
     it('counts characters, not bytes, when masking', function (): void {
-        $rule = new PatternRule(name: 't', pattern: '//', mode: PatternRule::MODE_MASK);
+        config()->set('redactor.profiles.span', spanProfile([
+            'word' => ['pattern' => '/h\p{L}+/u', 'mode' => PatternRule::MODE_MASK],
+        ]));
 
-        expect($rule->substitute('héllo', '[R]'))->toBe('*****');
+        expect(resolve(Redactor::class)->redact('say héllo', 'span'))->toBe('say *****');
     });
 });
 
@@ -311,5 +314,30 @@ describe('Strategy chaining', function (): void {
 
         expect(resolve(Redactor::class)->redact(['secret_note' => 'bob@example.com'], 'terminal'))
             ->toBe(['secret_note' => '[REDACTED]']);
+    });
+});
+
+describe('Pattern rule definitions at their edges', function (): void {
+    it('drops an uncompilable pattern given in the long form too', function (): void {
+        config()->set('redactor.profiles.span', spanProfile([
+            'ok' => EMAIL,
+            'broken' => ['pattern' => '/[unclosed/', 'entity' => 'x'],
+        ]));
+
+        expect(array_keys(RedactorConfig::fromConfig('span')->patterns))->toBe(['ok']);
+    });
+
+    it('falls back to medium confidence when the configured confidence is not a number', function (): void {
+        config()->set('redactor.profiles.span', spanProfile(['email' => ['pattern' => EMAIL, 'confidence' => 'high']]));
+
+        expect(RedactorConfig::fromConfig('span')->patterns['email']->confidence)->toBe(Confidence::MEDIUM);
+    });
+
+    it('masks with an asterisk when the mask character is configured empty', function (): void {
+        config()->set('redactor.profiles.span', spanProfile([
+            'email' => ['pattern' => EMAIL, 'mode' => PatternRule::MODE_MASK, 'mask_character' => ''],
+        ]));
+
+        expect(resolve(Redactor::class)->redact('mail bob@example.com', 'span'))->toBe('mail ***************');
     });
 });

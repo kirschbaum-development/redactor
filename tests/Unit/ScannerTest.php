@@ -188,3 +188,20 @@ describe('Scanner', function (): void {
     });
 
 });
+
+describe('Scanner excerpts', function (): void {
+    it('truncates a long excerpt so a minified line does not flood the report', function (): void {
+        $dir = sys_get_temp_dir().'/scanner_excerpt_'.uniqid();
+        mkdir($dir);
+        file_put_contents($dir.'/long.txt', 'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE '.str_repeat('x', 300)."\n");
+
+        $result = (new Scanner(resolve(Redactor::class)))->scanFile($dir.'/long.txt', 'file_scan');
+
+        expect($result->findings)->not->toBeEmpty()
+            ->and($result->findings[0]->excerpt)->toEndWith('...')
+            ->and(strlen($result->findings[0]->excerpt))->toBe(203)
+            ->and($result->findings[0]->excerpt)->not->toContain('AKIAIOSFODNN7EXAMPLE');
+
+        cleanupDirectory($dir);
+    });
+});

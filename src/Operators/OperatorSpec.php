@@ -88,14 +88,4 @@ final readonly class OperatorSpec
 
         return $out;
     }
-
-    /**
-     * Create a copy of the spec with the given defaults beneath its options.
-     *
-     * @param  array<string, mixed>  $defaults
-     */
-    public function withDefaults(array $defaults): self
-    {
-        return new self($this->name, [...$defaults, ...$this->options]);
-    }
 }

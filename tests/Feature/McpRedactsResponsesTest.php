@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Generator;
+use Kirschbaum\Redactor\Mcp\McpResponseRedactor;
 use Kirschbaum\Redactor\Mcp\RedactsResponses;
+use Kirschbaum\Redactor\Redactor;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\ResponseFactory;
@@ -12,6 +15,7 @@ use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Prompt;
 use Laravel\Mcp\Server\Resource;
 use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Transport\JsonRpcResponse;
 
 class LeakyTool extends Tool
 {
@@ -159,5 +163,79 @@ describe('RedactsResponses on an MCP server', function (): void {
             ->assertOk()
             ->assertDontSee('bob@example.com')
             ->assertSee('@example.com');
+    });
+});
+
+function mcpRedactor(?string $profile = null): McpResponseRedactor
+{
+    return new McpResponseRedactor(resolve(Redactor::class), $profile);
+}
+
+describe('McpResponseRedactor on raw JSON-RPC responses', function (): void {
+    it('redacts each response of a streamed iterable as it is yielded', function (): void {
+        $responses = (function (): Generator {
+            yield JsonRpcResponse::result(1, ['content' => [['type' => 'text', 'text' => 'first bob@example.com']]]);
+            yield JsonRpcResponse::result(2, ['content' => [['type' => 'text', 'text' => 'second sk_live_4eC39HqLyjWDarjtT1zdp7dc']]]);
+        })();
+
+        $out = mcpRedactor()->redact($responses);
+
+        expect($out)->toBeInstanceOf(Generator::class);
+
+        $texts = array_map(
+            fn (JsonRpcResponse $r): string => $r->content['result']['content'][0]['text'],
+            iterator_to_array($out, false)
+        );
+
+        expect($texts[0])->toBe('first [REDACTED]')
+            ->and($texts[1])->not->toContain('sk_live_4eC39HqLyjWDarjtT1zdp7dc')
+            ->and($texts[1])->toStartWith('second ');
+    });
+
+    it('redacts a JSON-RPC error message', function (): void {
+        $response = mcpRedactor()->redact(JsonRpcResponse::error(1, -32000, 'failed for bob@example.com'));
+
+        expect($response->content['error']['message'])->toBe('failed for [REDACTED]');
+    });
+
+    it('redacts the content a streamed notification carries', function (): void {
+        $response = mcpRedactor()->redact(JsonRpcResponse::notification('notifications/message', [
+            'content' => [['type' => 'text', 'text' => 'hi bob@example.com']],
+        ]));
+
+        expect($response->content['params']['content'][0]['text'])->toBe('hi [REDACTED]');
+    });
+
+    it('redacts a prompt message given as a bare string and leaves content that is not a block alone', function (): void {
+        $response = mcpRedactor()->redact(JsonRpcResponse::result(1, [
+            'messages' => [
+                ['role' => 'user', 'content' => 'ask bob@example.com'],
+                ['role' => 'assistant', 'content' => 42],
+            ],
+            'content' => ['not a block', ['type' => 'text', 'text' => 'from bob@example.com']],
+        ]));
+
+        $result = $response->content['result'];
+
+        expect($result['messages'][0]['content'])->toBe('ask [REDACTED]')
+            ->and($result['messages'][1]['content'])->toBe(42)
+            ->and($result['content'][0])->toBe('not a block')
+            ->and($result['content'][1]['text'])->toBe('from [REDACTED]');
+    });
+
+    it('redacts the text of a resource embedded in tool content', function (): void {
+        $response = mcpRedactor()->redact(JsonRpcResponse::result(1, [
+            'content' => [['type' => 'resource', 'resource' => ['uri' => 'file:///owner.txt', 'text' => 'owner bob@example.com']]],
+        ]));
+
+        expect($response->content['result']['content'][0]['resource']['text'])->toBe('owner [REDACTED]');
+    });
+
+    it('replaces structured content wholesale when it cannot be redacted', function (): void {
+        $response = mcpRedactor('no_such_profile')->redact(JsonRpcResponse::result(1, [
+            'structuredContent' => ['email' => 'bob@example.com'],
+        ]));
+
+        expect($response->content['result']['structuredContent'])->toBe(['redaction' => 'failed']);
     });
 });

@@ -58,6 +58,9 @@ class DeterministicRandom
         $max = 256 ** $bytes;
         $limit = $max - ($max % $bound);
 
+        $value = 0;
+
+        // Sixty-four rejections in a row is astronomically unlikely, so the last draw is folded rather than looping forever...
         for ($attempt = 0; $attempt < 64; $attempt++) {
             $value = 0;
             for ($i = 0; $i < $bytes; $i++) {
@@ -65,11 +68,10 @@ class DeterministicRandom
             }
 
             if ($value < $limit) {
-                return $value % $bound;
+                break;
             }
         }
 
-        // Astronomically unlikely, so fold rather than loop forever...
         return $value % $bound;
     }
 

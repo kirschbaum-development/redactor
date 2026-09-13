@@ -10,6 +10,7 @@ use Kirschbaum\Redactor\Redactor as RedactorService;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Tokenization\Detokenizer;
+use Kirschbaum\Redactor\Tokenization\LazyTokenStore;
 use Kirschbaum\Redactor\Tokenization\TokenStore;
 
 describe('Reversible tokens', function (): void {
@@ -112,5 +113,74 @@ describe('Reversible tokens', function (): void {
 
         expect($redactor->operators()->has('tokenize'))->toBeTrue()
             ->and($redactor->redact('nothing sensitive'))->toBe('nothing sensitive');
+    });
+});
+
+describe('The token store', function (): void {
+    beforeEach(function (): void {
+        config()->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
+        config()->set('redactor.pseudonymization.key', testPseudonymizationKey());
+        config()->set('redactor.profiles.ai', [
+            'enabled' => true,
+            'strategies' => [RegexPatternsStrategy::class],
+            'safe_keys' => [],
+            'blocked_keys' => [],
+            'patterns' => ['email' => ['pattern' => '/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/', 'entity' => 'email']],
+            'operators' => ['default' => 'tokenize'],
+            'replacement' => '[REDACTED]',
+            'mark_redacted' => false,
+            'track_redacted_keys' => false,
+            'non_redactable_object_behavior' => 'preserve',
+            'max_value_length' => null,
+            'redact_large_objects' => false,
+            'max_object_size' => 100,
+            'shannon_entropy' => ['enabled' => false],
+        ]);
+    });
+
+    it('keeps a token for good when no ttl is configured', function (): void {
+        config()->set('redactor.tokenization.ttl');
+
+        $token = (new Detokenizer(resolve(TokenStore::class)))->tokensIn(Redactor::redact('alice@customer.com', 'ai'))[0];
+
+        $this->travel(10)->years();
+
+        expect(resolve(TokenStore::class)->get($token))->toBe('alice@customer.com');
+    });
+
+    it('treats a token whose payload no longer decrypts as unknown', function (): void {
+        $out = Redactor::redact('alice@customer.com', 'ai');
+        $token = (new Detokenizer(resolve(TokenStore::class)))->tokensIn($out)[0];
+
+        Cache::put('redactor:token:'.$token, 'not-a-ciphertext', 60);
+
+        expect(resolve(TokenStore::class)->get($token))->toBeNull()
+            ->and(Redactor::detokenize($out))->toBe($out);
+    });
+
+    it('leaves content that is neither text nor an array alone when detokenizing', function (): void {
+        expect(Redactor::detokenize(42))->toBe(42)
+            ->and(Redactor::detokenize(null))->toBeNull();
+    });
+
+    it('resolves the underlying store once, on first use, for reads and forgets alike', function (): void {
+        $inner = resolve(TokenStore::class);
+        $resolved = 0;
+        $lazy = new LazyTokenStore(function () use ($inner, &$resolved): TokenStore {
+            $resolved++;
+
+            return $inner;
+        });
+
+        expect($resolved)->toBe(0);
+
+        $lazy->put('tok_email_abcdefghijkl', 'alice@customer.com', 'email');
+
+        expect($lazy->get('tok_email_abcdefghijkl'))->toBe('alice@customer.com');
+
+        $lazy->forget('tok_email_abcdefghijkl');
+
+        expect($lazy->get('tok_email_abcdefghijkl'))->toBeNull()
+            ->and($resolved)->toBe(1);
     });
 });

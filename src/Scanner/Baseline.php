@@ -107,11 +107,6 @@ class Baseline
         return file_put_contents($path, $json."\n") !== false;
     }
 
-    public function accepts(ScanFinding $finding): bool
-    {
-        return isset($this->fingerprints[$finding->fingerprint]);
-    }
-
     public function isEmpty(): bool
     {
         return $this->fingerprints === [];

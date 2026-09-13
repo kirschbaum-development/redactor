@@ -117,7 +117,7 @@ describe('FileCollector eligibility', function (): void {
         // come back as a finding.
         $base = tree([
             'text.txt' => "hello\nworld\n",
-            'image.bin' => "\x89PNG\r\n\x1a\n".random_bytes(512),
+            'image.bin' => "\x89PNG\r\n\x1a\n\x00\x00\x00\x0dIHDR".random_bytes(512),
         ]);
 
         expect(collected($base))->toBe(['text.txt']);
@@ -134,6 +134,23 @@ describe('FileCollector eligibility', function (): void {
         expect(collected($base, [], 10_485_760, false))->toBe(['image.bin', 'text.txt']);
 
         cleanupDirectory($base);
+    });
+
+    it('keeps text in a legacy encoding, which is not binary', function (): void {
+        $base = tree(['latin1.txt' => "caf\xe9 cr\xe8me br\xfbl\xe9e\n".str_repeat("R\xe9sum\xe9 de la r\xe9union\n", 40)]);
+
+        expect(collected($base))->toHaveCount(1);
+    });
+
+    it('skips NUL-free binary by its control bytes', function (): void {
+        $bytes = '';
+        for ($i = 1; $i < 256; $i++) {
+            $bytes .= chr($i);
+        }
+
+        $base = tree(['blob.bin' => str_repeat($bytes, 8)]);
+
+        expect(collected($base))->toHaveCount(0);
     });
 
     it('keeps UTF-8 text that is not ASCII', function (): void {
@@ -202,6 +219,19 @@ describe('FileCollector gitignore awareness', function (): void {
         exec('git -C '.escapeshellarg($base).' init -q 2>/dev/null');
 
         expect(collected($base, [], 10_485_760, true, false))->toContain('ignored.txt');
+
+        cleanupDirectory($base);
+    });
+});
+
+describe('FileCollector binary sniffing', function (): void {
+    it('skips content that is not valid UTF-8 even when it has no NUL byte', function (): void {
+        $base = tree([
+            'blob.bin' => str_repeat("\x80\x81\x82\x83\x84\x85\x86\x87", 64),
+            'text.txt' => 'ok',
+        ]);
+
+        expect(collected($base))->toBe(['text.txt']);
 
         cleanupDirectory($base);
     });

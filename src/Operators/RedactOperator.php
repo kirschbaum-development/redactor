@@ -18,12 +18,4 @@ class RedactOperator implements Operator
     {
         return $context->replacement;
     }
-
-    /**
-     * Determine if the operator leaves the value as it found it.
-     */
-    public function isPreserving(): bool
-    {
-        return false;
-    }
 }

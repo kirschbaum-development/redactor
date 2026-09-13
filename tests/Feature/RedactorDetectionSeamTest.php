@@ -7,10 +7,15 @@ namespace Tests\Feature;
 use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Detection\DetectionSet;
+use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Scanner\Scanner;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
+use Kirschbaum\Redactor\Strategies\EntityRecognitionStrategy;
+use Kirschbaum\Redactor\Strategies\KnownSecretsStrategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
@@ -329,5 +334,72 @@ describe('Pattern min_length', function (): void {
             $config = RedactorConfig::fromConfig('default');
             expect($config->patterns[$rule]->minLength)->toBeLessThanOrEqual(strlen($shortest), $rule);
         }
+    });
+});
+
+/**
+ * A chainable strategy that records the string it was handed.
+ */
+class SeamWitnessStrategy implements ChainableStrategy, Strategy
+{
+    public static ?string $seen = null;
+
+    public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
+    {
+        return is_string($value);
+    }
+
+    public function handle(mixed $value, string $key, RedactionContext $context): mixed
+    {
+        self::$seen = is_string($value) ? $value : null;
+
+        return $value.' !';
+    }
+}
+
+describe('The seam between detectors and everything after them', function (): void {
+    beforeEach(function (): void {
+        SeamWitnessStrategy::$seen = null;
+        config()->set('redactor.profiles.seam', seamProfile());
+    });
+
+    it('acts on the detections before a non-detecting strategy gets to see the value', function (): void {
+        $redactor = resolve(Redactor::class);
+        $redactor->registerCustomStrategy('seam_witness', new SeamWitnessStrategy);
+        config()->set('redactor.profiles.seam.strategies', [RegexPatternsStrategy::class, 'seam_witness']);
+
+        expect($redactor->redact('mail bob@example.com', 'seam'))->toBe('mail [REDACTED] !')
+            ->and(SeamWitnessStrategy::$seen)->toBe('mail [REDACTED]');
+    });
+
+    it('skips a detection whose offset lies before the cursor rather than splice garbage', function (): void {
+        $context = new RedactionContext(RedactorConfig::fromConfig('seam'));
+        $context->collect(seamDetection('email', -1, 'bob'));
+        $context->collect(seamDetection('email', 5, 'bob'));
+
+        expect($context->resolvePendingDetections('mail bob now', 'k'))->toBe('mail [REDACTED] now')
+            ->and($context->getFindings())->toHaveCount(1);
+    });
+
+    it('uses the profile secrets alone when none were registered at runtime', function (): void {
+        $config = RedactorConfig::fromConfig('seam');
+
+        expect((new RedactionContext($config))->secrets())->toBe($config->knownSecrets);
+    });
+
+    it('hands anything but a string back untouched from every detecting strategy', function (): void {
+        $context = new RedactionContext(RedactorConfig::fromConfig('seam'));
+        $payload = ['nested' => 'bob@example.com'];
+
+        foreach ([new KnownSecretsStrategy, new RegexPatternsStrategy, new ShannonEntropyStrategy, new EntityRecognitionStrategy] as $strategy) {
+            expect($strategy->handle($payload, 'k', $context))->toBe($payload)
+                ->and($context->hasPendingDetections())->toBeFalse();
+        }
+    });
+
+    it('reports nothing from the entropy detector for a subject shorter than min_length', function (): void {
+        $context = new RedactionContext(RedactorConfig::fromConfig('seam'));
+
+        expect((new ShannonEntropyStrategy)->detect('Zx7Qm4Kd9Rb', 'k', $context))->toBe([]);
     });
 });

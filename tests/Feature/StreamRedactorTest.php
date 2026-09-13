@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use Illuminate\Support\Facades\Route;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\Streaming\StreamRedactor;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 function streamed(iterable $chunks, int $holdback = 32): array
 {
@@ -118,5 +119,32 @@ describe('Streamed responses through the redact middleware', function (): void {
 
         expect($content)->toContain('data: contact [REDACTED] and token [REDACTED]')
             ->and($content)->not->toContain('bob@example.com');
+    });
+});
+
+describe('StreamRedactor cut points and responses', function (): void {
+    it('emits an unbroken run once it has outlived the hold-back window', function (): void {
+        $stream = new StreamRedactor(resolve(Redactor::class), 'file_scan', 8);
+
+        expect($stream->push(str_repeat('a', 40)))->toBe(str_repeat('a', 32))
+            ->and($stream->flush())->toBe(str_repeat('a', 8));
+    });
+
+    it('builds a streamed response whose output is redacted on the way out', function (): void {
+        $stream = new StreamRedactor(resolve(Redactor::class), 'file_scan', 16);
+
+        $response = $stream->response(function (): void {
+            echo "contact bob@example.com\n";
+        }, 201, ['X-Test' => 'yes'], 8);
+
+        expect($response)->toBeInstanceOf(StreamedResponse::class)
+            ->and($response->getStatusCode())->toBe(201)
+            ->and($response->headers->get('X-Test'))->toBe('yes');
+
+        ob_start();
+        $response->sendContent();
+        $out = ob_get_clean();
+
+        expect($out)->toBe("contact [REDACTED]\n");
     });
 });

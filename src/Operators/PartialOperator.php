@@ -30,12 +30,4 @@ class PartialOperator implements Operator
 
         return str_repeat($char, $length - $keep).mb_substr($detection->value, -$keep);
     }
-
-    /**
-     * Determine if the operator leaves the value as it found it.
-     */
-    public function isPreserving(): bool
-    {
-        return false;
-    }
 }

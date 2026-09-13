@@ -91,15 +91,12 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
 
             // A capture-free preg_match() on a non-matching subject costs a fraction of
             // preg_match_all() with offsets, and most rules do not match most values...
-            $any = @preg_match($rule->pattern, $subject);
-
-            if ($any === 0) {
+            if (@preg_match($rule->pattern, $subject) === 0) {
                 continue;
             }
 
-            $found = $any === false || preg_last_error() !== PREG_NO_ERROR
-                ? null
-                : $this->detectRule($rule, $subject, $key, $priority);
+            // A pre-check the engine could not finish falls through here and fails the same way...
+            $found = $this->detectRule($rule, $subject, $key, $priority);
 
             if ($found === null) {
                 // The engine gave up partway through, and a partially inspected string
@@ -136,10 +133,6 @@ class RegexPatternsStrategy implements DetectingStrategy, Detector, Strategy
 
         if ($found === false || preg_last_error() !== PREG_NO_ERROR) {
             return null;
-        }
-
-        if ($matches === []) {
-            return [];
         }
 
         $operator = $rule->hasExplicitOperator() ? $rule->operatorSpec() : null;

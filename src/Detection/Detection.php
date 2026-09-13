@@ -55,24 +55,6 @@ final readonly class Detection
     }
 
     /**
-     * Create a copy of the detection with the given confidence.
-     */
-    public function withConfidence(Confidence $confidence): self
-    {
-        return new self(
-            entity: $this->entity,
-            rule: $this->rule,
-            offset: $this->offset,
-            value: $this->value,
-            confidence: $confidence,
-            key: $this->key,
-            operator: $this->operator,
-            failClosed: $this->failClosed,
-            priority: $this->priority,
-        );
-    }
-
-    /**
      * Create a detection covering the whole subject because the detector failed.
      */
     public static function failClosed(string $entity, string $rule, string $subject, string $key, string $reason): self

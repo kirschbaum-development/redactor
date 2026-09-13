@@ -43,21 +43,17 @@ class LineWindowReader implements IteratorAggregate
      */
     public function getIterator(): Generator
     {
+        $handle = $this->content !== null
+            ? fopen('php://temp', 'r+b')
+            : @fopen($this->path, 'rb');
+
+        if ($handle === false) {
+            return;
+        }
+
         if ($this->content !== null) {
-            $handle = fopen('php://temp', 'r+b');
-
-            if ($handle === false) {
-                return;
-            }
-
             fwrite($handle, $this->content);
             rewind($handle);
-        } else {
-            $handle = @fopen($this->path, 'rb');
-
-            if ($handle === false) {
-                return;
-            }
         }
 
         // Overlap must be smaller than the window, or the reader never advances...

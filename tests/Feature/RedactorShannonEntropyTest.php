@@ -937,3 +937,35 @@ describe('Shannon Entropy Algorithm Tests', function (): void {
             ->and($result['_redacted'])->toBeTrue();
     });
 });
+
+describe('Shannon per-token judgement', function (): void {
+    it('never judges a token shorter than min_length by its entropy, even when asked directly', function (): void {
+        config()->set('redactor.profiles.judge', [
+            'enabled' => true,
+            'strategies' => [ShannonEntropyStrategy::class],
+            'safe_keys' => [],
+            'blocked_keys' => [],
+            'patterns' => [],
+            'replacement' => '[REDACTED]',
+            'mark_redacted' => false,
+            'track_redacted_keys' => false,
+            'non_redactable_object_behavior' => 'preserve',
+            'max_value_length' => null,
+            'redact_large_objects' => false,
+            'max_object_size' => 100,
+            'shannon_entropy' => ['enabled' => true, 'threshold' => 3.0, 'min_length' => 20, 'exclusion_patterns' => []],
+        ]);
+
+        $strategy = new class extends ShannonEntropyStrategy
+        {
+            public function judge(string $token, RedactionContext $context): bool
+            {
+                return $this->shouldRedactByEntropy($token, $context);
+            }
+        };
+        $context = new RedactionContext(RedactorConfig::fromConfig('judge'));
+
+        expect($strategy->judge('Zx7Qm4Kd9Rb2Vn6', $context))->toBeFalse()
+            ->and($strategy->judge('Zx7Qm4Kd9Rb2Vn6Tp1Ws8Yc3Hf', $context))->toBeTrue();
+    });
+});

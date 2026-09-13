@@ -23,11 +23,6 @@ final readonly class Patch
         public ?string $commit = null,
     ) {}
 
-    public function isEmpty(): bool
-    {
-        return $this->addedLines === [];
-    }
-
     /**
      * Get the added lines as one text, in order, for scanning.
      */

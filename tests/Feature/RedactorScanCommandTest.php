@@ -5,6 +5,9 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Artisan;
 use Kirschbaum\Redactor\Scanner\Baseline;
 use Kirschbaum\Redactor\Scanner\ScanFinding;
+use Kirschbaum\Redactor\Scanner\Scanner;
+use Kirschbaum\Redactor\Scanner\ScanResult;
+use Mockery\MockInterface;
 
 function fixturePath(string $name): string
 {
@@ -404,5 +407,109 @@ describe('Baseline fingerprints', function (): void {
         expect($baseline->fingerprints)->toHaveKeys(['abc123', 'def456']);
 
         unlink($path);
+    });
+});
+
+describe('RedactorScanCommand skipped files', function (): void {
+    beforeEach(function (): void {
+        config(['redactor.scan.profile' => 'file_scan', 'redactor.scan.baseline' => null]);
+
+        // The collector drops unreadable files before the scanner sees them, so a
+        // skipped result only reaches the command when a file vanishes in between.
+        $this->mock(Scanner::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('scanFile')->andReturnUsing(fn (string $file): ScanResult => str_contains($file, 'clean')
+                ? new ScanResult($file, [], 'file_scan', skipped: true, error: 'File unreadable')
+                : new ScanResult($file, [new ScanFinding($file, 'aws_access_key', 1, 1, 'AWS_ACCESS_KEY_ID=[REDACTED]', 'file_scan', 'fp', 'aws_access_key', 0.9)], 'file_scan'));
+        });
+    });
+
+    it('warns about a file the scanner could not read, after the findings', function (): void {
+        [$exitCode, $output] = scan(['paths' => [fixturePath('clean-text-file.txt'), fixturePath('sensitive-api-keys.txt')]]);
+
+        expect($exitCode)->toBe(0)
+            ->and($output)->toContain('Skipped')
+            ->and($output)->toContain('File unreadable')
+            ->and($output)->toContain('aws_access_key');
+    });
+
+    it('marks a skipped file in JUnit output', function (): void {
+        [, $output] = scan(['paths' => [fixturePath('clean-text-file.txt'), fixturePath('sensitive-api-keys.txt')], '--output' => 'junit']);
+
+        expect($output)->toContain('<skipped message="File unreadable"/>')
+            ->and($output)->toContain('<failure message="aws_access_key');
+    });
+});
+
+describe('RedactorScanCommand with a broken profile', function (): void {
+    it('reports the configuration error instead of scanning with it', function (): void {
+        config(['redactor.scan.profile' => 'file_scan', 'redactor.scan.baseline' => null]);
+        config(['redactor.profiles.file_scan.max_value_length' => 'lots']);
+
+        [$exitCode, $output] = scan(['paths' => [fixturePath('clean-text-file.txt')]]);
+
+        expect($exitCode)->toBe(1)
+            ->and($output)->toContain('max_value_length');
+    });
+});
+
+describe('Baseline files that cannot be read or written', function (): void {
+    beforeEach(function (): void {
+        config(['redactor.scan.profile' => 'file_scan']);
+        $this->dir = sys_get_temp_dir().'/redactor_baseline_io_'.uniqid();
+        mkdir($this->dir);
+        $this->baseline = $this->dir.'/baseline.json';
+    });
+
+    afterEach(function (): void {
+        if (is_file($this->baseline)) {
+            chmod($this->baseline, 0644);
+        }
+
+        cleanupDirectory($this->dir);
+    });
+
+    it('reports a baseline it cannot read rather than treating it as empty', function (): void {
+        file_put_contents($this->baseline, '{"findings": []}');
+        chmod($this->baseline, 0000);
+
+        expect(fn (): Baseline => Baseline::load($this->baseline))
+            ->toThrow(JsonException::class, 'could not be read');
+    })->skip(posix_geteuid() === 0, 'chmod does not restrict root');
+
+    it('refuses to write a baseline it cannot encode', function (): void {
+        $finding = new ScanFinding("bad\xff.env", 'rule', 1, 1, 'x', 'file_scan', 'fp');
+
+        expect(Baseline::write($this->baseline, [$finding], '2026-01-01T00:00:00+00:00'))->toBeFalse()
+            ->and(is_file($this->baseline))->toBeFalse();
+    });
+
+    it('fails the command when the baseline could not be written', function (): void {
+        // A rule name that is not UTF-8 cannot be encoded into the baseline file.
+        config(['redactor.profiles.file_scan.patterns' => ["k\xffey" => '/demo-secret-\d+/']]);
+        file_put_contents($this->dir.'/app.env', "x = demo-secret-12345\n");
+
+        [$exitCode, $output] = scan(['paths' => [$this->dir.'/app.env'], '--baseline' => $this->baseline, '--update-baseline' => true]);
+
+        expect($exitCode)->toBe(1)
+            ->and($output)->toContain('Could not write baseline file')
+            ->and(is_file($this->baseline))->toBeFalse();
+    });
+});
+
+describe('Scan results', function (): void {
+    it('returns itself untouched when there is no baseline or nothing to suppress', function (): void {
+        $finding = new ScanFinding('a.env', 'rule', 1, 1, 'x', 'file_scan', 'fp');
+        $clean = new ScanResult('a.env');
+        $dirty = new ScanResult('a.env', [$finding]);
+
+        expect($clean->withoutBaseline(['fp' => true]))->toBe($clean)
+            ->and($dirty->withoutBaseline([]))->toBe($dirty)
+            ->and($dirty->withoutBaseline(['fp' => true])->findings)->toBe([]);
+    });
+
+    it('serialises a finding to JSON the same way as toArray', function (): void {
+        $finding = new ScanFinding('a.env', 'rule', 3, 7, 'x', 'file_scan', 'fp', 'aws_access_key', 0.9, ['pattern matched']);
+
+        expect(json_decode((string) json_encode($finding), true))->toBe($finding->toArray());
     });
 });

@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Kirschbaum\Redactor\Logging\RedactorFormatter;
 use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
+use Monolog\Formatter\LineFormatter;
 use Monolog\Level;
 use Monolog\LogRecord;
 
@@ -275,5 +276,32 @@ describe('RedactorFormatter Tests', function (): void {
         $result = $formatter->format($record);
 
         expect($result)->toContain('[2023-12-25 14:30:45.999999]');
+    });
+});
+
+describe('RedactorFormatter batches', function (): void {
+    test('formats a batch through the inner formatter with every record redacted', function (): void {
+        config()->set('redactor.default_profile', 'logging_test');
+        config()->set('redactor.profiles.logging_test', [
+            'enabled' => true,
+            'strategies' => [RegexPatternsStrategy::class],
+            'safe_keys' => [],
+            'blocked_keys' => [],
+            'patterns' => ['password_pattern' => '/password:\s*\S+/i', 'token_pattern' => '/token:\s*\S+/i'],
+            'replacement' => '[REDACTED]',
+            'mark_redacted' => false,
+            'track_redacted_keys' => false,
+            'non_redactable_object_behavior' => 'preserve',
+            'max_value_length' => null,
+            'redact_large_objects' => false,
+            'max_object_size' => 100,
+            'shannon_entropy' => ['enabled' => false],
+        ]);
+
+        $formatter = new RedactorFormatter(new LineFormatter("%message%\n"));
+        $record = fn (string $message): LogRecord => new LogRecord(new DateTimeImmutable, 'app', Level::Info, $message);
+
+        expect($formatter->formatBatch([$record('login password: hunter2'), $record('sent token: abc')]))
+            ->toBe("login [REDACTED]\nsent [REDACTED]\n");
     });
 });

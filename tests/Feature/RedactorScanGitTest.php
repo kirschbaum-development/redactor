@@ -197,3 +197,20 @@ describe('Git-aware scanning', function (): void {
             ->and((new GitRepository(sys_get_temp_dir()))->isRepository())->toBeFalse();
     });
 });
+
+describe('Git failures', function (): void {
+    it('reports what git said when a ref does not exist', function (): void {
+        $dir = gitRepo();
+        file_put_contents($dir.'/README.md', "hello\n");
+        git($dir, 'add', '.');
+        git($dir, 'commit', '-q', '-m', 'initial');
+        config(['redactor.scan.profile' => 'file_scan', 'redactor.scan.baseline' => null]);
+
+        [$exit, $output] = scanGit($dir, ['--diff' => 'no-such-ref']);
+
+        expect($exit)->toBe(1)
+            ->and($output)->toContain('git diff failed');
+
+        cleanupDirectory($dir);
+    });
+});

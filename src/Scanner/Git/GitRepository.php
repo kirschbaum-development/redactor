@@ -28,14 +28,6 @@ class GitRepository
     }
 
     /**
-     * Get the repository root, which git's paths are relative to.
-     */
-    public function root(): string
-    {
-        return trim($this->run(['rev-parse', '--show-toplevel']));
-    }
-
-    /**
      * Get the lines added by the changes currently staged for commit.
      *
      * @param  array<int, string>  $pathspec

@@ -24,12 +24,4 @@ class NullifyOperator implements Operator
     {
         return '';
     }
-
-    /**
-     * Determine if the operator leaves the value as it found it.
-     */
-    public function isPreserving(): bool
-    {
-        return false;
-    }
 }

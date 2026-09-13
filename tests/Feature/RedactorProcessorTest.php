@@ -17,6 +17,7 @@ use Monolog\Level;
 use Monolog\Logger as MonologLogger;
 use Monolog\LogRecord;
 use Monolog\Processor\ProcessorInterface;
+use Psr\Log\NullLogger;
 
 function logRecord(string $message, array $context = [], array $extra = []): LogRecord
 {
@@ -175,5 +176,16 @@ describe('RedactorFormatter composition', function (): void {
         $out = $formatter->format(logRecord('hi', [], ['pid' => 42]));
 
         expect($out)->toContain('"pid":42');
+    });
+});
+
+describe('RedactorTap on other loggers', function (): void {
+    it('leaves a logger that is not Monolog alone, since only Monolog takes processors', function (): void {
+        $psr = new NullLogger;
+        $logger = new Logger($psr);
+
+        (new RedactorTap)($logger);
+
+        expect($logger->getLogger())->toBe($psr);
     });
 });

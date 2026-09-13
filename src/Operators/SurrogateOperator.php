@@ -47,12 +47,4 @@ class SurrogateOperator implements Operator
             $context->options,
         );
     }
-
-    /**
-     * Determine if the operator leaves the value as it found it.
-     */
-    public function isPreserving(): bool
-    {
-        return false;
-    }
 }

@@ -122,9 +122,7 @@ class Scanner
         foreach ($reader as [$startLine, $window]) {
             $result = $this->redactor->inspect($window, $profile);
 
-            $located = $result->findings === []
-                ? []
-                : $this->located($window, $result->value, $result->findings, $reportedPath, $profileName);
+            $located = $this->located($window, $result->value, $result->findings, $reportedPath, $profileName);
 
             if ($this->decode) {
                 foreach (Decoder::derive($window) as $derived) {

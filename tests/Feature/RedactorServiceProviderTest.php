@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use Illuminate\Container\Container;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\ServiceProvider;
 use Kirschbaum\Redactor\Console\Commands\RedactorScanCommand;
@@ -65,5 +66,16 @@ describe('RedactorServiceProvider', function (): void {
     it('registers the scan command', function (): void {
         expect(array_keys(resolve(Kernel::class)->all()))->toContain('redactor:scan')
             ->and(resolve(RedactorScanCommand::class))->toBeInstanceOf(RedactorScanCommand::class);
+    });
+});
+
+describe('RedactorServiceProvider without a router', function (): void {
+    it('registers no middleware alias when nothing has bound a router', function (): void {
+        $container = new Container;
+        $provider = new RedactorServiceProvider($container);
+
+        (new \ReflectionMethod($provider, 'registerMiddleware'))->invoke($provider);
+
+        expect($container->bound('router'))->toBeFalse();
     });
 });
