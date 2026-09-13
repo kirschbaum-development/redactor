@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+Hardening and completeness passes across correctness, security, performance,
+packaging and conventions. Each item is one commit, with tests.
+
 ### Added - capability
 
 - **Path rules.** `'request.headers.authorization' => 'redact'` names a location
@@ -137,6 +140,17 @@ All notable changes to this project will be documented in this file.
   string - a regex, an entropy measure, a recogniser model in another process
   - plugs into the same resolution and operator pipeline.
 
+- `Redactor::redactWithMetadata()` returning a `RedactionResult`. (R-07)
+- `Redactor::redactSafely()`, which never throws. (R-04)
+- `php artisan redactor:validate` - resolves every profile and fails on the
+  broken ones, including keys listed as both safe and blocked. (R-04, R-02)
+- Pattern rules: `mode` (replace/mask/partial/remove/full), `keep`,
+  `mask_character`, `capture` and `validator`. (R-01, R-16, R-17)
+- `max_depth` and `shannon_entropy.charset_thresholds` profile settings.
+  (R-03, R-16)
+- `redactor:scan --output=sarif` for GitHub code scanning, and
+  `--baseline` / `--update-baseline` so CI fails only on new findings. (R-10)
+
 ### Performance
 
 - Compiled key matchers are resolved once with the profile instead of being
@@ -181,8 +195,14 @@ All notable changes to this project will be documented in this file.
   trie on every redaction: 0.2285ms -> 0.0011ms for a profile with 200 path
   rules, and flat with rule count rather than linear.
 
-Hardening pass across correctness, security, performance and packaging. Each
-item below is one commit, with tests.
+- Blocked-key matching compiles its pattern list once instead of rebuilding a
+  regex per key per call: 1.223 us -> 0.288 us per check. (R-12)
+- Nested nodes are dispatched through the strategy chain once rather than
+  twice. (R-13)
+- `Redactor` and `Scanner` are container singletons, so the strategy cache
+  survives. (R-11)
+- Net effect on the default profile: ~15,000 -> ~21,000 redactions/sec, while
+  doing strictly more work than before.
 
 ### Changed - conventions, following Laravel's first-party packages
 
@@ -303,30 +323,6 @@ item below is one commit, with tests.
 - `mergeConfigFrom()` runs in `register()`, not `boot()`. (R-14)
 - `ReadactFormatter::formatBatch()` formats every record; it used to return only
   the first, so batching handlers dropped the rest. (R-06)
-
-### Added
-
-- `Redactor::redactWithMetadata()` returning a `RedactionResult`. (R-07)
-- `Redactor::redactSafely()`, which never throws. (R-04)
-- `php artisan redactor:validate` - resolves every profile and fails on the
-  broken ones, including keys listed as both safe and blocked. (R-04, R-02)
-- Pattern rules: `mode` (replace/mask/partial/remove/full), `keep`,
-  `mask_character`, `capture` and `validator`. (R-01, R-16, R-17)
-- `max_depth` and `shannon_entropy.charset_thresholds` profile settings.
-  (R-03, R-16)
-- `redactor:scan --output=sarif` for GitHub code scanning, and
-  `--baseline` / `--update-baseline` so CI fails only on new findings. (R-10)
-
-### Performance
-
-- Blocked-key matching compiles its pattern list once instead of rebuilding a
-  regex per key per call: 1.223 us -> 0.288 us per check. (R-12)
-- Nested nodes are dispatched through the strategy chain once rather than
-  twice. (R-13)
-- `Redactor` and `Scanner` are container singletons, so the strategy cache
-  survives. (R-11)
-- Net effect on the default profile: ~15,000 -> ~21,000 redactions/sec, while
-  doing strictly more work than before.
 
 ### Packaging and CI
 

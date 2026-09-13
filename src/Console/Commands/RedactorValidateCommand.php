@@ -18,7 +18,7 @@ class RedactorValidateCommand extends Command
 
     public function handle(Redactor $redactor): int
     {
-        $profiles = $redactor->getAvailableProfiles();
+        $profiles = $redactor->profiles();
 
         if ($profiles === []) {
             $this->components->error('No redaction profiles are configured.');
