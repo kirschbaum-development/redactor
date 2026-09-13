@@ -79,11 +79,18 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, RedactionSt
             return [];
         }
 
+        // Only tokens at least min_length long can qualify, and a byte count
+        // is an upper bound on a character count, so asking PCRE for `\S{n,}`
+        // rather than `\S+` is exact - and it turns a million-byte subject
+        // into a few hundred candidates instead of two hundred thousand
+        // [token, offset] pairs held in memory at once.
+        $minimum = max(1, $this->minimumLength($context->config->shannonEntropy));
+
         // Spelled out rather than selected into a variable so the /u decision
         // is visible at the point it matters.
         $found = $this->isAscii($subject)
-            ? @preg_match_all('/\S+/', $subject, $matches, PREG_OFFSET_CAPTURE)
-            : @preg_match_all('/\S+/u', $subject, $matches, PREG_OFFSET_CAPTURE);
+            ? @preg_match_all('/\S{'.$minimum.',}/', $subject, $matches, PREG_OFFSET_CAPTURE)
+            : @preg_match_all('/\S{'.$minimum.',}/u', $subject, $matches, PREG_OFFSET_CAPTURE);
 
         if ($found === false || preg_last_error() !== PREG_NO_ERROR) {
             // The engine gave up. Fail closed rather than let a value the
@@ -179,19 +186,25 @@ class ShannonEntropyStrategy implements DetectingStrategy, Detector, RedactionSt
      */
     protected function tooShort(string $subject, array $shannonConfig): bool
     {
-        $minLength = $shannonConfig['min_length'] ?? 25;
-
-        if (! is_numeric($minLength)) {
-            return false;
-        }
-
-        $minLength = (int) $minLength;
+        $minLength = $this->minimumLength($shannonConfig);
 
         if (strlen($subject) < $minLength) {
             return true;
         }
 
         return $this->length($subject) < $minLength;
+    }
+
+    /**
+     * The configured minimum token length, or zero when there is none.
+     *
+     * @param  array<string, mixed>  $shannonConfig
+     */
+    protected function minimumLength(array $shannonConfig): int
+    {
+        $minLength = $shannonConfig['min_length'] ?? 25;
+
+        return is_numeric($minLength) ? max(0, (int) $minLength) : 0;
     }
 
     /**
