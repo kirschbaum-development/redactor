@@ -29,19 +29,25 @@ function apiPayload(): array
     ];
 }
 
-function timeProfile(string $profile, int $iterations = 400): float
+/** The best of several short runs: what the code costs, not what the machine was doing. */
+function timeProfile(string $profile, int $iterations = 100, int $runs = 5): float
 {
     $redactor = app(Redactor::class);
     $payload = apiPayload();
 
     $redactor->redact($payload, $profile);
 
-    $start = hrtime(true);
-    for ($i = 0; $i < $iterations; $i++) {
-        $redactor->redact($payload, $profile);
+    $best = PHP_FLOAT_MAX;
+
+    for ($run = 0; $run < $runs; $run++) {
+        $start = hrtime(true);
+        for ($i = 0; $i < $iterations; $i++) {
+            $redactor->redact($payload, $profile);
+        }
+        $best = min($best, (hrtime(true) - $start) / $iterations);
     }
 
-    return (hrtime(true) - $start) / $iterations;
+    return $best;
 }
 
 function throughputProfile(array $overrides): array
