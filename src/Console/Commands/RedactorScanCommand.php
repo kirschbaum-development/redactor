@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Kirschbaum\Redactor\Config\ConfigValue;
+use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Scanner\Baseline;
 use Kirschbaum\Redactor\Scanner\FileCollector;
 use Kirschbaum\Redactor\Scanner\Git\GitRepository;
@@ -91,6 +92,22 @@ class RedactorScanCommand extends Command
         // Machine-readable output must not be polluted with progress chatter.
         $quiet = $outputFormat !== 'table';
 
+        try {
+            $ruleset = RedactorConfig::fromConfig($profile)->rulesetFingerprint;
+        } catch (\InvalidArgumentException $e) {
+            $this->components->error($e->getMessage());
+
+            return Command::FAILURE;
+        }
+
+        if (! $quiet && $baseline->ruleset !== null && $baseline->ruleset !== $ruleset) {
+            $this->components->warn(sprintf(
+                'The baseline was generated under ruleset %s; this scan runs ruleset %s. Findings it accepted may no longer mean the same thing - review it, or run --update-baseline.',
+                $baseline->ruleset,
+                $ruleset
+            ));
+        }
+
         if (! $quiet) {
             $this->components->info($gitMode === null
                 ? 'Scanning paths: '.implode(', ', $paths)." with profile: {$profile}"
@@ -169,7 +186,7 @@ class RedactorScanCommand extends Command
         $allFindings = $results->flatMap(fn (ScanResult $r) => $r->findings);
 
         if ($updateBaseline) {
-            return $this->writeBaseline($baselinePath, $allFindings->all());
+            return $this->writeBaseline($baselinePath, $allFindings->all(), $ruleset);
         }
 
         $suppressed = 0;
@@ -181,7 +198,7 @@ class RedactorScanCommand extends Command
             $suppressed = $before - $allFindings->count();
         }
 
-        $this->displayResults($results, $allFindings->all(), $outputFormat, $summaryOnly);
+        $this->displayResults($results, $allFindings->all(), $outputFormat, $summaryOnly, $ruleset);
 
         $filesWithFindings = $results->filter(fn (ScanResult $r) => $r->hasFindings());
 
@@ -271,7 +288,7 @@ class RedactorScanCommand extends Command
     /**
      * @param  array<int, ScanFinding>  $findings
      */
-    protected function writeBaseline(?string $path, array $findings): int
+    protected function writeBaseline(?string $path, array $findings, ?string $ruleset = null): int
     {
         if ($path === null) {
             $this->components->error('--update-baseline needs a path: pass --baseline=<file> or set redactor.scan.baseline.');
@@ -279,7 +296,7 @@ class RedactorScanCommand extends Command
             return Command::FAILURE;
         }
 
-        if (! Baseline::write($path, $findings, now()->toIso8601String())) {
+        if (! Baseline::write($path, $findings, now()->toIso8601String(), $ruleset)) {
             $this->components->error("Could not write baseline file [{$path}].");
 
             return Command::FAILURE;
@@ -331,11 +348,11 @@ class RedactorScanCommand extends Command
      * @param  Collection<int, ScanResult>  $results
      * @param  array<int, ScanFinding>  $findings
      */
-    protected function displayResults(Collection $results, array $findings, string $format, bool $summaryOnly): void
+    protected function displayResults(Collection $results, array $findings, string $format, bool $summaryOnly, ?string $ruleset = null): void
     {
         match ($format) {
-            'json' => $this->displayJsonResults($results),
-            'sarif' => $this->displaySarifResults($findings),
+            'json' => $this->displayJsonResults($results, $ruleset),
+            'sarif' => $this->displaySarifResults($findings, $ruleset),
             'junit' => $this->output->writeln(JunitReport::build($results->all())),
             default => $this->displayTableResults($results, $findings, $summaryOnly),
         };
@@ -344,10 +361,11 @@ class RedactorScanCommand extends Command
     /**
      * @param  Collection<int, ScanResult>  $results
      */
-    protected function displayJsonResults(Collection $results): void
+    protected function displayJsonResults(Collection $results, ?string $ruleset = null): void
     {
         $jsonData = $results->map(fn (ScanResult $r) => [
             'path' => $r->path,
+            'ruleset' => $ruleset,
             'status' => $r->skipped ? 'skipped' : ($r->hasFindings() ? 'findings' : 'clean'),
             'findings_count' => count($r->findings),
             'findings' => array_map(fn (ScanFinding $f) => $f->toArray(), $r->findings),
@@ -365,9 +383,9 @@ class RedactorScanCommand extends Command
     /**
      * @param  array<int, ScanFinding>  $findings
      */
-    protected function displaySarifResults(array $findings): void
+    protected function displaySarifResults(array $findings, ?string $ruleset = null): void
     {
-        $sarif = json_encode(SarifReport::build($findings), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        $sarif = json_encode(SarifReport::build($findings, '1.0.0', $ruleset), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
         if ($sarif !== false) {
             $this->output->writeln($sarif);

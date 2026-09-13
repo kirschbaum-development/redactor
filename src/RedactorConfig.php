@@ -64,6 +64,16 @@ readonly class RedactorConfig
     public array $patternsByLength;
 
     /**
+     * A short digest of everything that decides what this profile detects.
+     *
+     * Two scans with the same fingerprint used the same rules, so their
+     * findings can be compared; a baseline records the fingerprint it was
+     * made under, so a rules change is visible rather than silently
+     * reinterpreting what "accepted" meant.
+     */
+    public string $rulesetFingerprint;
+
+    /**
      * A number unique to this built profile, changing on every rebuild.
      *
      * Anything cached against a profile - the strategy chain, say - can key on
@@ -137,6 +147,7 @@ readonly class RedactorConfig
         $this->blockedKeyMatcher = KeyMatcher::for($this->blockedKeys);
         $this->allowlist = $allowlist ?? AllowList::none();
         $this->buildId = ProfileCache::nextBuildId();
+        $this->rulesetFingerprint = self::fingerprint($this->patterns, $this->shannonEntropy, $this->minConfidence, $this->safeKeys, $this->blockedKeys);
 
         $ordered = [];
         $position = 0;
@@ -237,6 +248,29 @@ readonly class RedactorConfig
         );
 
         return ProfileCache::put($profile, $config, $built, $shared);
+    }
+
+    /**
+     * @param  array<string, PatternRule>  $patterns
+     * @param  array<string, mixed>  $entropy
+     * @param  array<int, string>  $safeKeys
+     * @param  array<int, string>  $blockedKeys
+     */
+    private static function fingerprint(array $patterns, array $entropy, float $minConfidence, array $safeKeys, array $blockedKeys): string
+    {
+        $rules = [];
+
+        foreach ($patterns as $name => $rule) {
+            $rules[$name] = [
+                $rule->pattern, $rule->capture, $rule->validator, $rule->entity(), $rule->confidence,
+                $rule->mode, $rule->keep, $rule->keywords, $rule->minLength,
+                $rule->operator?->name, $rule->operator?->options,
+            ];
+        }
+
+        $encoded = json_encode([$rules, $entropy, $minConfidence, $safeKeys, $blockedKeys]);
+
+        return substr(hash('sha256', $encoded === false ? serialize($rules) : $encoded), 0, 16);
     }
 
     /**

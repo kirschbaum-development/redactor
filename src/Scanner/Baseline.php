@@ -24,6 +24,8 @@ final class Baseline
     private function __construct(
         public readonly array $fingerprints,
         public readonly ?string $generatedAt = null,
+        /** The ruleset fingerprint the baseline was generated under. */
+        public readonly ?string $ruleset = null,
     ) {}
 
     public static function empty(): self
@@ -64,14 +66,19 @@ final class Baseline
         }
 
         $generatedAt = $decoded['generated_at'] ?? null;
+        $ruleset = $decoded['ruleset'] ?? null;
 
-        return new self($fingerprints, is_string($generatedAt) ? $generatedAt : null);
+        return new self(
+            $fingerprints,
+            is_string($generatedAt) ? $generatedAt : null,
+            is_string($ruleset) ? $ruleset : null,
+        );
     }
 
     /**
      * @param  array<int, ScanFinding>  $findings
      */
-    public static function write(string $path, array $findings, string $generatedAt): bool
+    public static function write(string $path, array $findings, string $generatedAt, ?string $ruleset = null): bool
     {
         $entries = [];
 
@@ -87,11 +94,12 @@ final class Baseline
 
         ksort($entries);
 
-        $json = json_encode([
+        $json = json_encode(array_filter([
             'version' => 1,
             'generated_at' => $generatedAt,
+            'ruleset' => $ruleset,
             'findings' => array_values($entries),
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        ], fn ($v) => $v !== null), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
         if ($json === false) {
             return false;

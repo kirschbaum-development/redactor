@@ -16,7 +16,7 @@ final class SarifReport
      * @param  array<int, ScanFinding>  $findings
      * @return array<string, mixed>
      */
-    public static function build(array $findings, string $version = '1.0.0'): array
+    public static function build(array $findings, string $version = '1.0.0', ?string $ruleset = null): array
     {
         $rules = [];
         $results = [];
@@ -77,6 +77,9 @@ final class SarifReport
                         'informationUri' => 'https://github.com/kirschbaum-development/redactor',
                         'version' => $version,
                         'rules' => array_values($rules),
+                        // Which rules produced these results, so two runs can
+                        // be compared and a rules change is visible.
+                        'properties' => array_filter(['rulesetFingerprint' => $ruleset]),
                     ],
                 ],
                 'results' => $results,
