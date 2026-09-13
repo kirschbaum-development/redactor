@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor;
 
+use Illuminate\Contracts\Encryption\StringEncrypter;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
@@ -13,6 +14,11 @@ use Kirschbaum\Redactor\Console\Commands\RedactorValidateCommand;
 use Kirschbaum\Redactor\Http\Middleware\RedactResponse;
 use Kirschbaum\Redactor\Scanner\LineWindowReader;
 use Kirschbaum\Redactor\Scanner\Scanner;
+use Kirschbaum\Redactor\Tokenization\CacheTokenStore;
+use Kirschbaum\Redactor\Tokenization\Detokenizer;
+use Kirschbaum\Redactor\Tokenization\LazyTokenStore;
+use Kirschbaum\Redactor\Tokenization\TokenizeOperator;
+use Kirschbaum\Redactor\Tokenization\TokenStore;
 
 class RedactorServiceProvider extends ServiceProvider
 {
@@ -26,7 +32,28 @@ class RedactorServiceProvider extends ServiceProvider
             'redactor'
         );
 
-        $this->app->singleton(Redactor::class);
+        $this->app->singleton(TokenStore::class, function (): TokenStore {
+            $store = Config::get('redactor.tokenization.store');
+            $ttl = Config::get('redactor.tokenization.ttl');
+
+            return new CacheTokenStore(
+                $this->app->make('cache')->store(is_string($store) && $store !== '' ? $store : null),
+                $this->app->make(StringEncrypter::class),
+                $ttl === null || $ttl === '' ? null : ConfigValue::positiveInt($ttl, 86_400, 'tokenization.ttl'),
+            );
+        });
+
+        $this->app->singleton(Detokenizer::class, fn (): Detokenizer => new Detokenizer($this->app->make(TokenStore::class)));
+
+        $this->app->singleton(Redactor::class, function (): Redactor {
+            $redactor = new Redactor;
+
+            // The operator resolves the store on first use, not at boot: the
+            // cache and encrypter are not needed until something is tokenised.
+            $redactor->registerOperator('tokenize', new TokenizeOperator(new LazyTokenStore(fn () => $this->app->make(TokenStore::class))));
+
+            return $redactor;
+        });
 
         $this->app->singleton(Scanner::class, fn (): Scanner => new Scanner(
             $this->app->make(Redactor::class),

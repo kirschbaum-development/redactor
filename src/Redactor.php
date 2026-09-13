@@ -22,6 +22,7 @@ use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Strategies\StrategyOutcome;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Kirschbaum\Redactor\Support\SecretRegistry;
+use Kirschbaum\Redactor\Tokenization\Detokenizer;
 
 class Redactor
 {
@@ -57,6 +58,20 @@ class Redactor
     public function recognizers(): RecognizerRegistry
     {
         return $this->recognizers;
+    }
+
+    /**
+     * Exchange every known token in the content back for its original value.
+     *
+     * The counterpart of the `tokenize` operator. Unknown tokens - expired,
+     * foreign, invented by a model - are left as they are.
+     */
+    public function detokenize(mixed $content): mixed
+    {
+        /** @var Detokenizer $detokenizer */
+        $detokenizer = app(Detokenizer::class);
+
+        return $detokenizer->detokenize($content);
     }
 
     /**

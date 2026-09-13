@@ -371,6 +371,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Tokenization
+    |--------------------------------------------------------------------------
+    |
+    | The `tokenize` operator replaces a value with a token the application
+    | can exchange back - `alice@customer.com` becomes `tok_email_k4m9rp2xzq`,
+    | and Redactor::detokenize() turns it back. For the boundary in front of a
+    | language model: the model reasons about tokens, the application resolves
+    | them before acting. Originals are kept in the cache store below,
+    | encrypted with APP_KEY, for `ttl` seconds (null keeps them forever).
+    | Tokens are derived with the pseudonymization key, so they are stable
+    | and cannot be guessed.
+    |
+    */
+
+    'tokenization' => [
+        'store' => env('REDACTOR_TOKEN_STORE'),
+        'ttl' => env('REDACTOR_TOKEN_TTL', 86_400),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Redaction Profiles
     |--------------------------------------------------------------------------
     |
