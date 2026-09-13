@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\Streaming\StreamRedactor;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,8 +22,9 @@ use Throwable;
  *
  * JSON responses are redacted as data, so structure and types survive and a
  * profile's `nullify` operator can keep a typed field typed. Text responses
- * are redacted as text. Streamed and file responses pass through untouched:
- * a stream has no body to inspect here, and a file is not a payload.
+ * are redacted as text. A streamed response is redacted as it streams, with
+ * a hold-back so nothing split across two chunks gets through. File responses
+ * pass through: a file is not a payload.
  *
  * The profile's `_redacted` markers are never written into a response - they
  * are bookkeeping for logs, and a consumer of an API did not ask for them.
@@ -42,7 +44,17 @@ class RedactResponse
     {
         $response = $next($request);
 
-        if (! $response instanceof Response || $response instanceof StreamedResponse || $response instanceof BinaryFileResponse) {
+        if (! $response instanceof Response || $response instanceof BinaryFileResponse) {
+            return $response;
+        }
+
+        if ($response instanceof StreamedResponse) {
+            $callback = $response->getCallback();
+
+            if ($callback !== null) {
+                $response->setCallback((new StreamRedactor($this->redactor, $profile))->wrap($callback));
+            }
+
             return $response;
         }
 
