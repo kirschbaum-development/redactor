@@ -1018,6 +1018,18 @@ secret split across two chunks is still caught, and the cut always falls on a
 line end - or, when a stream goes a whole window without one, a word boundary.
 An open PEM block is held whole. The cost is latency in bytes, not time.
 
+## Events
+
+Every redaction that changed something dispatches `RedactionPerformed` with
+the profile, the keys, and counts per rule and per entity, and never a value,
+so a listener can feed metrics or an audit trail without becoming a leak. A
+listener that throws never breaks the redaction. `REDACTOR_EVENTS=false`
+switches it off.
+
+```php
+Event::listen(RedactionPerformed::class, fn ($e) => Metrics::increment('redactions', $e->findings, ['profile' => $e->profile]));
+```
+
 ## Where Else To Use It
 
 The Monolog tap covers the log channel. The same call covers everything else
