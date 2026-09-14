@@ -12,6 +12,7 @@ use Kirschbaum\Redactor\Findings\MatchFinding;
 use Kirschbaum\Redactor\Operators\OperatorContext;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
 use Kirschbaum\Redactor\Operators\OperatorSpec;
+use Kirschbaum\Redactor\Recognition\RecognizedSpan;
 use Kirschbaum\Redactor\Recognition\RecognizerRegistry;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Kirschbaum\Redactor\Support\Pseudonymizer;
@@ -75,6 +76,33 @@ class RedactionContext
     }
 
     private ?RecognizerRegistry $defaultRecognizers = null;
+
+    /**
+     * Spans a priming pass already recognised, keyed by the exact text.
+     *
+     * @var array<string, array<int, RecognizedSpan>>
+     */
+    private array $recognized = [];
+
+    /**
+     * Remember what a recogniser found in each text so the walk need not ask again.
+     *
+     * @param  array<string, array<int, RecognizedSpan>>  $spansByText
+     */
+    public function primeRecognition(array $spansByText): void
+    {
+        $this->recognized = $spansByText + $this->recognized;
+    }
+
+    /**
+     * Get the spans already recognised in the exact text, or null if it was never primed.
+     *
+     * @return array<int, RecognizedSpan>|null
+     */
+    public function primedRecognition(string $text): ?array
+    {
+        return $this->recognized[$text] ?? null;
+    }
 
     /**
      * Get the recognizer registry.

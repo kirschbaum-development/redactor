@@ -194,6 +194,7 @@ Named entity recognition. Present in the shipped `default` profile and inert unt
 | `max_length` | `int` | `5000` | | Values longer than this are not sent. |
 | `min_words` | `int` | `3` | | Values with fewer whitespace-separated words are not sent. |
 | `timeout` | `float` | `2.0` | | Seconds to wait for the recogniser. |
+| `batch` | `bool` | `true` | | Send every prose value in a payload in one call before the walk, instead of one call per value. |
 | `failure_threshold` | `int` | `3` | | Consecutive failures before the circuit breaker opens. |
 | `cooldown` | `int` | `60` | | Seconds the breaker stays open. |
 

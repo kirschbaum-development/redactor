@@ -64,6 +64,7 @@ Four empty interfaces in the same namespace change how the chain treats a strate
 | `DetectingStrategy` | Extends `ChainableStrategy`. `handle()` returns the value untouched and reports what it found through `$context->collect()`. Every detecting strategy sees the same original string, and the context rewrites it once after the last of them. `RegexPatternsStrategy`, `ShannonEntropyStrategy`, `KnownSecretsStrategy` and `EntityRecognitionStrategy` are these. |
 | `PreservingStrategy` | `handle()` declares the value safe. The chain ends, the walk does not descend, and any pending detections are discarded. `SafeKeysStrategy` is one. |
 | `ConditionalStrategy` | Adds `appliesTo(RedactorConfig $config): bool`. A strategy returning false is left out of the chain for that profile, so it costs nothing. `EntityRecognitionStrategy` uses it to stay inert until enabled. |
+| `PrimingStrategy` | Adds `prime(mixed $content, RedactionContext $context): void`, called once with the whole payload before the walk starts. For work that costs per call rather than per value: do it here in one go and leave the result on the context for `handle()` to read. `EntityRecognitionStrategy` uses it to recognise every prose value in one request. |
 
 Implement the markers that describe what your `handle()` does. A strategy with none of them replaces the value outright and ends the chain.
 

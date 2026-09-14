@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use GuzzleHttp\Promise\PromiseInterface;
+use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Support\Facades\Http;
 use Kirschbaum\Redactor\Recognition\CircuitBreaker;
 use Kirschbaum\Redactor\Recognition\RecognizedSpan;
@@ -12,9 +14,13 @@ use Kirschbaum\Redactor\Recognition\Recognizers\PresidioRecognizer;
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\PrimingStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Strategies\EntityRecognitionStrategy;
+use Kirschbaum\Redactor\Strategies\LargeStringStrategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 use RuntimeException;
 
 const NER_URL = 'http://presidio.test/analyze';
@@ -112,6 +118,8 @@ describe('Entity recognition', function (): void {
     });
 
     it('skips a span whose offsets do not land on the subject', function (): void {
+        // Asked per value, since the batch driver already drops spans outside a text...
+        config()->set('redactor.profiles.ner.recognition.batch', false);
         Http::fake([NER_URL => Http::response(presidio([['PERSON', 30, 60, 0.9], ['PERSON', 12, 22, 0.9]]))]);
 
         $text = 'Please call John Smith about the invoice';
@@ -307,5 +315,359 @@ describe('Entity recognition at its edges', function (): void {
         });
 
         expect($redactor->recognizers()->has('stub'))->toBeTrue();
+    });
+});
+
+describe('Entity recognition batching', function (): void {
+    beforeEach(function (): void {
+        CircuitBreaker::reset();
+        config()->set('redactor.profiles.ner', nerProfile());
+    });
+
+    /** Answer one joined request by locating each name in the joined text. */
+    function presidioFinding(array $names): callable
+    {
+        return function ($request) use ($names): PromiseInterface {
+            $text = $request->data()['text'];
+            $spans = [];
+
+            foreach ($names as [$entity, $name, $score]) {
+                $start = mb_strpos($text, $name);
+
+                if ($start !== false) {
+                    $spans[] = [$entity, $start, $start + mb_strlen($name), $score];
+                }
+            }
+
+            return Http::response(presidio($spans));
+        };
+    }
+
+    it('sends every prose value in one request and maps each span back to its own value', function (): void {
+        Http::fake([NER_URL => presidioFinding([['PERSON', 'John Smith', 0.9], ['PERSON', 'Zoë Müller', 0.9], ['LOCATION', 'Berlin', 0.8]])]);
+
+        $payload = [
+            'notes' => 'Please call John Smith about the invoice',
+            'nested' => [
+                'summary' => 'Café visit with Zoë Müller went well today',
+                'city' => 'She is now based in Berlin for the year',
+            ],
+            'count' => 3,
+            'short' => 'no',
+        ];
+
+        $result = resolve(Redactor::class)->inspect($payload, 'ner');
+
+        expect($result->value['notes'])->toBe('Please call [REDACTED] about the invoice')
+            ->and($result->value['nested']['summary'])->toBe('Café visit with [REDACTED] went well today')
+            ->and($result->value['nested']['city'])->toBe('She is now based in [REDACTED] for the year')
+            ->and($result->value['count'])->toBe(3);
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => str_contains($request->data()['text'], "invoice\n\nCafé"));
+    });
+
+    it('sends identical texts once and leaves safe and blocked keys out of the batch', function (): void {
+        config()->set('redactor.profiles.ner.safe_keys', ['public_note', 'public_notes']);
+        config()->set('redactor.profiles.ner.blocked_keys', ['secret_note']);
+        config()->set('redactor.profiles.ner.strategies', [
+            SafeKeysStrategy::class,
+            BlockedKeysStrategy::class,
+            RegexPatternsStrategy::class,
+            EntityRecognitionStrategy::class,
+        ]);
+        Http::fake([NER_URL => presidioFinding([['PERSON', 'John Smith', 0.9]])]);
+
+        $payload = [
+            'a' => 'Please call John Smith about the invoice',
+            'b' => 'Please call John Smith about the invoice',
+            'public_note' => 'Alice Jones wrote this public note for everyone',
+            'secret_note' => 'Bob Brown wrote this private note for nobody',
+            'public_notes' => ['Alice Jones wrote this public note for everyone too'],
+        ];
+
+        $result = resolve(Redactor::class)->inspect($payload, 'ner');
+
+        expect($result->value['a'])->toBe('Please call [REDACTED] about the invoice')
+            ->and($result->value['b'])->toBe('Please call [REDACTED] about the invoice')
+            ->and($result->value['public_note'])->toBe('Alice Jones wrote this public note for everyone')
+            ->and($result->value['secret_note'])->toBe('[REDACTED]');
+
+        Http::assertSentCount(1);
+        Http::assertSent(function ($request): bool {
+            $text = $request->data()['text'];
+
+            return substr_count($text, 'John Smith') === 1
+                && ! str_contains($text, 'Alice Jones')
+                && ! str_contains($text, 'Bob Brown');
+        });
+    });
+
+    it('gathers prose from objects the way the walk opens them', function (): void {
+        Http::fake([NER_URL => presidioFinding([['PERSON', 'John Smith', 0.9], ['PERSON', 'Jane Doe', 0.9]])]);
+
+        $arrayable = new class implements Arrayable
+        {
+            public function toArray(): array
+            {
+                return ['note' => 'Please call John Smith about the invoice'];
+            }
+        };
+
+        $plain = new \stdClass;
+        $plain->note = 'Please call Jane Doe about the refund';
+
+        // JSON cannot encode a self-reference, so this one is skipped, as the walk skips it...
+        $unopenable = new \stdClass;
+        $unopenable->self = $unopenable;
+        $unopenable->note = 'Please call Bob Brown about the delivery';
+
+        $payload = [
+            'model' => $arrayable,
+            'plain' => $plain,
+            'unopenable' => $unopenable,
+            'exception' => new RuntimeException('Please call John Smith about the invoice'),
+            'when' => new \DateTimeImmutable('2024-01-01'),
+        ];
+
+        $result = resolve(Redactor::class)->inspect($payload, 'ner');
+
+        expect($result->value['model']['note'])->toBe('Please call [REDACTED] about the invoice')
+            ->and($result->value['plain']['note'])->toBe('Please call [REDACTED] about the refund');
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => ! str_contains($request->data()['text'], 'Bob Brown'));
+    });
+
+    it('stops gathering at the depth limit and on a cycle, like the walk', function (): void {
+        Http::fake([NER_URL => presidioFinding([['PERSON', 'John Smith', 0.9], ['PERSON', 'Jane Smith', 0.9]])]);
+
+        $cyclic = new class implements Arrayable
+        {
+            public function toArray(): array
+            {
+                return ['self' => $this, 'note' => 'Please call Jane Smith about the refund'];
+            }
+        };
+
+        $payload = ['one' => ['two' => ['three' => 'Please call John Smith about the invoice']], 'cyclic' => $cyclic];
+
+        // Deep enough for everything: the cycle is entered once and the deep value is found...
+        resolve(Redactor::class)->inspect($payload, 'ner');
+
+        Http::assertSent(fn ($request): bool => substr_count($request->data()['text'], 'Jane Smith') === 1
+            && substr_count($request->data()['text'], 'John Smith') === 1);
+
+        // Two levels: the deep value is never gathered...
+        config()->set('redactor.profiles.ner.max_depth', 2);
+        resolve(Redactor::class)->inspect($payload, 'ner');
+
+        Http::assertSent(fn ($request): bool => ! str_contains($request->data()['text'], 'John Smith'));
+    });
+
+    it('counts a failed batch once and does not retry per value', function (): void {
+        Http::fake([NER_URL => Http::response('down', 503)]);
+
+        $payload = [
+            'a' => 'Please call John Smith about the invoice',
+            'b' => 'Please call Jane Doe about the refund',
+            'c' => 'Please call Bob Brown about the delivery',
+        ];
+
+        $result = resolve(Redactor::class)->inspect($payload, 'ner');
+
+        expect($result->value)->toBe($payload)
+            ->and(CircuitBreaker::isOpen('presidio|ner'))->toBeFalse();
+
+        Http::assertSentCount(1);
+    });
+
+    it('asks nothing while the breaker is open', function (): void {
+        Http::fake([NER_URL => Http::response('down', 503)]);
+
+        resolve(Redactor::class)->inspect(['a' => 'Please call John Smith about the invoice'], 'ner');
+        resolve(Redactor::class)->inspect(['a' => 'Please call John Smith about the invoice'], 'ner');
+
+        expect(CircuitBreaker::isOpen('presidio|ner'))->toBeTrue();
+
+        resolve(Redactor::class)->inspect(['a' => 'Please call John Smith about the invoice'], 'ner');
+
+        Http::assertSentCount(2);
+    });
+
+    it('counts a per-value failure against the breaker when batch is off', function (): void {
+        config()->set('redactor.profiles.ner.recognition.batch', false);
+        Http::fake([NER_URL => Http::response('down', 503)]);
+
+        $result = resolve(Redactor::class)->inspect([
+            'a' => 'Please call John Smith about the invoice',
+            'b' => 'Please call John Smith about the refund',
+        ], 'ner');
+
+        expect($result->value['a'])->toBe('Please call John Smith about the invoice')
+            ->and(CircuitBreaker::isOpen('presidio|ner'))->toBeTrue();
+
+        Http::assertSentCount(2);
+    });
+
+    it('asks per value when batch is off', function (): void {
+        config()->set('redactor.profiles.ner.recognition.batch', false);
+        Http::fake([NER_URL => presidioFinding([['PERSON', 'John Smith', 0.9]])]);
+
+        $result = resolve(Redactor::class)->inspect([
+            'a' => 'Please call John Smith about the invoice',
+            'b' => 'Please call John Smith about the refund',
+        ], 'ner');
+
+        expect($result->value['a'])->toBe('Please call [REDACTED] about the invoice')
+            ->and($result->value['b'])->toBe('Please call [REDACTED] about the refund');
+
+        Http::assertSentCount(2);
+    });
+
+    it('falls back to one call for a value the walk truncated before the strategy saw it', function (): void {
+        config()->set('redactor.profiles.ner.max_value_length', 45);
+        config()->set('redactor.profiles.ner.strategies', [
+            LargeStringStrategy::class,
+            RegexPatternsStrategy::class,
+            EntityRecognitionStrategy::class,
+        ]);
+        Http::fake([NER_URL => presidioFinding([['PERSON', 'John Smith', 0.9]])]);
+
+        $result = resolve(Redactor::class)->inspect([
+            'a' => 'Please call John Smith about the invoice, the refund and the delivery schedule',
+        ], 'ner');
+
+        expect($result->value['a'])->toStartWith('Please call [REDACTED] about the invoice');
+
+        Http::assertSentCount(2);
+    });
+
+    it('asks a recogniser that cannot take a list once per text, before the walk', function (): void {
+        $redactor = resolve(Redactor::class);
+        $calls = [];
+
+        $redactor->registerRecognizer(new class($calls) implements Recognizer
+        {
+            public function __construct(private array &$calls) {}
+
+            public function name(): string
+            {
+                return 'single';
+            }
+
+            public function recognize(string $text, string $language, array $entities, float $scoreThreshold): array
+            {
+                $this->calls[] = $text;
+
+                return [new RecognizedSpan('PERSON', 12, 22, 0.9)];
+            }
+        });
+        config()->set('redactor.profiles.ner.recognition.driver', 'single');
+
+        $result = $redactor->inspect([
+            'a' => 'Please call John Smith about the invoice',
+            'b' => 'Please call Jane Smith about the refund',
+        ], 'ner');
+
+        expect($calls)->toBe(['Please call John Smith about the invoice', 'Please call Jane Smith about the refund'])
+            ->and($result->value['a'])->toBe('Please call [REDACTED] about the invoice')
+            ->and($result->value['b'])->toBe('Please call [REDACTED] about the refund');
+    });
+
+    it('skips the batch for an unknown driver and for a payload with no prose', function (): void {
+        Http::fake();
+
+        config()->set('redactor.profiles.ner.recognition.driver', 'missing');
+        resolve(Redactor::class)->inspect(['a' => 'Please call John Smith about the invoice'], 'ner');
+
+        config()->set('redactor.profiles.ner.recognition.driver', 'presidio');
+        resolve(Redactor::class)->inspect(['a' => 'x', 'b' => 42], 'ner');
+
+        Http::assertNothingSent();
+    });
+});
+
+describe('PresidioRecognizer::recognizeMany', function (): void {
+    it('drops a span that crosses the join between two texts', function (): void {
+        // "Alice" ends text one; "Smith" starts text two; a span over both is an artefact...
+        Http::fake([NER_URL => Http::sequence()
+            ->push(presidio([['PERSON', 17, 29, 0.9]]))
+            ->push(presidio([['PERSON', 17, 22, 0.9], ['PERSON', 24, 29, 0.9]]))]);
+
+        $recognizer = new PresidioRecognizer(NER_URL);
+        $spans = $recognizer->recognizeMany(['Please say hi to Alice', 'Smith is here now'], 'en', [], 0.5);
+
+        expect($spans[0])->toHaveCount(0)
+            ->and($spans[1])->toHaveCount(0);
+
+        $spans = $recognizer->recognizeMany(['Please say hi to Alice', 'Smith is here now'], 'en', [], 0.5);
+
+        expect($spans[0][0]->start)->toBe(17)
+            ->and($spans[0][0]->end)->toBe(22)
+            ->and($spans[1][0]->start)->toBe(0)
+            ->and($spans[1][0]->end)->toBe(5);
+    });
+
+    it('splits texts into requests under the character cap', function (): void {
+        Http::fake([NER_URL => Http::response([])]);
+
+        $long = str_repeat('word ', 8000); // 40,000 characters
+        $spans = (new PresidioRecognizer(NER_URL))->recognizeMany([$long, $long, 'short one here'], 'en', [], 0.5);
+
+        expect($spans)->toHaveCount(3);
+
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request): bool => mb_strlen($request->data()['text']) <= PresidioRecognizer::BATCH_CHARACTERS);
+    });
+
+    it('keeps input indexes and returns an empty list for every text when nothing is found', function (): void {
+        Http::fake([NER_URL => Http::response([])]);
+
+        $spans = (new PresidioRecognizer(NER_URL))->recognizeMany([5 => 'Please say hi to Alice', 9 => 'Smith is here now'], 'en', [], 0.5);
+
+        expect($spans)->toBe([5 => [], 9 => []]);
+    });
+
+    it('sends nothing for an empty list', function (): void {
+        Http::fake();
+
+        expect((new PresidioRecognizer(NER_URL))->recognizeMany([], 'en', [], 0.5))->toBe([]);
+
+        Http::assertNothingSent();
+    });
+});
+
+describe('Priming strategies', function (): void {
+    it('see the whole payload once before the walk', function (): void {
+        $seen = [];
+
+        $strategy = new class($seen) implements PrimingStrategy
+        {
+            public function __construct(private array &$seen) {}
+
+            public function prime(mixed $content, RedactionContext $context): void
+            {
+                $this->seen[] = $content;
+            }
+
+            public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
+            {
+                return false;
+            }
+
+            public function handle(mixed $value, string $key, RedactionContext $context): mixed
+            {
+                return $value;
+            }
+        };
+
+        $redactor = resolve(Redactor::class);
+        $redactor->registerCustomStrategy('primer', $strategy);
+        config()->set('redactor.profiles.ner', nerProfile(['strategies' => ['primer']]));
+
+        $redactor->redact(['a' => 1, 'b' => ['c' => 2]], 'ner');
+
+        expect($seen)->toBe([['a' => 1, 'b' => ['c' => 2]]]);
     });
 });

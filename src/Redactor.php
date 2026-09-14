@@ -21,6 +21,7 @@ use Kirschbaum\Redactor\Strategies\Contracts\ChainableStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\ConditionalStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\PreservingStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\PrimingStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
 use Kirschbaum\Redactor\Strategies\StrategyOutcome;
@@ -142,6 +143,14 @@ class Redactor
 
         $context = new RedactionContext($config, $this->operators, $this->secrets, $this->recognizers, $entities);
         $strategies = $this->getStrategiesForProfile($config);
+
+        // A strategy that pays per call rather than per value sees the whole
+        // payload once before the walk hands it values one at a time...
+        foreach ($strategies as $strategy) {
+            if ($strategy instanceof PrimingStrategy) {
+                $strategy->prime($content, $context);
+            }
+        }
 
         $redactedContent = $this->redactRecursively($content, '', $context, $strategies, false, $config->paths->cursor());
 

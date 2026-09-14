@@ -8,6 +8,7 @@ use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Detection\Detector;
 use Kirschbaum\Redactor\Detection\KeywordContext;
+use Kirschbaum\Redactor\Recognition\BatchRecognizer;
 use Kirschbaum\Redactor\Recognition\CircuitBreaker;
 use Kirschbaum\Redactor\Recognition\RecognizedSpan;
 use Kirschbaum\Redactor\Recognition\Recognizer;
@@ -16,6 +17,7 @@ use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\RedactorConfig;
 use Kirschbaum\Redactor\Strategies\Contracts\ConditionalStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\DetectingStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\PrimingStrategy;
 use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 use Kirschbaum\Redactor\Support\InternalLog;
 use Throwable;
@@ -29,10 +31,193 @@ use Throwable;
  * it, only on prose within a length window, and never belongs on the request
  * path. Spans are verified against the subject before they become detections,
  * and a failing recogniser trips a breaker and leaves the output rules-only.
+ *
+ * Before the walk, every prose value in the payload is gathered and sent in
+ * one call, so a record with fifty free-text fields costs one round trip.
  */
-class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrategy, Detector, Strategy
+class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrategy, Detector, PrimingStrategy, Strategy
 {
     public const RULE = 'entity_recognition';
+
+    /**
+     * Recognise every prose value in the payload in one call, ahead of the walk.
+     *
+     * Values under safe or blocked keys are left out, since the walk will
+     * preserve or replace them whole without reading them. A failure counts
+     * once against the breaker and primes every value with nothing, so the
+     * walk does not retry a dead recogniser once per value.
+     */
+    public function prime(mixed $content, RedactionContext $context): void
+    {
+        $settings = $context->config->recognition;
+
+        if (($settings['batch'] ?? true) === false) {
+            return;
+        }
+
+        $texts = [];
+        $this->gather($content, '', $context, $texts);
+
+        if ($texts === []) {
+            return;
+        }
+
+        $recognizer = $this->recognizer($settings, $context);
+
+        if (! $recognizer instanceof Recognizer || ! CircuitBreaker::allows($this->breakerKey($recognizer, $context))) {
+            return;
+        }
+
+        $texts = array_values($texts);
+        $spans = $this->askMany($recognizer, $texts, $context);
+
+        $primed = [];
+
+        foreach ($texts as $index => $text) {
+            $primed[$text] = $spans[$index] ?? [];
+        }
+
+        $context->primeRecognition($primed);
+    }
+
+    /**
+     * Ask the recogniser about every text, in one call if it can take a list.
+     *
+     * A throw becomes "rules only, this time" for every text in the batch.
+     *
+     * @param  array<int, string>  $texts
+     * @return array<int, array<int, RecognizedSpan>>
+     */
+    private function askMany(Recognizer $recognizer, array $texts, RedactionContext $context): array
+    {
+        $settings = $context->config->recognition;
+        $language = $this->string($settings, 'language', 'en');
+        $entities = $this->labels($settings);
+        $threshold = $this->float($settings, 'score_threshold', 0.6);
+
+        try {
+            if ($recognizer instanceof BatchRecognizer) {
+                $spans = $recognizer->recognizeMany($texts, $language, $entities, $threshold);
+            } else {
+                $spans = [];
+
+                foreach ($texts as $index => $text) {
+                    $spans[$index] = $recognizer->recognize($text, $language, $entities, $threshold);
+                }
+            }
+        } catch (Throwable $e) {
+            $this->failed($recognizer, $context, $e);
+
+            return [];
+        }
+
+        CircuitBreaker::recordSuccess($this->breakerKey($recognizer, $context));
+
+        return $spans;
+    }
+
+    /**
+     * Collect every prose value the walk would send, keyed by the text itself.
+     *
+     * Objects are opened the way the walk opens them, and the same depth and
+     * cycle guards apply, so a payload the walk would stop on stops here too.
+     *
+     * @param  array<string, string>  $texts
+     */
+    private function gather(mixed $value, string $key, RedactionContext $context, array &$texts): void
+    {
+        if (is_string($value)) {
+            if (! isset($texts[$value]) && $this->walkWouldRead($key, $context) && $this->shouldHandle($value, $key, $context)) {
+                $texts[$value] = $value;
+            }
+
+            return;
+        }
+
+        if (! $this->walkWouldRead($key, $context)) {
+            return;
+        }
+
+        if (is_array($value)) {
+            $this->gatherFrom($value, $context, $texts);
+
+            return;
+        }
+
+        // The object stays on the stack while its children are read, so a
+        // toArray() that hands back its owner is entered once...
+        if (is_object($value) && $context->enterObject($value)) {
+            try {
+                $opened = $this->open($value);
+
+                if ($opened !== null) {
+                    $this->gatherFrom($opened, $context, $texts);
+                }
+            } finally {
+                $context->leaveObject($value);
+            }
+        }
+    }
+
+    /**
+     * Collect prose from every child of the array, one level deeper.
+     *
+     * @param  array<array-key, mixed>  $array
+     * @param  array<string, string>  $texts
+     */
+    private function gatherFrom(array $array, RedactionContext $context, array &$texts): void
+    {
+        if (! $context->enterDepth()) {
+            return;
+        }
+
+        try {
+            foreach ($array as $childKey => $child) {
+                $this->gather($child, (string) $childKey, $context, $texts);
+            }
+        } finally {
+            $context->leaveDepth();
+        }
+    }
+
+    /**
+     * Determine if the walk would read the value under the key rather than settle it by name.
+     */
+    private function walkWouldRead(string $key, RedactionContext $context): bool
+    {
+        if ($key === '') {
+            return true;
+        }
+
+        return ! $context->config->safeKeyMatcher->matches($key, onError: false)
+            && ! $context->config->blockedKeyMatcher->matches($key);
+    }
+
+    /**
+     * Open an object into an array the way the walk does, or null when it is opaque.
+     *
+     * @return array<array-key, mixed>|null
+     */
+    private function open(object $object): ?array
+    {
+        if ($object instanceof Throwable || $object instanceof \DateTimeInterface || $object instanceof \DateTimeZone || $object instanceof \UnitEnum || $object instanceof \Closure) {
+            return null;
+        }
+
+        try {
+            if (method_exists($object, 'toArray')) {
+                $array = $object->toArray();
+
+                return is_array($array) ? $array : null;
+            }
+
+            $decoded = json_decode(json_encode($object, JSON_THROW_ON_ERROR), true, 512, JSON_THROW_ON_ERROR);
+
+            return is_array($decoded) ? $decoded : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
 
     /**
      * Determine if the profile enables entity recognition.
@@ -96,42 +281,76 @@ class EntityRecognitionStrategy implements ConditionalStrategy, DetectingStrateg
             return [];
         }
 
-        $breakerKey = $recognizer->name().'|'.$context->config->profile;
+        $threshold = $this->float($settings, 'score_threshold', 0.6);
+        $spans = $context->primedRecognition($subject);
 
-        if (! CircuitBreaker::allows($breakerKey)) {
-            return [];
+        if ($spans === null) {
+            if (! CircuitBreaker::allows($this->breakerKey($recognizer, $context))) {
+                return [];
+            }
+
+            $spans = $this->askOne($recognizer, $subject, $context);
         }
 
-        $entities = $this->labels($settings);
-        $threshold = $this->float($settings, 'score_threshold', 0.6);
+        return $this->toDetections($spans, $subject, $key, $recognizer->name(), $settings, $threshold);
+    }
+
+    /**
+     * Ask the recogniser about one text.
+     *
+     * A throw becomes "rules only, this time" for that text.
+     *
+     * @return array<int, RecognizedSpan>
+     */
+    private function askOne(Recognizer $recognizer, string $subject, RedactionContext $context): array
+    {
+        $settings = $context->config->recognition;
 
         try {
             $spans = $recognizer->recognize(
                 $subject,
                 $this->string($settings, 'language', 'en'),
-                $entities,
-                $threshold
+                $this->labels($settings),
+                $this->float($settings, 'score_threshold', 0.6)
             );
         } catch (Throwable $e) {
-            $opened = CircuitBreaker::recordFailure(
-                $breakerKey,
-                $this->int($settings, 'failure_threshold', 3),
-                $this->int($settings, 'cooldown', 60)
-            );
-
-            InternalLog::warning('Entity recognition failed; continuing with rules only', [
-                'recognizer' => $recognizer->name(),
-                'profile' => $context->config->profile,
-                'reason' => $e->getMessage(),
-                'breaker_opened' => $opened,
-            ]);
+            $this->failed($recognizer, $context, $e);
 
             return [];
         }
 
-        CircuitBreaker::recordSuccess($breakerKey);
+        CircuitBreaker::recordSuccess($this->breakerKey($recognizer, $context));
 
-        return $this->toDetections($spans, $subject, $key, $recognizer->name(), $settings, $threshold);
+        return $spans;
+    }
+
+    /**
+     * Count a failed call against the breaker and log it through the re-entrancy guard.
+     */
+    private function failed(Recognizer $recognizer, RedactionContext $context, Throwable $e): void
+    {
+        $settings = $context->config->recognition;
+
+        $opened = CircuitBreaker::recordFailure(
+            $this->breakerKey($recognizer, $context),
+            $this->int($settings, 'failure_threshold', 3),
+            $this->int($settings, 'cooldown', 60)
+        );
+
+        InternalLog::warning('Entity recognition failed; continuing with rules only', [
+            'recognizer' => $recognizer->name(),
+            'profile' => $context->config->profile,
+            'reason' => $e->getMessage(),
+            'breaker_opened' => $opened,
+        ]);
+    }
+
+    /**
+     * Get the breaker key for the recogniser under this profile.
+     */
+    private function breakerKey(Recognizer $recognizer, RedactionContext $context): string
+    {
+        return $recognizer->name().'|'.$context->config->profile;
     }
 
     /**

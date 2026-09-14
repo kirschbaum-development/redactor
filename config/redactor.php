@@ -702,6 +702,10 @@ return [
             | is replaced. A failing recogniser is skipped, and after
             | failure_threshold consecutive failures not asked again for
             | cooldown seconds; the output is then rules-only.
+            |
+            | With batch on, every prose value in a payload is sent in one
+            | call before the walk, so a record with fifty free-text fields
+            | costs one round trip rather than fifty.
             */
             'recognition' => [
                 'enabled' => env('REDACTOR_RECOGNITION', false),
@@ -720,6 +724,7 @@ return [
                 'max_length' => 5000,
                 'min_words' => 3,
                 'timeout' => 2.0,
+                'batch' => true,
                 'failure_threshold' => 3,
                 'cooldown' => 60,
             ],

@@ -209,6 +209,10 @@ packaging and conventions. Each item is one commit, with tests.
 
 ### Changed - conventions, following Laravel's first-party packages
 
+- **Recogniser batching.** Every prose value in a payload is recognised in
+  one call before the walk, so a record with fifty free-text fields costs one
+  round trip. `BatchRecognizer` for recognisers that take a list, and
+  `PrimingStrategy` for any strategy that pays per call rather than per value.
 - **Four more verifiers.** OpenAI, Anthropic, SendGrid and Google API keys,
   each behind the same three gates; `SecretVerifier::register()` adds your own.
 - **Region packs.** National identifiers and VAT numbers for GB, NL, DE, FR,

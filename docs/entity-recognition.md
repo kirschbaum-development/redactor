@@ -5,6 +5,7 @@
 - [The Presidio Contract](#the-presidio-contract)
 - [Gates](#gates)
 - [Offsets](#offsets)
+- [Batching](#batching)
 - [The Circuit Breaker](#the-circuit-breaker)
 - [Writing a Recognizer](#writing-a-recognizer)
 - [When to Use It](#when-to-use-it)
@@ -87,6 +88,14 @@ On the way back:
 
 A recogniser reports character offsets, because every model tokenises its own copy of the text and none of them count bytes. The strategy converts each span's `start` to a byte offset with `mb_substr()`, extracts the text between `start` and `end`, and checks that the bytes at that position in the value are exactly that text. A span that is empty, whose `end` is not past its `start`, that runs past the end of the value, or that does not line up is skipped with a warning, never guessed. The detection's offset is then a byte offset like every other finding's.
 
+## Batching
+
+A model call costs a round trip and almost nothing per extra byte, so a record with fifty free-text fields should cost one call, not fifty. Before the walk starts, the strategy gathers every value that passes the gates, leaves out anything under a safe or blocked key, since the walk will preserve or replace those without reading them, and sends the rest in one request. Identical texts are sent once. When the walk later reaches a value, it finds the spans already recognised and asks nothing.
+
+The Presidio driver joins the texts with a blank line between them, sends them under one 60,000 character cap per request, and hands each span back to the text it fell in with offsets relative to that text. No entity spans a blank line, so a span that crosses the join is an artefact and is dropped. A recogniser of your own takes the list directly by implementing `BatchRecognizer`, and one that only implements `Recognizer` is asked once per text at the same point.
+
+A batch that fails counts once against the breaker and primes every gathered value with nothing, so the walk does not retry a dead recogniser once per value. A value the walk truncates before the strategy sees it falls back to a single call for that value. Set `batch` to `false` to always ask per value.
+
 ## The Circuit Breaker
 
 A sidecar that is down fails every call at the full timeout, so inside a log tap every line would wait seconds to be told nothing. A recogniser that throws is skipped and the output is rules-only for that value. After `failure_threshold` consecutive failures the breaker opens for `cooldown` seconds and the recogniser is not asked again until it closes; one success closes it.
@@ -130,6 +139,8 @@ class OnnxRecognizer implements Recognizer
 }
 ```
 
+A recogniser that can read a list in one call also implements `Kirschbaum\Redactor\Recognition\BatchRecognizer`, whose `recognizeMany()` takes an array of texts and returns spans per input index, with offsets relative to each text. See [Batching](#batching).
+
 Register it, usually in a service provider's `boot()`, and select it by name:
 
 ```php
@@ -150,4 +161,4 @@ Do not enable it on the request path or on a busy log channel. The rule engine c
 
 Do not rely on it for credentials. A model finds names; a pattern finds keys. The rules run either way.
 
-Still open in the package: an in-process ONNX recogniser so recognition needs no sidecar, and batching every candidate string in a payload into one recogniser call.
+Still open in the package: an in-process ONNX recogniser so recognition needs no sidecar.
