@@ -1,0 +1,152 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Kirschbaum\Redactor\Scanner;
+
+use Illuminate\Contracts\Support\Arrayable;
+use JsonSerializable;
+use Kirschbaum\Redactor\Verification\VerificationResult;
+
+/**
+ * One located finding: which rule fired, where, and what the line looks like
+ * once redacted.
+ *
+ * @implements Arrayable<string, mixed>
+ */
+final readonly class ScanFinding implements Arrayable, JsonSerializable
+{
+    public function __construct(
+        public string $path,
+        public string $rule,
+        public int $line,
+        public int $column,
+        public string $excerpt,
+        public string $profile,
+        public string $fingerprint,
+        public string $entity = '',
+        /** 0.0-1.0, or null where the rule is structural rather than inferred. */
+        public ?float $confidence = null,
+        /** @var array<int, string> */
+        public array $signals = [],
+        /** Set only when verification ran; never carries the secret itself. */
+        public ?VerificationResult $verification = null,
+        /** The commit that added the line, when scanning git history. */
+        public ?string $commit = null,
+        /** base64, url or json when the secret was found inside an encoded span. */
+        public ?string $encoding = null,
+    ) {}
+
+    public function withVerification(VerificationResult $result): self
+    {
+        return new self(
+            path: $this->path,
+            rule: $this->rule,
+            line: $this->line,
+            column: $this->column,
+            excerpt: $this->excerpt,
+            profile: $this->profile,
+            fingerprint: $this->fingerprint,
+            entity: $this->entity,
+            confidence: $this->confidence,
+            signals: $this->signals,
+            verification: $result,
+            commit: $this->commit,
+            encoding: $this->encoding,
+        );
+    }
+
+    /**
+     * Relocate the finding to its real line in the file and the commit that added it.
+     */
+    public function at(int $line, ?string $commit): self
+    {
+        return new self(
+            path: $this->path,
+            rule: $this->rule,
+            line: $line,
+            column: $this->column,
+            excerpt: $this->excerpt,
+            profile: $this->profile,
+            fingerprint: $this->fingerprint,
+            entity: $this->entity,
+            confidence: $this->confidence,
+            signals: $this->signals,
+            verification: $this->verification,
+            commit: $commit,
+            encoding: $this->encoding,
+        );
+    }
+
+    /**
+     * Get the finding's location as a human reads it.
+     */
+    public function location(): string
+    {
+        $where = sprintf('%s:%d:%d', $this->path, $this->line, $this->column);
+
+        return $this->commit === null ? $where : substr($this->commit, 0, 8).':'.$where;
+    }
+
+    /**
+     * Get a severity a human can sort by.
+     */
+    public function severity(): string
+    {
+        // A confirmed-live credential outranks anything confidence can say...
+        if ($this->verification instanceof VerificationResult && $this->verification->status->isActive()) {
+            return 'critical';
+        }
+
+        return match (true) {
+            $this->confidence === null => 'high',
+            $this->confidence >= 0.9 => 'high',
+            $this->confidence >= 0.6 => 'medium',
+            $this->confidence >= 0.3 => 'low',
+            default => 'very-low',
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'rule' => $this->rule,
+            'entity' => $this->entity,
+            'line' => $this->line,
+            'column' => $this->column,
+            'excerpt' => $this->excerpt,
+            'confidence' => $this->confidence,
+            'severity' => $this->severity(),
+            // Why the score is what it is, so a threshold can be chosen on evidence...
+            'signals' => $this->signals,
+            'verification' => $this->verification?->toArray(),
+            'commit' => $this->commit,
+            'encoding' => $this->encoding,
+            'profile' => $this->profile,
+            'fingerprint' => $this->fingerprint,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
+    }
+
+    /**
+     * Get a stable identity for the finding.
+     *
+     * Derived from the rule, the file and the secret itself - never the line
+     * number, so a finding accepted into a baseline stays accepted when the
+     * code above it moves. The secret is hashed, never stored.
+     */
+    public static function fingerprint(string $rule, string $path, string $matched): string
+    {
+        return substr(hash('sha256', $rule.'|'.$path.'|'.$matched), 0, 32);
+    }
+}

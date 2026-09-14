@@ -1,0 +1,7 @@
+# Dependencies and generated output; findings there belong upstream.
+vendor/
+node_modules/
+.phpunit.cache/
+
+# Test fixtures hold deliberately fake credentials the scanner must find.
+tests/Feature/fixtures/

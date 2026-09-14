@@ -1,0 +1,43 @@
+name: Secret scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  redactor:
+    name: redactor:scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The diff and history modes need more than the tip commit.
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      # On a pull request: fail on secrets the branch adds over its base.
+      - name: Scan the changes in this pull request
+        if: github.event_name == 'pull_request'
+        run: php artisan redactor:scan --diff=origin/${{ github.base_ref }} --bail --output=sarif > redactor.sarif
+
+      # On main: the whole tree, against the committed baseline.
+      - name: Scan the repository
+        if: github.event_name != 'pull_request'
+        run: php artisan redactor:scan --bail --output=sarif > redactor.sarif
+
+      - name: Upload findings to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: redactor.sarif

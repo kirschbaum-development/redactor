@@ -1,20 +1,20 @@
 <?php
 
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\Scanner\ScanFinding;
 use Kirschbaum\Redactor\Scanner\Scanner;
-use Mockery;
 
-describe('Scanner', function () {
-    beforeEach(function () {
+describe('Scanner', function (): void {
+    beforeEach(function (): void {
         $this->tempDir = sys_get_temp_dir().'/scanner_test_'.uniqid();
         mkdir($this->tempDir, 0755, true);
     });
 
-    afterEach(function () {
+    afterEach(function (): void {
         cleanupDirectory($this->tempDir);
     });
 
-    it('handles unreadable files gracefully when called directly', function () {
+    it('handles unreadable files gracefully when called directly', function (): void {
         $redactor = resolve(Redactor::class);
         $scanner = new Scanner($redactor);
 
@@ -34,7 +34,7 @@ describe('Scanner', function () {
         chmod($unreadableFile, 0644);
     });
 
-    it('handles non-existent files gracefully when called directly', function () {
+    it('handles non-existent files gracefully when called directly', function (): void {
         $redactor = resolve(Redactor::class);
         $scanner = new Scanner($redactor);
 
@@ -48,7 +48,7 @@ describe('Scanner', function () {
         expect($result->path)->toBe($nonExistentFile);
     });
 
-    it('scans readable files successfully when called directly', function () {
+    it('scans readable files successfully when called directly', function (): void {
         $redactor = resolve(Redactor::class);
         $scanner = new Scanner($redactor);
 
@@ -65,11 +65,12 @@ describe('Scanner', function () {
         expect($result->profile)->toBe('file_scan');
     });
 
-    it('detects full content redaction when sensitive patterns are found', function () {
+    it('reports a located finding for each sensitive span', function (): void {
         $redactor = resolve(Redactor::class);
         $scanner = new Scanner($redactor);
 
-        // Create content with sensitive information - this will get fully redacted
+        // Create content with sensitive information - the address is replaced,
+        // the surrounding log lines survive.
         $sensitiveFile = $this->tempDir.'/sensitive.txt';
         $content = "This is a log file.\nContact: john@example.com\nEnd of log.";
 
@@ -83,13 +84,16 @@ describe('Scanner', function () {
         expect($result->findings)->toHaveCount(1);
 
         $finding = $result->findings[0];
-        expect($finding['type'])->toBe('full_content_redacted');
-        expect($finding['reason'])->toBe('Entire content was redacted');
-        expect($finding['original_length'])->toBe(strlen($content));
-        expect($finding['profile'])->toBe('file_scan');
+        expect($finding->rule)->toBe('email');
+        expect($finding->line)->toBe(2);
+        expect($finding->column)->toBe(10);
+        expect($finding->excerpt)->toBe('Contact: [REDACTED]');
+        expect($finding->excerpt)->not->toContain('john@example.com');
+        expect($finding->profile)->toBe('file_scan');
+        expect($finding->fingerprint)->toHaveLength(32);
     });
 
-    it('detects array-based redaction for structured data', function () {
+    it('detects array-based redaction for structured data', function (): void {
         $redactor = resolve(Redactor::class);
         $scanner = new Scanner($redactor);
 
@@ -120,75 +124,84 @@ describe('Scanner', function () {
         expect(count($result->findings))->toBeGreaterThan(0);
     });
 
-    it('handles array-based redaction with _redacted_keys', function () {
-        // Mock the Redactor to return array with _redacted metadata
-        $mockRedactor = Mockery::mock(Redactor::class);
-        $mockRedactor->shouldReceive('redact')
-            ->once()
-            ->andReturn([
-                'user' => 'john',
-                'email' => '[REDACTED]',
-                'api_key' => '[REDACTED]',
-                '_redacted' => true,
-                '_redacted_keys' => [
-                    [
-                        'key' => 'email',
-                        'type' => 'blocked_key',
-                        'strategy' => 'BlockedKeysStrategy',
-                    ],
-                    [
-                        'key' => 'api_key',
-                        'type' => 'blocked_key',
-                        'strategy' => 'BlockedKeysStrategy',
-                    ],
-                ],
-            ]);
+    it('reports the key alongside a key-based finding in structured data', function (): void {
+        $scanner = new Scanner(resolve(Redactor::class));
 
-        $scanner = new Scanner($mockRedactor);
+        $testFile = $this->tempDir.'/keys.json';
+        file_put_contents($testFile, "{\n  \"user\": \"john\",\n  \"password\": \"supersecret123\"\n}");
 
-        $testFile = $this->tempDir.'/mock_test.json';
-        file_put_contents($testFile, '{"user":"john","email":"test@example.com","api_key":"secret123"}');
+        $result = $scanner->scanFile($testFile, 'file_scan');
 
-        $result = $scanner->scanFile($testFile, 'default');
-
-        expect($result->skipped)->toBeFalse();
-        expect($result->error)->toBeNull();
         expect($result->hasFindings())->toBeTrue();
-        expect($result->findings)->toHaveCount(2);
-        expect($result->findings[0]['key'])->toBe('email');
-        expect($result->findings[0]['type'])->toBe('blocked_key');
-        expect($result->findings[1]['key'])->toBe('api_key');
-        expect($result->findings[1]['type'])->toBe('blocked_key');
-        expect($result->profile)->toBe('default');
+
+        $rules = array_map(fn (ScanFinding $finding): string => $finding->rule, $result->findings);
+        expect($rules)->toContain('password_assignment');
+    });
+
+    it('reports paths relative to a base when given one', function (): void {
+        $scanner = new Scanner(resolve(Redactor::class));
+
+        $file = $this->tempDir.'/nested/app.env';
+        mkdir(dirname($file), 0777, true);
+        file_put_contents($file, "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n");
+
+        $result = $scanner->scanFile($file, 'file_scan', $this->tempDir);
+
+        expect($result->findings[0]->path)->toBe('nested/app.env')
+            // The absolute path stays on the result for the caller that needs it.
+            ->and($result->path)->toBe($file);
+    });
+
+    it('returns no findings for clean content', function (): void {
+        $scanner = new Scanner(resolve(Redactor::class));
+
+        $file = $this->tempDir.'/clean.txt';
+        file_put_contents($file, "nothing to see here\njust ordinary prose\n");
+
+        $result = $scanner->scanFile($file, 'file_scan');
+
+        expect($result->hasFindings())->toBeFalse()
+            ->and($result->findings)->toBe([]);
+    });
+
+    it('numbers lines correctly in a multi-line file', function (): void {
+        $scanner = new Scanner(resolve(Redactor::class));
+
+        $file = $this->tempDir.'/multi.env';
+        file_put_contents($file, implode("\n", [
+            'FIRST=ok',
+            'SECOND=ok',
+            'THIRD=ok',
+            'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE',
+            'FIFTH=ok',
+        ]));
+
+        $result = $scanner->scanFile($file, 'file_scan');
+
+        $aws = array_values(array_filter(
+            $result->findings,
+            fn (ScanFinding $finding): bool => $finding->rule === 'aws_access_key'
+        ));
+
+        expect($aws)->toHaveCount(1)
+            ->and($aws[0]->line)->toBe(4);
     });
 
 });
 
-/**
- * Clean up directory recursively
- */
-function cleanupDirectory(string $dir): void
-{
-    if (! is_dir($dir)) {
-        return;
-    }
+describe('Scanner excerpts', function (): void {
+    it('truncates a long excerpt so a minified line does not flood the report', function (): void {
+        $dir = sys_get_temp_dir().'/scanner_excerpt_'.uniqid();
+        mkdir($dir);
+        file_put_contents($dir.'/long.txt', 'AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE '.str_repeat('x', 300)."\n");
 
-    $files = scandir($dir);
-    foreach ($files as $file) {
-        if ($file === '.' || $file === '..') {
-            continue;
-        }
+        $result = (new Scanner(resolve(Redactor::class)))->scanFile($dir.'/long.txt', 'file_scan');
 
-        $path = $dir.'/'.$file;
+        expect($result->findings)->not->toBeEmpty()
+            ->and($result->findings[0]->excerpt)->toEndWith('...')
+            ->and(strlen($result->findings[0]->excerpt))->toBe(203)
+            ->and($result->findings[0]->excerpt)->not->toContain('AKIAIOSFODNN7EXAMPLE');
 
-        if (is_dir($path)) {
-            cleanupDirectory($path);
-        } else {
-            // Ensure file is writable before deletion
-            chmod($path, 0644);
-            unlink($path);
-        }
-    }
-
-    rmdir($dir);
-}
+        cleanupDirectory($dir);
+    });
+});

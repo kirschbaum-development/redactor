@@ -5,7 +5,12 @@ declare(strict_types=1);
 use Kirschbaum\Redactor\RedactionContext;
 use Kirschbaum\Redactor\Redactor;
 use Kirschbaum\Redactor\RedactorConfig;
-use Kirschbaum\Redactor\Strategies\RedactionStrategyInterface;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
+use Kirschbaum\Redactor\Strategies\LargeObjectStrategy;
+use Kirschbaum\Redactor\Strategies\LargeStringStrategy;
+use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
 // Simple test object without toArray method
@@ -17,7 +22,7 @@ class SimpleTestObject
 
     public $prop3 = 'value3';
 
-    public function getData()
+    public function getData(): array
     {
         return ['prop1' => $this->prop1, 'prop2' => $this->prop2, 'prop3' => $this->prop3];
     }
@@ -38,18 +43,18 @@ class TestObjectWithToArray
     }
 }
 
-describe('Redactor Content Tests', function () {
-    beforeEach(function () {
+describe('Redactor Content Tests', function (): void {
+    beforeEach(function (): void {
         // Set up test configurations for different scenarios
         // This replaces the need for dynamic strategy addition/removal
         config()->set('redactor.profiles.no_shannon', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
                 // Note: No ShannonEntropyStrategy
             ],
             'safe_keys' => [],
@@ -67,7 +72,7 @@ describe('Redactor Content Tests', function () {
 
         config()->set('redactor.profiles.test_shannon', [
             'enabled' => true,
-            'strategies' => [\Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class],
+            'strategies' => [ShannonEntropyStrategy::class],
             'safe_keys' => [],
             'blocked_keys' => [],
             'patterns' => [],
@@ -89,12 +94,12 @@ describe('Redactor Content Tests', function () {
         config()->set('redactor.profiles.small_object_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -110,11 +115,11 @@ describe('Redactor Content Tests', function () {
         ]);
     });
 
-    test('it returns zero entropy when no ShannonEntropyStrategy is found during entropy calculation', function () {
+    test('it returns zero entropy when no ShannonEntropyStrategy is found during entropy calculation', function (): void {
         $redactor = new Redactor;
 
         // Use profile without ShannonEntropyStrategy - should return 0.0
-        $strategies = $redactor->getStrategies('no_shannon');
+        $strategies = $redactor->strategies('no_shannon');
         $hasShannon = false;
         foreach ($strategies as $strategy) {
             if ($strategy instanceof ShannonEntropyStrategy) {
@@ -125,36 +130,26 @@ describe('Redactor Content Tests', function () {
 
         expect($hasShannon)->toBeFalse();
 
-        // calculateShannonEntropy uses default profile by default, so we need to check directly
-        // Since the method searches through strategies in the default profile, and our no_shannon profile
-        // doesn't have ShannonEntropyStrategy, we need to test with empty strategies
-        $entropy = $redactor->calculateShannonEntropy('high-entropy-string-xyz123');
+        // Entropy is a property of the string, not of the profile: it stays the
+        // same whether or not the active profile lists ShannonEntropyStrategy.
+        $entropy = (new ShannonEntropyStrategy)->calculateShannonEntropy('high-entropy-string-xyz123');
+        expect($entropy)->toBeGreaterThan(0.0);
 
-        // The default profile still has ShannonEntropyStrategy, so let's verify the logic
-        // by testing the actual case where no strategy is found
-        expect($entropy)->toBeGreaterThan(0.0); // Default profile has the strategy
-
-        // Create redactor instance that specifically uses no_shannon profile for this test
-        // Since calculateShannonEntropy uses default profile, we test the edge case directly
         config()->set('redactor.default_profile', 'no_shannon');
-        $noShannonRedactor = new Redactor;
-        $entropyNoStrategy = $noShannonRedactor->calculateShannonEntropy('high-entropy-string-xyz123');
-        expect($entropyNoStrategy)->toBe(0.0);
+        expect((new ShannonEntropyStrategy)->calculateShannonEntropy('high-entropy-string-xyz123'))
+            ->toBe($entropy);
     });
 
-    test('it returns false when no ShannonEntropyStrategy is found during pattern checking', function () {
-        // Set profile without ShannonEntropyStrategy as default
+    test('it reports no exclusion match when the profile configures no exclusion patterns', function (): void {
         config()->set('redactor.default_profile', 'no_shannon');
-        $redactor = new Redactor;
         $config = RedactorConfig::fromConfig('no_shannon');
 
-        // Should return false when no strategy found
-        $isCommon = $redactor->isCommonPattern('192.168.1.1', $config);
+        $isCommon = (new ShannonEntropyStrategy)->isCommonPattern('192.168.1.1', $config);
 
         expect($isCommon)->toBe(false);
     });
 
-    test('it allows long hex strings to bypass common pattern exclusion for entropy checking', function () {
+    test('it allows long hex strings to bypass common pattern exclusion for entropy checking', function (): void {
         $redactor = new Redactor;
         $config = RedactorConfig::fromConfig('test_shannon');
 
@@ -162,24 +157,24 @@ describe('Redactor Content Tests', function () {
         $longHex = str_repeat('a1b2c3d4', 8); // 64 characters
 
         // This will exercise the specific branch where hex strings >= 32 continue
-        $isCommon = $redactor->isCommonPattern($longHex, $config);
+        $isCommon = (new ShannonEntropyStrategy)->isCommonPattern($longHex, $config);
 
         // The method should return false for long hex strings, allowing them to be entropy-checked
         expect($isCommon)->toBe(false);
 
         // Short hex should be considered common
         $shortHex = 'a1b2c3d4';
-        $isCommonShort = $redactor->isCommonPattern($shortHex, $config);
+        $isCommonShort = (new ShannonEntropyStrategy)->isCommonPattern($shortHex, $config);
         expect($isCommonShort)->toBe(true);
     });
 
-    test('it handles exceptions thrown by toArray method during object redaction', function () {
+    test('it handles exceptions thrown by toArray method during object redaction', function (): void {
         $redactor = new Redactor;
 
         // Create an object with a toArray method that throws an exception
         $objectWithBadToArray = new class
         {
-            public function toArray()
+            public function toArray(): never
             {
                 throw new Exception('toArray failed');
             }
@@ -192,16 +187,16 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('bad_object');
     });
 
-    test('it skips large object redaction when feature is disabled', function () {
+    test('it skips large object redaction when feature is disabled', function (): void {
         // Create profile with large object redaction disabled
         config()->set('redactor.profiles.no_large_objects', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
                 // Note: No LargeObjectStrategy
             ],
             'safe_keys' => [],
@@ -234,9 +229,9 @@ describe('Redactor Content Tests', function () {
         expect($result['large_data'])->toBe($largeArray);
     });
 
-    test('it wraps non-array strategy results in redacted array structure', function () {
+    test('it wraps non-array strategy results in redacted array structure', function (): void {
         // Create a custom strategy that returns a string when processing arrays
-        $customStrategy = new class implements RedactionStrategyInterface
+        $customStrategy = new class implements Strategy
         {
             public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
             {
@@ -260,8 +255,8 @@ describe('Redactor Content Tests', function () {
             'enabled' => true,
             'strategies' => [
                 'array_strategy', // Custom strategy first
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -288,9 +283,9 @@ describe('Redactor Content Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    test('it removes keys when strategy returns removal signal', function () {
+    test('it removes keys when strategy returns removal signal', function (): void {
         // Create a custom strategy that removes specific keys by returning __REDACTOR_REMOVE_OBJECT__
-        $removeStrategy = new class implements RedactionStrategyInterface
+        $removeStrategy = new class implements Strategy
         {
             public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
             {
@@ -314,8 +309,8 @@ describe('Redactor Content Tests', function () {
             'enabled' => true,
             'strategies' => [
                 'remove_strategy', // Custom strategy first
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -351,17 +346,17 @@ describe('Redactor Content Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    test('it handles large objects that exceed size limits during property counting', function () {
+    test('it handles large objects that exceed size limits during property counting', function (): void {
         // Create profile with very small max object size
         config()->set('redactor.profiles.small_object_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -392,17 +387,17 @@ describe('Redactor Content Tests', function () {
         expect($message)->toContain('stdClass');
     });
 
-    test('it handles large objects detected via JSON encoding when toArray is unavailable', function () {
+    test('it handles large objects detected via JSON encoding when toArray is unavailable', function (): void {
         // Create profile with small max object size
         config()->set('redactor.profiles.json_size_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -437,7 +432,7 @@ describe('Redactor Content Tests', function () {
         expect($result['large_obj'])->toHaveKey('_large_object_redacted');
     });
 
-    test('it handles objects with toArray method that throws exception during size detection', function () {
+    test('it handles objects with toArray method that throws exception during size detection', function (): void {
         config(['redactor.max_object_size' => 2]);
 
         $redactor = new Redactor;
@@ -445,7 +440,7 @@ describe('Redactor Content Tests', function () {
         // Create object with toArray that throws an exception during size detection
         $largeObject = new class
         {
-            public function toArray()
+            public function toArray(): never
             {
                 throw new Exception('Failed during detection');
             }
@@ -458,7 +453,7 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('large_obj');
     });
 
-    test('it handles objects with JSON encoding failures during size detection', function () {
+    test('it handles objects with JSON encoding failures during size detection', function (): void {
         config(['redactor.max_object_size' => 2]);
 
         $redactor = new Redactor;
@@ -466,6 +461,9 @@ describe('Redactor Content Tests', function () {
         // Create object that will fail JSON encoding during size detection
         $largeObject = new class
         {
+            /**
+             * @var $this
+             */
             public $circular;
 
             public function __construct()
@@ -481,9 +479,9 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('large_obj');
     });
 
-    test('it returns strategy-processed objects directly when handled by custom strategies', function () {
+    test('it returns strategy-processed objects directly when handled by custom strategies', function (): void {
         // Create a custom strategy that specifically handles certain objects
-        $objectStrategy = new class implements RedactionStrategyInterface
+        $objectStrategy = new class implements Strategy
         {
             public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
             {
@@ -507,8 +505,8 @@ describe('Redactor Content Tests', function () {
             'enabled' => true,
             'strategies' => [
                 'object_strategy', // Custom strategy first
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => [],
@@ -543,22 +541,23 @@ describe('Redactor Content Tests', function () {
             ->and($arrayResult['_redacted'])->toBeTrue();
     });
 
-    test('it returns all registered strategies via getStrategies method', function () {
+    test('it returns all registered strategies via getStrategies method', function (): void {
         $redactor = new Redactor;
 
         // Get the initial strategies from default profile
-        $strategies = $redactor->getStrategies();
+        $strategies = $redactor->strategies();
 
-        // Should have the 6 default strategies
-        expect($strategies)->toHaveCount(6);
+        // Seven of the eight configured strategies: entity recognition is
+        // configured but switched off, so it stays out of the chain.
+        expect($strategies)->toHaveCount(7);
 
         // Verify they are strategy instances
         foreach ($strategies as $strategy) {
-            expect($strategy)->toBeInstanceOf(RedactionStrategyInterface::class);
+            expect($strategy)->toBeInstanceOf(Strategy::class);
         }
 
         // Test with a custom profile that includes a registered custom strategy
-        $customStrategy = new class implements RedactionStrategyInterface
+        $customStrategy = new class implements Strategy
         {
             public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
             {
@@ -577,12 +576,12 @@ describe('Redactor Content Tests', function () {
         config()->set('redactor.profiles.custom_strategy_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeObjectStrategy::class,
-                \Kirschbaum\Redactor\Strategies\LargeStringStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                LargeObjectStrategy::class,
+                LargeStringStrategy::class,
+                RegexPatternsStrategy::class,
+                ShannonEntropyStrategy::class,
                 'test_strategy', // Custom strategy
             ],
             'safe_keys' => [],
@@ -599,15 +598,15 @@ describe('Redactor Content Tests', function () {
         ]);
 
         // Should now have 7 strategies when using custom profile
-        $strategiesWithCustom = $redactor->getStrategies('custom_strategy_test');
+        $strategiesWithCustom = $redactor->strategies('custom_strategy_test');
         expect($strategiesWithCustom)->toHaveCount(7);
 
-        // Profile without custom strategy should still have 6
-        $strategiesDefault = $redactor->getStrategies();
-        expect($strategiesDefault)->toHaveCount(6);
+        // Profile without custom strategy should still have 7
+        $strategiesDefault = $redactor->strategies();
+        expect($strategiesDefault)->toHaveCount(7);
     });
 
-    test('it skips large object redaction when feature is disabled in configuration', function () {
+    test('it skips large object redaction when feature is disabled in configuration', function (): void {
         // Disable large object redaction
         config(['redactor.redact_large_objects' => false]);
 
@@ -638,7 +637,7 @@ describe('Redactor Content Tests', function () {
             ->and($result)->not->toHaveKey('_redacted'); // No redaction occurred
     });
 
-    test('it redacts large objects when they exceed size limits', function () {
+    test('it redacts large objects when they exceed size limits', function (): void {
         // Use the small_object_test profile we already set up
         $redactor = new Redactor;
 
@@ -656,14 +655,20 @@ describe('Redactor Content Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    test('it handles objects with circular references gracefully', function () {
+    test('it handles objects with circular references gracefully', function (): void {
         $redactor = new Redactor;
 
         // Create an object with circular reference
         $problematicObject = new class
         {
+            /**
+             * @var $this
+             */
             public $circular;
 
+            /**
+             * @var 'value1'
+             */
             public $prop1;
 
             public function __construct()
@@ -680,7 +685,7 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('problematic_obj');
     });
 
-    test('it handles string values correctly in redaction process', function () {
+    test('it handles string values correctly in redaction process', function (): void {
         $redactor = new Redactor;
 
         $data = ['simple_string' => 'test_value'];
@@ -690,7 +695,7 @@ describe('Redactor Content Tests', function () {
         expect($result['simple_string'])->toBe('test_value');
     });
 
-    test('it handles objects with toArray method correctly', function () {
+    test('it handles objects with toArray method correctly', function (): void {
         $redactor = new Redactor;
 
         // Use an object that has a toArray method
@@ -703,7 +708,7 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('test_object');
     });
 
-    test('it handles complex objects with encoding issues gracefully', function () {
+    test('it handles complex objects with encoding issues gracefully', function (): void {
         $redactor = new Redactor;
 
         // Create an object that might cause encoding issues
@@ -713,6 +718,9 @@ describe('Redactor Content Tests', function () {
 
             public $prop2 = 'value2';
 
+            /**
+             * @var $this
+             */
             public $circular;
 
             public function __construct()
@@ -728,11 +736,11 @@ describe('Redactor Content Tests', function () {
         expect($result)->toHaveKey('complex_obj');
     });
 
-    test('it allows long hex strings to bypass exclusion patterns in shannon entropy strategy', function () {
+    test('it allows long hex strings to bypass exclusion patterns in shannon entropy strategy', function (): void {
         // Create profile with Shannon entropy and hex exclusion pattern
         config()->set('redactor.profiles.hex_test', [
             'enabled' => true,
-            'strategies' => [\Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class],
+            'strategies' => [ShannonEntropyStrategy::class],
             'safe_keys' => [],
             'blocked_keys' => [],
             'patterns' => [],
@@ -770,12 +778,12 @@ describe('Redactor Content Tests', function () {
             ->and($shortResult)->not->toHaveKey('_redacted');
     });
 
-    test('it calculates shannon entropy correctly', function () {
+    test('it calculates shannon entropy correctly', function (): void {
         $redactor = new Redactor;
 
         // Test the public calculateShannonEntropy method
         $highEntropyString = 'aB3$xY9#mK2@pL5!qR8%';
-        $entropy = $redactor->calculateShannonEntropy($highEntropyString);
+        $entropy = (new ShannonEntropyStrategy)->calculateShannonEntropy($highEntropyString);
 
         // Should return a reasonable entropy value
         expect($entropy)->toBeGreaterThan(0.0)

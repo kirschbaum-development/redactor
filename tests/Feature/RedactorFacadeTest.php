@@ -5,16 +5,18 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Kirschbaum\Redactor\Facades\Redactor;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
 
-describe('Redactor Facade Tests', function () {
-    beforeEach(function () {
+describe('Redactor Facade Tests', function (): void {
+    beforeEach(function (): void {
         // Set up basic profile for facade testing
         config()->set('redactor.default_profile', 'facade_test');
         config()->set('redactor.profiles.facade_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => ['id'],
             'blocked_keys' => ['password'],
@@ -30,7 +32,7 @@ describe('Redactor Facade Tests', function () {
         ]);
     });
 
-    test('facade can redact data using default profile', function () {
+    test('facade can redact data using default profile', function (): void {
         $data = [
             'id' => 123,
             'password' => 'secret123',
@@ -43,12 +45,12 @@ describe('Redactor Facade Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    test('facade can redact data using specific profile', function () {
+    test('facade can redact data using specific profile', function (): void {
         // Set up a different profile
         config()->set('redactor.profiles.strict_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
+                BlockedKeysStrategy::class,
             ],
             'safe_keys' => [],
             'blocked_keys' => ['id', 'password'],
@@ -75,19 +77,19 @@ describe('Redactor Facade Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    test('facade can get available profiles', function () {
-        $profiles = Redactor::getAvailableProfiles();
+    test('facade can get available profiles', function (): void {
+        $profiles = Redactor::profiles();
 
         expect($profiles)->toBeArray()
             ->and($profiles)->toContain('facade_test');
     });
 
-    test('facade can check if profile exists', function () {
-        expect(Redactor::profileExists('facade_test'))->toBeTrue()
-            ->and(Redactor::profileExists('non_existent'))->toBeFalse();
+    test('facade can check if profile exists', function (): void {
+        expect(Redactor::hasProfile('facade_test'))->toBeTrue()
+            ->and(Redactor::hasProfile('non_existent'))->toBeFalse();
     });
 
-    test('facade provides fresh instances to avoid state conflicts', function () {
+    test('facade provides fresh instances to avoid state conflicts', function (): void {
         // This test ensures that multiple facade calls don't interfere with each other
         $data1 = ['id' => 1, 'password' => 'secret1'];
         $data2 = ['id' => 2, 'password' => 'secret2'];

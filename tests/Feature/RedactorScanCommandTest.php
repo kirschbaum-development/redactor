@@ -1,423 +1,515 @@
-
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\File;
-use Mockery;
+use Kirschbaum\Redactor\Scanner\Baseline;
+use Kirschbaum\Redactor\Scanner\ScanFinding;
+use Kirschbaum\Redactor\Scanner\Scanner;
+use Kirschbaum\Redactor\Scanner\ScanResult;
+use Mockery\MockInterface;
 
-describe('RedactorScanCommand', function () {
-    beforeEach(function () {
-        // Ensure we're using the file_scan profile for consistent results
+function fixturePath(string $name): string
+{
+    return __DIR__.'/fixtures/'.$name;
+}
+
+function scan(array $arguments = []): array
+{
+    $exitCode = Artisan::call('redactor:scan', $arguments);
+
+    return [$exitCode, Artisan::output()];
+}
+
+describe('RedactorScanCommand output', function (): void {
+    beforeEach(function (): void {
         config(['redactor.scan.profile' => 'file_scan']);
-
-        // Create unreadable test files dynamically
-        $unreadableContent = 'This file should not be readable by the scanner.';
-
-        $unreadableFile1 = __DIR__.'/fixtures/unreadable-file.txt';
-        $unreadableFile2 = __DIR__.'/fixtures/subdirectory/unreadable-file.txt';
-
-        file_put_contents($unreadableFile1, $unreadableContent);
-        file_put_contents($unreadableFile2, $unreadableContent);
-
-        chmod($unreadableFile1, 0000);
-        chmod($unreadableFile2, 0000);
+        config(['redactor.scan.baseline' => null]);
     });
 
-    afterEach(function () {
-        // Clean up unreadable test files
-        $unreadableFile1 = __DIR__.'/fixtures/unreadable-file.txt';
-        $unreadableFile2 = __DIR__.'/fixtures/subdirectory/unreadable-file.txt';
+    it('reports a clean file as clean', function (): void {
+        [$exitCode, $output] = scan(['paths' => [fixturePath('clean-text-file.txt')]]);
 
-        if (file_exists($unreadableFile1)) {
-            chmod($unreadableFile1, 0644);
-            unlink($unreadableFile1);
-        }
-
-        if (file_exists($unreadableFile2)) {
-            chmod($unreadableFile2, 0644);
-            unlink($unreadableFile2);
-        }
+        expect($exitCode)->toBe(0)
+            ->and($output)->toContain('No findings')
+            ->and($output)->toContain('Files scanned: 1')
+            ->and($output)->toContain('Total findings: 0');
     });
 
-    it('scans a single clean file and shows clean status', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures/clean-text-file.txt'],
-        ]);
+    it('names the rule and the line for each finding', function (): void {
+        // The old output was one opaque row per file - "FINDINGS 1 <path>" -
+        // with no way to know which rule fired or where to look.
+        [$exitCode, $output] = scan(['paths' => [fixturePath('sensitive-api-keys.txt')]]);
 
-        $output = Artisan::output();
-
-        expect($exitCode)->toBe(0);
-        expect($output)->toContain('CLEAN');
-        expect($output)->toContain('Files scanned: 1');
-        expect($output)->toContain('Files with findings: 0');
+        expect($exitCode)->toBe(0)
+            ->and($output)->toContain('Rule')
+            ->and($output)->toContain('Location')
+            ->and($output)->toMatch('/sensitive-api-keys\.txt:\d+:\d+/');
     });
 
-    it('scans a single sensitive file and detects findings', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures/sensitive-api-keys.txt'],
-        ]);
+    it('locates a secret on the line it is actually on', function (): void {
+        $dir = sys_get_temp_dir().'/redactor_scan_'.uniqid();
+        mkdir($dir);
+        file_put_contents($dir.'/app.env', "APP_NAME=demo\nAPP_ENV=local\nAWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n");
 
-        $output = Artisan::output();
+        [, $output] = scan(['paths' => [$dir.'/app.env'], '--output' => 'json']);
 
-        expect($exitCode)->toBe(0);
-        expect($output)->toContain('FINDINGS');
-        expect($output)->toContain('Files scanned: 1');
-        expect($output)->toContain('Files with findings: 1');
+        $findings = json_decode($output, true)[0]['findings'];
+
+        expect($findings)->not->toBeEmpty()
+            ->and($findings[0]['line'])->toBe(3)
+            ->and($findings[0]['rule'])->toBe('aws_access_key');
+
+        cleanupDirectory($dir);
     });
 
-    it('scans multiple files with mixed content', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [
-                __DIR__.'/fixtures/clean-text-file.txt',
-                __DIR__.'/fixtures/sensitive-api-keys.txt',
-                __DIR__.'/fixtures/personal-info.txt',
-            ],
-        ]);
+    it('shows an excerpt with the secret already redacted', function (): void {
+        $dir = sys_get_temp_dir().'/redactor_scan_'.uniqid();
+        mkdir($dir);
+        file_put_contents($dir.'/app.env', "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n");
 
-        $output = Artisan::output();
+        [, $output] = scan(['paths' => [$dir.'/app.env'], '--output' => 'json']);
 
-        expect($exitCode)->toBe(0);
-        expect($output)->toContain('CLEAN');
-        expect($output)->toContain('FINDINGS');
-        expect($output)->toContain('Files scanned: 3');
-        expect($output)->toContain('Files with findings: 2');
+        $finding = json_decode($output, true)[0]['findings'][0];
+
+        expect($finding['excerpt'])->toContain('AWS_ACCESS_KEY_ID')
+            ->and($finding['excerpt'])->toContain('[REDACTED]')
+            ->and($finding['excerpt'])->not->toContain('AKIAIOSFODNN7EXAMPLE');
+
+        cleanupDirectory($dir);
     });
 
-    it('scans a directory and finds all files (excluding filtered files)', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures/subdirectory'],
-        ]);
+    it('reports several findings in one file separately', function (): void {
+        [, $output] = scan(['paths' => [fixturePath('personal-info.txt')], '--output' => 'json']);
 
-        $output = Artisan::output();
+        $findings = json_decode($output, true)[0]['findings'];
 
-        expect($exitCode)->toBe(0);
-        // Should still be 2 files - the large and unreadable files should be filtered out
-        expect($output)->toContain('Files scanned: 2');
-        expect($output)->toContain('nested-secrets.yml');
-        expect($output)->toContain('clean-config.yml');
-        // Should not contain the filtered files
-        expect($output)->not->toContain('large-file.txt');
-        expect($output)->not->toContain('unreadable-file.txt');
+        expect(count($findings))->toBeGreaterThan(1)
+            ->and(array_unique(array_column($findings, 'rule')))->not->toHaveCount(1);
     });
 
-    it('scans mixed files and directories', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [
-                __DIR__.'/fixtures/clean-text-file.txt',
-                __DIR__.'/fixtures/subdirectory',
-            ],
-        ]);
+    it('scans several paths at once', function (): void {
+        [$exitCode, $output] = scan(['paths' => [
+            fixturePath('clean-text-file.txt'),
+            fixturePath('sensitive-api-keys.txt'),
+            fixturePath('personal-info.txt'),
+        ]]);
 
-        $output = Artisan::output();
-
-        expect($exitCode)->toBe(0);
-        expect($output)->toContain('Files scanned: 3');
-        expect($output)->toContain('clean-text-file.txt');
-        expect($output)->toContain('nested-secrets.yml');
-        expect($output)->toContain('clean-config.yml');
+        expect($exitCode)->toBe(0)
+            ->and($output)->toContain('Files scanned: 3');
     });
 
-    it('outputs results in JSON format', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures/clean-text-file.txt'],
-            '--output' => 'json',
-        ]);
+    it('scans a directory', function (): void {
+        [$exitCode, $output] = scan(['paths' => [fixturePath('subdirectory')]]);
 
-        $output = Artisan::output();
-
-        expect($exitCode)->toBe(0);
-
-        // Extract JSON from output - find the JSON array part
-        $jsonStart = strpos($output, '[');
-        $jsonEnd = strrpos($output, ']') + 1;
-
-        expect($jsonStart)->not->toBeFalse('JSON output should contain an array');
-
-        $jsonOutput = substr($output, $jsonStart, $jsonEnd - $jsonStart);
-        $data = json_decode($jsonOutput, true);
-
-        expect($data)->toBeArray();
-        expect($data[0]['status'])->toBe('clean');
-        expect($data[0]['findings_count'])->toBe(0);
-        expect($data[0]['profile'])->toBe('file_scan');
+        expect($exitCode)->toBe(0)
+            ->and($output)->toContain('Files scanned:');
     });
 
-    it('supports summary-only option', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures/clean-text-file.txt'],
+    it('warns about a path that does not exist', function (): void {
+        [$exitCode, $output] = scan(['paths' => ['/no/such/path.txt']]);
+
+        expect($exitCode)->toBe(0)
+            ->and($output)->toContain('Path not found');
+    });
+
+    it('honours --summary-only', function (): void {
+        [, $output] = scan([
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--summary-only' => true,
         ]);
 
-        $output = Artisan::output();
-
-        expect($exitCode)->toBe(0);
-        expect($output)->not->toContain('CLEAN'); // No table shown
-        expect($output)->toContain('Files scanned: 1');
-        expect($output)->toContain('Files with findings: 0');
+        expect($output)->not->toContain('Location')
+            ->and($output)->toContain('Total findings:');
     });
 
-    it('exits with failure code when --bail is used and findings are detected', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures/sensitive-api-keys.txt'],
-            '--bail' => true,
-        ]);
-
-        $output = Artisan::output();
-
-        expect($exitCode)->toBe(1); // Failure exit code
-        expect($output)->toContain('FINDINGS');
-        expect($output)->toContain('Files with findings: 1');
-    });
-
-    it('exits with success code when --bail is used and no findings are detected', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures/clean-text-file.txt'],
-            '--bail' => true,
-        ]);
-
-        $output = Artisan::output();
-
-        expect($exitCode)->toBe(0); // Success exit code
-        expect($output)->toContain('CLEAN');
-        expect($output)->toContain('Files with findings: 0');
-    });
-
-    it('uses custom profile when specified', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures/clean-text-file.txt'],
+    it('honours an explicit --profile', function (): void {
+        [$exitCode, $output] = scan([
+            'paths' => [fixturePath('clean-text-file.txt')],
             '--profile' => 'default',
         ]);
 
-        $output = Artisan::output();
+        expect($exitCode)->toBe(0)
+            ->and($output)->toContain('profile: default');
+    });
+});
 
-        expect($exitCode)->toBe(0);
-        expect($output)->toContain('with profile: default');
+describe('RedactorScanCommand exit codes', function (): void {
+    beforeEach(function (): void {
+        config(['redactor.scan.profile' => 'file_scan']);
+        config(['redactor.scan.baseline' => null]);
     });
 
-    it('defaults to base_path when no paths are provided', function () {
-        $exitCode = Artisan::call('redactor:scan', []);
-
-        $output = Artisan::output();
+    it('exits 0 without --bail even when findings exist', function (): void {
+        [$exitCode] = scan(['paths' => [fixturePath('sensitive-api-keys.txt')]]);
 
         expect($exitCode)->toBe(0);
-        expect($output)->toContain('Scanning paths:');
-        expect($output)->toContain('Files scanned:');
     });
 
-    it('handles non-existent file gracefully', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [
-                __DIR__.'/fixtures/non-existent-file.txt',
-                __DIR__.'/fixtures/clean-text-file.txt',
-            ],
+    it('exits 1 with --bail when findings exist', function (): void {
+        [$exitCode] = scan([
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
+            '--bail' => true,
         ]);
 
-        $output = Artisan::output();
+        expect($exitCode)->toBe(1);
+    });
+
+    it('exits 0 with --bail when the file is clean', function (): void {
+        [$exitCode] = scan([
+            'paths' => [fixturePath('clean-text-file.txt')],
+            '--bail' => true,
+        ]);
 
         expect($exitCode)->toBe(0);
-        expect($output)->toContain('Path not found or not accessible');
-        expect($output)->toContain('Files scanned: 1'); // Only the existing file
     });
 
-    it('detects findings in various file types', function () {
-        $testFiles = [
-            'sensitive-api-keys.txt',
-            'personal-info.txt',
-            'sensitive-config.json',
-            'environment-secrets.env',
-            'high-entropy-strings.txt',
-            'mixed-content.txt',
-            'subdirectory/nested-secrets.yml',
-        ];
+    it('rejects an unknown output format rather than silently defaulting', function (): void {
+        [$exitCode, $output] = scan([
+            'paths' => [fixturePath('clean-text-file.txt')],
+            '--output' => 'yaml',
+        ]);
 
-        foreach ($testFiles as $file) {
-            $exitCode = Artisan::call('redactor:scan', [
-                'paths' => [__DIR__.'/fixtures/'.$file],
-            ]);
+        expect($exitCode)->toBe(1)
+            ->and($output)->toContain('Unknown --output format');
+    });
+});
 
-            $output = Artisan::output();
-
-            expect($exitCode)->toBe(0);
-            expect($output)->toContain('FINDINGS');
-            expect($output)->toContain('Files with findings: 1');
-        }
+describe('RedactorScanCommand JSON output', function (): void {
+    beforeEach(function (): void {
+        config(['redactor.scan.profile' => 'file_scan']);
+        config(['redactor.scan.baseline' => null]);
     });
 
-    it('identifies clean files correctly', function () {
-        $testFiles = [
-            'clean-text-file.txt',
-            'clean-config.json',
-            'subdirectory/clean-config.yml',
-        ];
-
-        foreach ($testFiles as $file) {
-            $exitCode = Artisan::call('redactor:scan', [
-                'paths' => [__DIR__.'/fixtures/'.$file],
-            ]);
-
-            $output = Artisan::output();
-
-            expect($exitCode)->toBe(0);
-            expect($output)->toContain('CLEAN');
-            expect($output)->toContain('Files with findings: 0');
-        }
-    });
-
-    it('provides detailed findings in JSON output', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures/sensitive-api-keys.txt'],
+    it('emits parseable JSON with no progress chatter', function (): void {
+        [, $output] = scan([
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--output' => 'json',
         ]);
 
-        $output = Artisan::output();
+        $decoded = json_decode($output, true);
 
-        expect($exitCode)->toBe(0);
-
-        // Extract JSON from output - find the JSON array part
-        $jsonStart = strpos($output, '[');
-        $jsonEnd = strrpos($output, ']') + 1;
-
-        expect($jsonStart)->not->toBeFalse('JSON output should contain an array');
-
-        $jsonOutput = substr($output, $jsonStart, $jsonEnd - $jsonStart);
-        $data = json_decode($jsonOutput, true);
-
-        expect($data)->toBeArray();
-        expect($data[0]['status'])->toBe('findings');
-        expect($data[0]['findings_count'])->toBe(1);
-        expect($data[0]['findings'][0]['type'])->toBe('full_content_redacted');
-        expect($data[0]['profile'])->toBe('file_scan');
+        expect(json_last_error())->toBe(JSON_ERROR_NONE)
+            ->and($decoded)->toBeArray()
+            ->and($decoded[0]['status'])->toBe('findings');
     });
 
-    it('scans the original test fixture and finds redactions', function () {
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures/test-sensitive-file.txt'],
-        ]);
-
-        $output = Artisan::output();
-
-        expect($exitCode)->toBe(0);
-        expect($output)->toContain('FINDINGS');
-        expect($output)->toContain('Files with findings: 1');
-    });
-
-    it('truncates long file paths in table output', function () {
-        // Create a file with a very long path name
-        $longPath = __DIR__.'/fixtures/this-is-a-very-long-filename-that-should-be-truncated-in-table-output.txt';
-        File::copy(__DIR__.'/fixtures/clean-text-file.txt', $longPath);
-
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [$longPath],
-        ]);
-
-        $output = Artisan::output();
-
-        expect($exitCode)->toBe(0);
-        expect($output)->toContain('...');
-
-        // Clean up
-        File::delete($longPath);
-    });
-
-    it('filters out large and unreadable files during directory scanning', function () {
-        // Get the count of files when scanning the entire fixtures directory
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures'],
+    it('gives every finding a rule, position, excerpt and fingerprint', function (): void {
+        [, $output] = scan([
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
             '--output' => 'json',
         ]);
 
-        $output = Artisan::output();
+        $finding = json_decode($output, true)[0]['findings'][0];
+
+        expect($finding)->toHaveKeys(['rule', 'line', 'column', 'excerpt', 'profile', 'fingerprint'])
+            ->and($finding['line'])->toBeGreaterThan(0)
+            ->and($finding['column'])->toBeGreaterThan(0)
+            ->and($finding['fingerprint'])->toHaveLength(32);
+    });
+
+    it('reports a clean file with an empty findings list', function (): void {
+        [, $output] = scan([
+            'paths' => [fixturePath('clean-text-file.txt')],
+            '--output' => 'json',
+        ]);
+
+        $decoded = json_decode($output, true);
+
+        expect($decoded[0]['status'])->toBe('clean')
+            ->and($decoded[0]['findings'])->toBe([]);
+    });
+});
+
+describe('RedactorScanCommand SARIF output', function (): void {
+    beforeEach(function (): void {
+        config(['redactor.scan.profile' => 'file_scan']);
+        config(['redactor.scan.baseline' => null]);
+    });
+
+    it('emits a valid SARIF 2.1.0 document', function (): void {
+        [, $output] = scan([
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
+            '--output' => 'sarif',
+        ]);
+
+        $sarif = json_decode($output, true);
+
+        expect(json_last_error())->toBe(JSON_ERROR_NONE)
+            ->and($sarif['version'])->toBe('2.1.0')
+            ->and($sarif['runs'][0]['tool']['driver']['name'])->toBe('Redactor')
+            ->and($sarif['runs'][0]['results'])->not->toBeEmpty();
+    });
+
+    it('locates each result for GitHub code scanning', function (): void {
+        [, $output] = scan([
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
+            '--output' => 'sarif',
+        ]);
+
+        $result = json_decode($output, true)['runs'][0]['results'][0];
+        $region = $result['locations'][0]['physicalLocation']['region'];
+
+        expect($result['ruleId'])->toBeString()
+            ->and($region['startLine'])->toBeGreaterThan(0)
+            ->and($region['startColumn'])->toBeGreaterThan(0)
+            ->and($result['partialFingerprints'])->toHaveKey('redactorFingerprint/v1');
+    });
+
+    it('declares every rule it reports', function (): void {
+        [, $output] = scan([
+            'paths' => [fixturePath('personal-info.txt')],
+            '--output' => 'sarif',
+        ]);
+
+        $run = json_decode($output, true)['runs'][0];
+
+        $declared = array_column($run['tool']['driver']['rules'], 'id');
+        $used = array_unique(array_column($run['results'], 'ruleId'));
+
+        expect(array_diff($used, $declared))->toBe([]);
+    });
+
+    it('never puts the secret itself in the report', function (): void {
+        $dir = sys_get_temp_dir().'/redactor_scan_'.uniqid();
+        mkdir($dir);
+        file_put_contents($dir.'/app.env', "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n");
+
+        [, $output] = scan(['paths' => [$dir.'/app.env'], '--output' => 'sarif']);
+
+        // A SARIF file gets uploaded to GitHub; publishing the secret in it
+        // would be worse than not scanning at all.
+        expect($output)->not->toContain('AKIAIOSFODNN7EXAMPLE');
+
+        cleanupDirectory($dir);
+    });
+});
+
+describe('RedactorScanCommand baseline', function (): void {
+    beforeEach(function (): void {
+        config(['redactor.scan.profile' => 'file_scan']);
+
+        $this->baseline = sys_get_temp_dir().'/redactor_baseline_'.uniqid().'.json';
+        config(['redactor.scan.baseline' => $this->baseline]);
+    });
+
+    afterEach(function (): void {
+        if (is_file($this->baseline)) {
+            unlink($this->baseline);
+        }
+    });
+
+    it('writes accepted findings and exits 0', function (): void {
+        [$exitCode, $output] = scan([
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
+            '--update-baseline' => true,
+        ]);
+
+        expect($exitCode)->toBe(0)
+            ->and($output)->toContain('Wrote')
+            ->and(is_file($this->baseline))->toBeTrue();
+
+        $decoded = json_decode((string) file_get_contents($this->baseline), true);
+
+        expect($decoded['version'])->toBe(1)
+            ->and($decoded['findings'])->not->toBeEmpty()
+            ->and($decoded['findings'][0])->toHaveKeys(['fingerprint', 'rule', 'path']);
+    });
+
+    it('suppresses baselined findings on the next run', function (): void {
+        scan(['paths' => [fixturePath('sensitive-api-keys.txt')], '--update-baseline' => true]);
+
+        [$exitCode, $output] = scan([
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
+            '--bail' => true,
+        ]);
+
+        // Without a baseline a repo with fixtures or a documented example key
+        // can never go green, which is how a scanner gets switched off.
+        expect($exitCode)->toBe(0)
+            ->and($output)->toContain('Total findings: 0')
+            ->and($output)->toContain('Suppressed by baseline:');
+    });
+
+    it('still fails on a finding the baseline does not cover', function (): void {
+        scan(['paths' => [fixturePath('clean-text-file.txt')], '--update-baseline' => true]);
+
+        [$exitCode] = scan([
+            'paths' => [fixturePath('sensitive-api-keys.txt')],
+            '--bail' => true,
+        ]);
+
+        expect($exitCode)->toBe(1);
+    });
+
+    it('never writes the secret into the baseline file', function (): void {
+        $dir = sys_get_temp_dir().'/redactor_scan_'.uniqid();
+        mkdir($dir);
+        file_put_contents($dir.'/app.env', "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE\n");
+
+        scan(['paths' => [$dir.'/app.env'], '--update-baseline' => true]);
+
+        expect(file_get_contents($this->baseline))->not->toContain('AKIAIOSFODNN7EXAMPLE');
+
+        cleanupDirectory($dir);
+    });
+
+    it('reports a malformed baseline instead of ignoring it', function (): void {
+        file_put_contents($this->baseline, '{"nope": true}');
+
+        [$exitCode, $output] = scan(['paths' => [fixturePath('clean-text-file.txt')]]);
+
+        expect($exitCode)->toBe(1)
+            ->and($output)->toContain('findings');
+    });
+
+    it('treats a missing baseline file as empty', function (): void {
+        [$exitCode] = scan(['paths' => [fixturePath('clean-text-file.txt')]]);
 
         expect($exitCode)->toBe(0);
+    });
 
-        // Extract JSON from output
-        $jsonStart = strpos($output, '[');
-        $jsonEnd = strrpos($output, ']') + 1;
+    it('refuses --update-baseline with nowhere to write', function (): void {
+        config(['redactor.scan.baseline' => null]);
 
-        expect($jsonStart)->not->toBeFalse('JSON output should contain an array');
+        [$exitCode, $output] = scan([
+            'paths' => [fixturePath('clean-text-file.txt')],
+            '--update-baseline' => true,
+        ]);
 
-        $jsonOutput = substr($output, $jsonStart, $jsonEnd - $jsonStart);
-        $data = json_decode($jsonOutput, true);
+        expect($exitCode)->toBe(1)
+            ->and($output)->toContain('--update-baseline needs a path');
+    });
+});
 
-        // Verify that large-file.txt and unreadable-file.txt are not in the results
-        $scannedPaths = collect($data)->pluck('path')->toArray();
+describe('Baseline fingerprints', function (): void {
+    it('survives the finding moving to a different line', function (): void {
+        $first = ScanFinding::fingerprint('aws', 'a.env', 'AKIA123');
+        $second = ScanFinding::fingerprint('aws', 'a.env', 'AKIA123');
 
-        $foundLargeFile = false;
-        $foundUnreadableFile = false;
+        expect($first)->toBe($second);
+    });
 
-        foreach ($scannedPaths as $path) {
-            if (str_contains($path, 'large-file.txt')) {
-                $foundLargeFile = true;
-            }
-            if (str_contains($path, 'unreadable-file.txt')) {
-                $foundUnreadableFile = true;
-            }
+    it('differs per rule, per path and per secret', function (): void {
+        $base = ScanFinding::fingerprint('aws', 'a.env', 'AKIA123');
+
+        expect(ScanFinding::fingerprint('gh', 'a.env', 'AKIA123'))->not->toBe($base)
+            ->and(ScanFinding::fingerprint('aws', 'b.env', 'AKIA123'))->not->toBe($base)
+            ->and(ScanFinding::fingerprint('aws', 'a.env', 'AKIA999'))->not->toBe($base);
+    });
+
+    it('accepts a plain list of fingerprints as well as objects', function (): void {
+        $path = sys_get_temp_dir().'/redactor_baseline_'.uniqid().'.json';
+        file_put_contents($path, json_encode(['findings' => ['abc123', ['fingerprint' => 'def456']]]));
+
+        $baseline = Baseline::load($path);
+
+        expect($baseline->fingerprints)->toHaveKeys(['abc123', 'def456']);
+
+        unlink($path);
+    });
+});
+
+describe('RedactorScanCommand skipped files', function (): void {
+    beforeEach(function (): void {
+        config(['redactor.scan.profile' => 'file_scan', 'redactor.scan.baseline' => null]);
+
+        // The collector drops unreadable files before the scanner sees them, so a
+        // skipped result only reaches the command when a file vanishes in between.
+        $this->mock(Scanner::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('scanFile')->andReturnUsing(fn (string $file): ScanResult => str_contains($file, 'clean')
+                ? new ScanResult($file, [], 'file_scan', skipped: true, error: 'File unreadable')
+                : new ScanResult($file, [new ScanFinding($file, 'aws_access_key', 1, 1, 'AWS_ACCESS_KEY_ID=[REDACTED]', 'file_scan', 'fp', 'aws_access_key', 0.9)], 'file_scan'));
+        });
+    });
+
+    it('warns about a file the scanner could not read, after the findings', function (): void {
+        [$exitCode, $output] = scan(['paths' => [fixturePath('clean-text-file.txt'), fixturePath('sensitive-api-keys.txt')]]);
+
+        expect($exitCode)->toBe(0)
+            ->and($output)->toContain('Skipped')
+            ->and($output)->toContain('File unreadable')
+            ->and($output)->toContain('aws_access_key');
+    });
+
+    it('marks a skipped file in JUnit output', function (): void {
+        [, $output] = scan(['paths' => [fixturePath('clean-text-file.txt'), fixturePath('sensitive-api-keys.txt')], '--output' => 'junit']);
+
+        expect($output)->toContain('<skipped message="File unreadable"/>')
+            ->and($output)->toContain('<failure message="aws_access_key');
+    });
+});
+
+describe('RedactorScanCommand with a broken profile', function (): void {
+    it('reports the configuration error instead of scanning with it', function (): void {
+        config(['redactor.scan.profile' => 'file_scan', 'redactor.scan.baseline' => null]);
+        config(['redactor.profiles.file_scan.max_value_length' => 'lots']);
+
+        [$exitCode, $output] = scan(['paths' => [fixturePath('clean-text-file.txt')]]);
+
+        expect($exitCode)->toBe(1)
+            ->and($output)->toContain('max_value_length');
+    });
+});
+
+describe('Baseline files that cannot be read or written', function (): void {
+    beforeEach(function (): void {
+        config(['redactor.scan.profile' => 'file_scan']);
+        $this->dir = sys_get_temp_dir().'/redactor_baseline_io_'.uniqid();
+        mkdir($this->dir);
+        $this->baseline = $this->dir.'/baseline.json';
+    });
+
+    afterEach(function (): void {
+        if (is_file($this->baseline)) {
+            chmod($this->baseline, 0644);
         }
 
-        // These files should be filtered out due to size/permission constraints
-        expect($foundLargeFile)->toBeFalse('large-file.txt should be filtered out due to size');
-        expect($foundUnreadableFile)->toBeFalse('unreadable-file.txt should be filtered out due to permissions');
-
-        // But we should still have scanned other files
-        expect(count($data))->toBeGreaterThan(0, 'Should have scanned some files');
+        cleanupDirectory($this->dir);
     });
 
-    it('filters out large and unreadable files when specified as individual file paths', function () {
-        // Try to scan the large and unreadable files directly
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [
-                __DIR__.'/fixtures/large-file.txt',
-                __DIR__.'/fixtures/unreadable-file.txt',
-                __DIR__.'/fixtures/subdirectory/large-file.txt',
-                __DIR__.'/fixtures/subdirectory/unreadable-file.txt',
-                __DIR__.'/fixtures/clean-text-file.txt', // Include one valid file
-            ],
-            '--output' => 'json',
-        ]);
+    it('reports a baseline it cannot read rather than treating it as empty', function (): void {
+        file_put_contents($this->baseline, '{"findings": []}');
+        chmod($this->baseline, 0000);
 
-        $output = Artisan::output();
+        expect(fn (): Baseline => Baseline::load($this->baseline))
+            ->toThrow(JsonException::class, 'could not be read');
+    })->skip(posix_geteuid() === 0, 'chmod does not restrict root');
 
-        expect($exitCode)->toBe(0);
+    it('refuses to write a baseline it cannot encode', function (): void {
+        $finding = new ScanFinding("bad\xff.env", 'rule', 1, 1, 'x', 'file_scan', 'fp');
 
-        // Extract JSON from output
-        $jsonStart = strpos($output, '[');
-        $jsonEnd = strrpos($output, ']') + 1;
-
-        expect($jsonStart)->not->toBeFalse('JSON output should contain an array');
-
-        $jsonOutput = substr($output, $jsonStart, $jsonEnd - $jsonStart);
-        $data = json_decode($jsonOutput, true);
-
-        // Should only have the clean file, filtered files should be excluded
-        expect(count($data))->toBe(1, 'Should only scan the one readable, appropriately-sized file');
-        expect($data[0]['path'])->toContain('clean-text-file.txt');
-        expect($data[0]['status'])->toBe('clean');
+        expect(Baseline::write($this->baseline, [$finding], '2026-01-01T00:00:00+00:00'))->toBeFalse()
+            ->and(is_file($this->baseline))->toBeFalse();
     });
 
-    it('displays skipped status when scanner returns skipped result', function () {
-        // Mock Scanner to return a skipped result to test the display logic
-        $mockScanner = Mockery::mock(\Kirschbaum\Redactor\Scanner\Scanner::class);
-        $mockScanner->shouldReceive('scanFile')
-            ->once()
-            ->andReturn(new \Kirschbaum\Redactor\Scanner\ScanResult(
-                path: 'test-file.txt',
-                findings: [],
-                profile: 'test',
-                skipped: true,
-                error: 'Test error'
-            ));
+    it('fails the command when the baseline could not be written', function (): void {
+        // A rule name that is not UTF-8 cannot be encoded into the baseline file.
+        config(['redactor.profiles.file_scan.patterns' => ["k\xffey" => '/demo-secret-\d+/']]);
+        file_put_contents($this->dir.'/app.env', "x = demo-secret-12345\n");
 
-        $this->app->instance(\Kirschbaum\Redactor\Scanner\Scanner::class, $mockScanner);
+        [$exitCode, $output] = scan(['paths' => [$this->dir.'/app.env'], '--baseline' => $this->baseline, '--update-baseline' => true]);
 
-        $exitCode = Artisan::call('redactor:scan', [
-            'paths' => [__DIR__.'/fixtures/clean-text-file.txt'],
-        ]);
+        expect($exitCode)->toBe(1)
+            ->and($output)->toContain('Could not write baseline file')
+            ->and(is_file($this->baseline))->toBeFalse();
+    });
+});
 
-        $output = Artisan::output();
+describe('Scan results', function (): void {
+    it('returns itself untouched when there is no baseline or nothing to suppress', function (): void {
+        $finding = new ScanFinding('a.env', 'rule', 1, 1, 'x', 'file_scan', 'fp');
+        $clean = new ScanResult('a.env');
+        $dirty = new ScanResult('a.env', [$finding]);
 
-        expect($exitCode)->toBe(0);
-        expect($output)->toContain('SKIPPED');
-        expect($output)->toContain('Files scanned: 1');
-        expect($output)->toContain('Files with findings: 0');
+        expect($clean->withoutBaseline(['fp' => true]))->toBe($clean)
+            ->and($dirty->withoutBaseline([]))->toBe($dirty)
+            ->and($dirty->withoutBaseline(['fp' => true])->findings)->toBe([]);
+    });
+
+    it('serialises a finding to JSON the same way as toArray', function (): void {
+        $finding = new ScanFinding('a.env', 'rule', 3, 7, 'x', 'file_scan', 'fp', 'aws_access_key', 0.9, ['pattern matched']);
+
+        expect(json_decode((string) json_encode($finding), true))->toBe($finding->toArray());
     });
 });

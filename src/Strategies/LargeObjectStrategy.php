@@ -5,37 +5,46 @@ declare(strict_types=1);
 namespace Kirschbaum\Redactor\Strategies;
 
 use Kirschbaum\Redactor\RedactionContext;
+use Kirschbaum\Redactor\Strategies\Contracts\Strategy;
 
-class LargeObjectStrategy implements RedactionStrategyInterface
+/**
+ * Replaces a container with more items than the profile allows.
+ */
+class LargeObjectStrategy implements Strategy
 {
+    /**
+     * Determine if the value has more items than the profile allows.
+     */
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
-        if (! $context->config->redactLargeObjects) {
+        $maxObjectSize = $context->config->maxObjectSize;
+
+        if (! $context->config->redactLargeObjects || $maxObjectSize === null) {
             return false;
         }
 
         if (is_array($value)) {
-            return count($value) > $context->config->maxObjectSize;
+            return count($value) > $maxObjectSize;
         }
 
         if (is_object($value)) {
-            // For objects, we'll need to check if they can be converted to array first
+            // Objects are measured through toArray() when they offer it...
             if (method_exists($value, 'toArray')) {
                 try {
                     $array = $value->toArray();
 
-                    return is_array($array) && count($array) > $context->config->maxObjectSize;
+                    return is_array($array) && count($array) > $maxObjectSize;
                 } catch (\Throwable) {
                     return false;
                 }
             }
 
-            // Try JSON encoding to get a size estimate
+            // Otherwise estimate the size through a JSON round trip...
             try {
                 $jsonString = json_encode($value, JSON_THROW_ON_ERROR);
                 $array = json_decode($jsonString, true, 512, JSON_THROW_ON_ERROR);
 
-                return is_array($array) && count($array) > $context->config->maxObjectSize;
+                return is_array($array) && count($array) > $maxObjectSize;
             } catch (\Throwable) {
                 return false;
             }
@@ -44,6 +53,9 @@ class LargeObjectStrategy implements RedactionStrategyInterface
         return false;
     }
 
+    /**
+     * Replace the value with a summary of what it held.
+     */
     public function handle(mixed $value, string $key, RedactionContext $context): mixed
     {
         $context->markRedacted();
@@ -59,7 +71,7 @@ class LargeObjectStrategy implements RedactionStrategyInterface
         }
 
         if (is_object($value)) {
-            // Try to get property count for more accurate messaging
+            // Count the properties for the message where the object allows it...
             $propertyCount = 'large number of';
             try {
                 if (method_exists($value, 'toArray')) {
@@ -75,14 +87,14 @@ class LargeObjectStrategy implements RedactionStrategyInterface
                     }
                 }
             } catch (\Throwable) {
-                // Keep default message
+                // Keep the default message...
             }
 
             return [
                 '_large_object_redacted' => sprintf(
                     '%s (Object %s with %s properties)',
                     $context->config->replacement,
-                    get_class($value),
+                    $value::class,
                     $propertyCount
                 ),
             ];

@@ -22,6 +22,19 @@ else
 fi
 
 # --------------------------------------
+# Step 1b: Rector (Refactoring rules, dry run)
+# --------------------------------------
+echo "${YELLOW}🛠  Running Rector...${RESET}"
+./vendor/bin/rector process --dry-run --no-progress-bar
+if [[ $? -ne 0 ]]; then
+    echo "${RED}🛠  ⭕ Rector would change files.${RESET}"
+    echo "   ${YELLOW}Run 'composer rector' to apply them, then commit again.${RESET}"
+    status=1
+else
+    echo "${GREEN}🛠  ✅ Rector passed.${RESET}"
+fi
+
+# --------------------------------------
 # Step 2: PHPStan (Static analysis)
 # --------------------------------------
 echo "${YELLOW}🔢 Running PHPStan...${RESET}"

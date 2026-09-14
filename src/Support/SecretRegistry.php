@@ -1,0 +1,93 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Kirschbaum\Redactor\Support;
+
+/**
+ * Literal values that must never appear in output.
+ *
+ * Every other detector infers. This one knows: the application's own
+ * credentials are in config already, and a log line containing one verbatim
+ * is a leak whatever it looks like. Matching is exact and case-sensitive,
+ * because secrets are. Values shorter than the minimum are refused rather
+ * than registered, since a three-character "secret" would match inside
+ * ordinary words and redact half the log.
+ */
+class SecretRegistry
+{
+    public const MIN_LENGTH = 8;
+
+    /** @var array<string, string> value => entity */
+    private array $secrets = [];
+
+    /** Length of the shortest registered value; a shorter subject cannot contain one. */
+    private int $shortest = PHP_INT_MAX;
+
+    /**
+     * Register one value, returning false if it was too short to be safe.
+     */
+    public function add(string $value, string $entity = 'known_secret'): bool
+    {
+        if (strlen($value) < self::MIN_LENGTH) {
+            return false;
+        }
+
+        $this->secrets[$value] = $entity;
+        $this->shortest = min($this->shortest, strlen($value));
+
+        return true;
+    }
+
+    /**
+     * Determine if a subject is long enough to contain any registered value.
+     */
+    public function couldContainOne(string $subject): bool
+    {
+        return $this->secrets !== [] && strlen($subject) >= $this->shortest;
+    }
+
+    /**
+     * Get the number of registered values.
+     */
+    public function count(): int
+    {
+        return count($this->secrets);
+    }
+
+    /**
+     * Get every occurrence of every registered value in the subject.
+     *
+     * @return array<int, array{offset: int, value: string, entity: string}>
+     */
+    public function find(string $subject): array
+    {
+        $found = [];
+
+        foreach ($this->secrets as $secret => $entity) {
+            $offset = 0;
+
+            while (($position = strpos($subject, $secret, $offset)) !== false) {
+                $found[] = ['offset' => $position, 'value' => $secret, 'entity' => $entity];
+                $offset = $position + strlen($secret);
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * Merge another registry's values into a copy of this one.
+     */
+    public function merge(self $other): self
+    {
+        $merged = clone $this;
+
+        foreach ($other->secrets as $value => $entity) {
+            $merged->secrets[$value] = $entity;
+            $merged->shortest = min($merged->shortest, strlen($value));
+        }
+
+        return $merged;
+    }
+}

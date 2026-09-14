@@ -1,0 +1,9 @@
+#!/bin/sh
+#
+# Fails the commit when a staged change adds a secret.
+#
+# Scans only the lines being committed, so pre-existing findings never block
+# a commit - accept those into the baseline or mark them `redactor:allow`.
+# Install with:  git config core.hooksPath .githooks   (or copy into .git/hooks)
+
+php artisan redactor:scan --staged --bail

@@ -5,17 +5,21 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use Kirschbaum\Redactor\Redactor;
+use Kirschbaum\Redactor\Strategies\BlockedKeysStrategy;
+use Kirschbaum\Redactor\Strategies\RegexPatternsStrategy;
+use Kirschbaum\Redactor\Strategies\SafeKeysStrategy;
+use Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy;
 
-describe('Redactor Integration Tests', function () {
-    it('integrates with Laravel Log and redacts context', function () {
+describe('Redactor Integration Tests', function (): void {
+    it('integrates with Laravel Log and redacts context', function (): void {
         // Set up completely explicit profile for this specific test
         config()->set('redactor.default_profile', 'integration_test');
         config()->set('redactor.profiles.integration_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                RegexPatternsStrategy::class,
             ],
             'safe_keys' => ['user_id'],
             'blocked_keys' => ['password', 'secret'],
@@ -59,16 +63,16 @@ describe('Redactor Integration Tests', function () {
     });
 });
 
-describe('Redactor Real-world Scenario Tests', function () {
-    it('handles realistic user registration context', function () {
+describe('Redactor Real-world Scenario Tests', function (): void {
+    it('handles realistic user registration context', function (): void {
         // Explicit profile for user registration test
         config()->set('redactor.default_profile', 'user_registration_test');
         config()->set('redactor.profiles.user_registration_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\RegexPatternsStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                RegexPatternsStrategy::class,
             ],
             'safe_keys' => ['id', 'user_id', 'created_at', 'updated_at'],
             'blocked_keys' => ['email', 'ssn', 'password'],
@@ -116,15 +120,15 @@ describe('Redactor Real-world Scenario Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles API request context with tokens', function () {
+    it('handles API request context with tokens', function (): void {
         // Explicit profile for API token test with Shannon entropy enabled
         config()->set('redactor.default_profile', 'api_token_test');
         config()->set('redactor.profiles.api_token_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => ['request_id', 'user_id', 'endpoint', 'method', 'created_at'],
             'blocked_keys' => ['api_key'],
@@ -170,15 +174,15 @@ describe('Redactor Real-world Scenario Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles complex e-commerce order context', function () {
+    it('handles complex e-commerce order context', function (): void {
         // Explicit profile for e-commerce test
         config()->set('redactor.default_profile', 'ecommerce_test');
         config()->set('redactor.profiles.ecommerce_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => ['order_id', 'user_id', 'created_at', 'address', 'city', 'name', 'price', 'amount', 'payment_id'],
             'blocked_keys' => ['email', 'ssn'],
@@ -238,15 +242,15 @@ describe('Redactor Real-world Scenario Tests', function () {
             ->and($result['_redacted'])->toBeTrue();
     });
 
-    it('handles logging context with database queries and errors', function () {
+    it('handles logging context with database queries and errors', function (): void {
         // Explicit profile for logging test
         config()->set('redactor.default_profile', 'logging_test');
         config()->set('redactor.profiles.logging_test', [
             'enabled' => true,
             'strategies' => [
-                \Kirschbaum\Redactor\Strategies\SafeKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\BlockedKeysStrategy::class,
-                \Kirschbaum\Redactor\Strategies\ShannonEntropyStrategy::class,
+                SafeKeysStrategy::class,
+                BlockedKeysStrategy::class,
+                ShannonEntropyStrategy::class,
             ],
             'safe_keys' => ['user_id', 'query', 'level', 'message', 'file', 'line', 'duration_ms'],
             'blocked_keys' => ['password', 'api_key'],
