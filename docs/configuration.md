@@ -336,3 +336,11 @@ Only the `default` profile reads the per-profile variables. The other shipped pr
 - A pattern that does not compile is dropped from the profile; a rule with no `pattern` and no `words`, or with a bad `mode`, throws.
 
 Anything that fails throws a `ConfigurationException` whose message names the path, such as `profiles.default.max_depth`. `php artisan redactor:validate` surfaces all of them at once.
+
+## Region Packs
+
+`regions` at the top level holds pattern lists grouped by country: `gb`, `nl`,
+`de`, `fr`, `it`, `es`, `be`, `se`, `no`, `ca`, `au` and `eu`. A profile's
+`regions` key lists the packs to spread into its patterns. Packs are off unless
+listed. See [Region Packs](rules.md#region-packs).
+

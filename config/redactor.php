@@ -371,6 +371,253 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Region Packs
+    |--------------------------------------------------------------------------
+    |
+    | National identifiers and VAT numbers, grouped by country and switched on
+    | per profile with its `regions` list. Each rule carries a checksum
+    | validator where the identifier has one, keywords where the shape alone
+    | is too common (a nine-digit run is a phone number more often than a
+    | citizen number), and samples that redactor:validate proves.
+    |
+    |   'profiles' => ['default' => ['regions' => ['gb', 'nl', 'eu']]],
+    |
+    */
+
+    'regions' => [
+        'gb' => [
+            'uk_national_insurance' => [
+                'pattern' => '/\b(?!BG|GB|NK|KN|TN|NT|ZZ)[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z] ?\d{2} ?\d{2} ?\d{2} ?[A-D]\b/',
+                'entity' => 'national_id',
+                'confidence' => 0.75,
+                'min_length' => 9,
+                'samples' => ['NI number AB 12 34 56 C', 'AB123456C'],
+                'counter_samples' => ['AB12345C', 'ZZ123456C'],
+            ],
+            'uk_nhs_number' => [
+                'pattern' => '/\b\d{3} ?\d{3} ?\d{4}\b/',
+                'validator' => 'nhs',
+                'keywords' => ['nhs'],
+                'entity' => 'health_id',
+                'confidence' => 0.7,
+                'min_length' => 10,
+                'samples' => ['NHS number 915 229 6008'],
+                'counter_samples' => ['NHS number 123 456 7890', 'called 9152296008'],
+            ],
+            'uk_vat' => [
+                'pattern' => '/\bGB ?\d{3} ?\d{4} ?\d{2}(?: ?\d{3})?\b/',
+                'validator' => 'vat',
+                'entity' => 'vat_number',
+                'confidence' => 0.7,
+                'min_length' => 11,
+                'samples' => ['VAT GB436083107', 'GB 695 0749 92'],
+                'counter_samples' => ['GB123456789'],
+            ],
+        ],
+
+        'nl' => [
+            'nl_bsn' => [
+                'pattern' => '/\b\d{9}\b/',
+                'validator' => 'bsn',
+                'keywords' => ['bsn', 'burgerservicenummer', 'sofinummer'],
+                'entity' => 'national_id',
+                'confidence' => 0.7,
+                'min_length' => 9,
+                'samples' => ['BSN 283194443'],
+                'counter_samples' => ['BSN 123456789', 'order 283194443'],
+            ],
+            'nl_vat' => [
+                'pattern' => '/\bNL ?\d{9} ?B ?\d{2}\b/',
+                'validator' => 'vat',
+                'entity' => 'vat_number',
+                'confidence' => 0.7,
+                'min_length' => 14,
+                'samples' => ['NL514465888B07'],
+                'counter_samples' => ['NL123456789B01'],
+            ],
+        ],
+
+        'de' => [
+            'de_steuer_id' => [
+                'pattern' => '/\b\d{2} ?\d{3} ?\d{3} ?\d{3}\b/',
+                'validator' => 'steuer_id',
+                'keywords' => ['steuer', 'idnr', 'tax', 'tin'],
+                'entity' => 'national_id',
+                'confidence' => 0.7,
+                'min_length' => 11,
+                'samples' => ['Steuer-ID 72 096 139 541'],
+                'counter_samples' => ['Steuer-ID 12 345 678 901'],
+            ],
+            'de_vat' => [
+                'pattern' => '/\bDE ?\d{9}\b/',
+                'validator' => 'vat',
+                'entity' => 'vat_number',
+                'confidence' => 0.7,
+                'min_length' => 11,
+                'samples' => ['USt-IdNr. DE869428760'],
+                'counter_samples' => ['DE000000000'],
+            ],
+        ],
+
+        'fr' => [
+            'fr_nir' => [
+                'pattern' => '/\b[12] ?\d{2} ?(?:0[1-9]|1[0-2]|[2-9]\d) ?(?:\d{2}|2A|2B) ?\d{3} ?\d{3} ?\d{2}\b/',
+                'validator' => 'nir',
+                'entity' => 'national_id',
+                'confidence' => 0.8,
+                'min_length' => 15,
+                'samples' => ['NIR 1 96 04 20 350 020 61', '267127783624161'],
+                'counter_samples' => ['1 96 04 20 350 020 62'],
+            ],
+            'fr_vat' => [
+                'pattern' => '/\bFR ?[0-9A-Z]{2} ?\d{9}\b/',
+                'validator' => 'vat',
+                'entity' => 'vat_number',
+                'confidence' => 0.7,
+                'min_length' => 13,
+                'samples' => ['TVA FR50786240626'],
+                'counter_samples' => ['FR00786240626'],
+            ],
+        ],
+
+        'it' => [
+            'it_codice_fiscale' => [
+                'pattern' => '/\b[A-Z]{6}\d{2}[A-EHLMPRST]\d{2}[A-Z]\d{3}[A-Z]\b/i',
+                'validator' => 'codice_fiscale',
+                'entity' => 'national_id',
+                'confidence' => 0.85,
+                'min_length' => 16,
+                'samples' => ['CF RSSMRA85T10A562S'],
+                'counter_samples' => ['RSSMRA85T10A562T'],
+            ],
+            'it_vat' => [
+                'pattern' => '/\bIT ?\d{11}\b/',
+                'validator' => 'vat',
+                'entity' => 'vat_number',
+                'confidence' => 0.7,
+                'min_length' => 13,
+                'samples' => ['P.IVA IT55679497721'],
+                'counter_samples' => ['IT00000000001'],
+            ],
+        ],
+
+        'es' => [
+            'es_dni' => [
+                'pattern' => '/\b(?:\d{8}|[XYZ]\d{7})[A-Z]\b/i',
+                'validator' => 'dni',
+                'entity' => 'national_id',
+                'confidence' => 0.8,
+                'min_length' => 9,
+                'samples' => ['DNI 68334472T', 'NIE X6732518G'],
+                'counter_samples' => ['12345678A'],
+            ],
+            'es_vat' => [
+                'pattern' => '/\bES ?[A-Z0-9]\d{7}[A-Z0-9]\b/',
+                'validator' => 'vat',
+                'entity' => 'vat_number',
+                'confidence' => 0.6,
+                'min_length' => 11,
+                'samples' => ['ESB12345674'],
+                'counter_samples' => ['ES12345'],
+            ],
+        ],
+
+        'be' => [
+            'be_national_number' => [
+                'pattern' => '/\b\d{2}\.?\d{2}\.?\d{2}[-.]?\d{3}\.?\d{2}\b/',
+                'validator' => 'belgian_national_number',
+                'entity' => 'national_id',
+                'confidence' => 0.75,
+                'min_length' => 11,
+                'samples' => ['54.04.11-613.25', 'RRN 85.07.22-005.34'],
+                'counter_samples' => ['54.04.11-613.26'],
+            ],
+            'be_vat' => [
+                'pattern' => '/\bBE ?0?\d{9}\b/',
+                'validator' => 'vat',
+                'entity' => 'vat_number',
+                'confidence' => 0.7,
+                'min_length' => 11,
+                'samples' => ['BTW BE0190125740'],
+                'counter_samples' => ['BE0190125741'],
+            ],
+        ],
+
+        'se' => [
+            'se_personnummer' => [
+                'pattern' => '/\b(?:\d{2})?\d{6}[-+]?\d{4}\b/',
+                'validator' => 'personnummer',
+                'entity' => 'national_id',
+                'confidence' => 0.7,
+                'min_length' => 10,
+                'samples' => ['600112-7239', '19550914-4548'],
+                'counter_samples' => ['600112-7238', 'started at 1694600000'],
+            ],
+            'se_vat' => [
+                'pattern' => '/\bSE ?\d{10} ?01\b/',
+                'validator' => 'vat',
+                'entity' => 'vat_number',
+                'confidence' => 0.7,
+                'min_length' => 14,
+                'samples' => ['SE213467230801'],
+                'counter_samples' => ['SE213467230901'],
+            ],
+        ],
+
+        'no' => [
+            'no_fodselsnummer' => [
+                'pattern' => '/\b\d{6} ?\d{5}\b/',
+                'validator' => 'fodselsnummer',
+                'entity' => 'national_id',
+                'confidence' => 0.8,
+                'min_length' => 11,
+                'samples' => ['25054326869', 'fnr 130876 78770'],
+                'counter_samples' => ['25054326868'],
+            ],
+        ],
+
+        'ca' => [
+            'ca_sin' => [
+                'pattern' => '/\b\d{3}[ -]?\d{3}[ -]?\d{3}\b/',
+                'validator' => 'sin',
+                'keywords' => ['sin', 'social insurance'],
+                'entity' => 'national_id',
+                'confidence' => 0.7,
+                'min_length' => 9,
+                'samples' => ['SIN 965-232-432'],
+                'counter_samples' => ['SIN 123-456-789', 'ref 965-232-432'],
+            ],
+        ],
+
+        'au' => [
+            'au_tfn' => [
+                'pattern' => '/\b\d{3} ?\d{3} ?\d{2,3}\b/',
+                'validator' => 'tfn',
+                'keywords' => ['tfn', 'tax file'],
+                'entity' => 'national_id',
+                'confidence' => 0.7,
+                'min_length' => 8,
+                'samples' => ['TFN 261 158 631'],
+                'counter_samples' => ['TFN 123 456 789'],
+            ],
+        ],
+
+        // Members without a public checksum, accepted on format alone...
+        'eu' => [
+            'eu_vat' => [
+                'pattern' => '/\b(?:AT|BG|CY|CZ|DK|EE|EL|FI|HR|HU|IE|LT|LU|LV|MT|PL|PT|RO|SI|SK)U?[A-Z0-9]{8,12}\b/',
+                'validator' => 'vat',
+                'entity' => 'vat_number',
+                'confidence' => 0.6,
+                'min_length' => 10,
+                'samples' => ['ATU12345678', 'PL1234567890', 'IE1234567FA'],
+                'counter_samples' => ['XX12345678', 'CY12345678'],
+            ],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Tokenization
     |--------------------------------------------------------------------------
     |
@@ -583,6 +830,12 @@ return [
                 ...$credentialPatterns,
                 ...$identityPatterns,
             ],
+
+            /*
+            | Region packs to add to the patterns above, by key from the
+            | `regions` section at the top of this file: ['gb', 'nl', 'eu'].
+            */
+            'regions' => [],
 
             /*
             | Rules that name a location outright.

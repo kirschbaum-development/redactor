@@ -163,7 +163,13 @@ readonly class RedactorConfig
         // Settings folded in from outside the profile must rebuild it when they
         // change, or a rotated salt would keep old and new logs joinable and a
         // rotated APP_KEY would go unredacted; validation happens once below...
-        $shared = [Configuration::get('redactor.pseudonymization'), self::knownSecretSources($config['known_secrets'] ?? [])];
+        $regions = ConfigValue::stringList($config['regions'] ?? [], "profiles.{$profile}.regions");
+
+        $shared = [
+            Configuration::get('redactor.pseudonymization'),
+            self::knownSecretSources($config['known_secrets'] ?? []),
+            $regions === [] ? null : Configuration::get('redactor.regions'),
+        ];
 
         $cached = ProfileCache::get($profile, $config, $shared);
 
@@ -190,7 +196,10 @@ readonly class RedactorConfig
             enabled: ConfigValue::bool($config['enabled'] ?? true, true, "profiles.{$profile}.enabled"),
             safeKeys: array_map(strtolower(...), ConfigValue::stringList($config['safe_keys'] ?? [], "profiles.{$profile}.safe_keys")),
             blockedKeys: array_map(strtolower(...), ConfigValue::stringList($config['blocked_keys'] ?? [], "profiles.{$profile}.blocked_keys")),
-            patterns: self::buildPatternRules(ConfigValue::map($config['patterns'] ?? [], "profiles.{$profile}.patterns"), $profile),
+            patterns: self::buildPatternRules(
+                ConfigValue::map($config['patterns'] ?? [], "profiles.{$profile}.patterns") + self::regionPatterns($regions, $profile),
+                $profile
+            ),
             replacement: ConfigValue::string($config['replacement'] ?? '[REDACTED]', '[REDACTED]', "profiles.{$profile}.replacement"),
             markRedacted: ConfigValue::bool($config['mark_redacted'] ?? true, true, "profiles.{$profile}.mark_redacted"),
             trackRedactedKeys: ConfigValue::bool($config['track_redacted_keys'] ?? false, false, "profiles.{$profile}.track_redacted_keys"),
@@ -276,6 +285,42 @@ readonly class RedactorConfig
         }
 
         return $map;
+    }
+
+    /**
+     * The pattern definitions of the region packs a profile lists.
+     *
+     * A profile's own rule of the same name wins, which is what the array
+     * union at the call site expresses.
+     *
+     * @param  array<int, string>  $regions
+     * @return array<string, mixed>
+     *
+     * @throws ConfigurationException when a listed region is not defined
+     */
+    private static function regionPatterns(array $regions, string $profile): array
+    {
+        if ($regions === []) {
+            return [];
+        }
+
+        $packs = ConfigValue::map(Configuration::get('redactor.regions', []), 'regions');
+        $patterns = [];
+
+        foreach ($regions as $region) {
+            if (! isset($packs[$region])) {
+                throw new ConfigurationException(sprintf(
+                    'Redactor config [profiles.%s.regions] names an unknown region [%s]. Known: %s.',
+                    $profile,
+                    $region,
+                    implode(', ', array_keys($packs))
+                ));
+            }
+
+            $patterns += ConfigValue::map($packs[$region], "regions.{$region}");
+        }
+
+        return $patterns;
     }
 
     /**

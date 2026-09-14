@@ -379,3 +379,63 @@ A `preserve` operator reports the finding through `inspect()` without marking th
 Every regex is evaluated fail-closed. If PCRE gives up on a pattern, because of the backtrack limit, the JIT stack limit or invalid UTF-8, the value is treated as sensitive rather than clean: the whole value is replaced, the failure is logged with the rule name, and the finding is reported with a certain confidence.
 
 The exceptions are the places where a failure would otherwise excuse a value. An allow-list entry, an entropy exclusion pattern or a safe-key pattern that cannot be evaluated allows nothing. A blocked-key pattern that cannot be evaluated blocks the key.
+
+## Region Packs
+
+National identifiers and VAT numbers are grouped by country under `regions`
+in `config/redactor.php` and switched on per profile:
+
+```php
+'profiles' => [
+    'default' => [
+        'regions' => ['gb', 'nl', 'eu'],
+    ],
+],
+```
+
+| Pack | Rules | Checks |
+| --- | --- | --- |
+| `gb` | National Insurance number, NHS number, VAT | NHS mod-11, VAT mod-97 |
+| `nl` | BSN, VAT | eleven-proof, weighted mod-11 |
+| `de` | Steuer-ID, VAT | ISO 7064 mod 11,10 |
+| `fr` | NIR, VAT | mod-97 key, SIREN key |
+| `it` | codice fiscale, VAT | check character, Luhn |
+| `es` | DNI and NIE, VAT | mod-23 letter |
+| `be` | national register number, VAT | mod-97, both centuries |
+| `se` | personnummer, VAT | date plausibility and Luhn |
+| `no` | fødselsnummer | two mod-11 control digits |
+| `ca` | SIN | Luhn |
+| `au` | TFN | weighted mod-11 |
+| `eu` | VAT for the remaining member states | format |
+
+Identifiers whose shape is too common on its own, a nine-digit BSN or SIN, a
+ten-digit NHS number, also require a label such as `bsn`, `sin` or `nhs`
+somewhere in the value, so an order number is not mistaken for one. Every
+pack rule carries samples and counter-samples that `redactor:validate` proves,
+and a rule in the profile's own `patterns` with the same name wins over the
+pack's.
+
+Region rules use the entities `national_id`, `health_id` and `vat_number`, so
+one operator covers a whole class:
+
+```php
+'operators' => ['national_id' => 'hash', 'vat_number' => 'preserve'],
+```
+
+## Custom Validators
+
+Register a validator of your own and name it from any rule:
+
+```php
+use Kirschbaum\Redactor\Patterns\Validator;
+
+Validator::extend('policy_number', fn (string $value): bool => PolicyNumber::isValid($value));
+```
+
+```php
+'policy' => ['pattern' => '/\bPOL-\d{8}\b/', 'validator' => 'policy_number'],
+```
+
+A rule naming a validator that does not exist is a configuration error, so a
+typo fails `redactor:validate` rather than silently disabling the check.
+

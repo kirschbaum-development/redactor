@@ -209,6 +209,14 @@ packaging and conventions. Each item is one commit, with tests.
 
 ### Changed - conventions, following Laravel's first-party packages
 
+- **Region packs.** National identifiers and VAT numbers for GB, NL, DE, FR,
+  IT, ES, BE, SE, NO, CA, AU and the rest of the EU, each with its checksum
+  (NHS mod-11, BSN eleven-proof, Steuer-ID, NIR key, DNI letter, codice
+  fiscale, Belgian mod-97, personnummer, fødselsnummer, SIN, TFN, VAT by
+  country), keywords where the shape is common, and samples that
+  `redactor:validate` proves. Switched on per profile with `regions`.
+- **Custom validators.** `Validator::extend('name', fn)` makes a validator
+  usable from any rule; an unknown validator name is now a configuration error.
 - **Per-call entity filtering.** `Redactor::profile('x')->only(['email'])` and
   `->except([...])` act on a subset of what the profile can find, for the
   export that only needs two things hidden. A key rule's entity is the key
