@@ -35,7 +35,13 @@
     "authors": [
         {
             "name": "Erand Laci",
-            "email": "erandlaci@gmail.com"
+            "email": "erandlaci@gmail.com",
+            "role": "Developer"
+        },
+        {
+            "name": "Belisar Hoxholli",
+            "email": "belisar.hoxholli@gmail.com",
+            "role": "Developer"
         }
     ],
     "require-dev": {
