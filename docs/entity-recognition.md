@@ -161,4 +161,6 @@ Do not enable it on the request path or on a busy log channel. The rule engine c
 
 Do not rely on it for credentials. A model finds names; a pattern finds keys. The rules run either way.
 
-Still open in the package: an in-process ONNX recogniser so recognition needs no sidecar.
+The companion package `kirschbaum-development/redactor-onnx` removes the sidecar: the same gates, breaker and batching, with the model loaded once per worker. It suits queue workers, Octane and scans for the same reason a sidecar does, and a request that boots and exits for the same reason a sidecar does not.
+
+To run a model inside the PHP process instead of a sidecar, install [kirschbaum-development/redactor-onnx](https://github.com/kirschbaum-development/redactor-onnx), which registers an `onnx` driver over TransformersPHP. It implements `BatchRecognizer`, so batching applies unchanged.

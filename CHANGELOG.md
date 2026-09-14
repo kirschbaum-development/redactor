@@ -209,6 +209,9 @@ packaging and conventions. Each item is one commit, with tests.
 
 ### Changed - conventions, following Laravel's first-party packages
 
+- **In-process recognition.** The companion package
+  `kirschbaum-development/redactor-onnx` registers an `onnx` driver that runs
+  a token classification model through TransformersPHP with no sidecar.
 - **Recogniser batching.** Every prose value in a payload is recognised in
   one call before the walk, so a record with fifty free-text fields costs one
   round trip. `BatchRecognizer` for recognisers that take a list, and
