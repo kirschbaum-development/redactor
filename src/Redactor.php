@@ -9,6 +9,7 @@ use Illuminate\Support\Traits\Conditionable;
 use Illuminate\Support\Traits\Macroable;
 use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
+use Kirschbaum\Redactor\Detection\EntityFilter;
 use Kirschbaum\Redactor\Events\RedactionPerformed;
 use Kirschbaum\Redactor\Operators\Operator;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
@@ -131,7 +132,7 @@ class Redactor
      *
      * The metadata is kept out of the payload rather than written into it.
      */
-    public function inspect(mixed $content, ?string $profile = null, ?bool $mark = null): RedactionResult
+    public function inspect(mixed $content, ?string $profile = null, ?bool $mark = null, ?EntityFilter $entities = null): RedactionResult
     {
         $config = RedactorConfig::fromConfig($profile);
 
@@ -139,7 +140,7 @@ class Redactor
             return new RedactionResult($content, false);
         }
 
-        $context = new RedactionContext($config, $this->operators, $this->secrets, $this->recognizers);
+        $context = new RedactionContext($config, $this->operators, $this->secrets, $this->recognizers, $entities);
         $strategies = $this->getStrategiesForProfile($config);
 
         $redactedContent = $this->redactRecursively($content, '', $context, $strategies, false, $config->paths->cursor());
@@ -632,7 +633,8 @@ class Redactor
             $childCursor = $cursor?->descend($keyString);
             $pathMatch = $childCursor?->match();
 
-            if ($pathMatch instanceof PathMatch) {
+            // A path names the key it lands on, so the key is the entity the filter sees...
+            if ($pathMatch instanceof PathMatch && $context->wants($keyString)) {
                 $decided = $this->applyPathRule($value, $keyString, $pathMatch, $context);
 
                 if ($decided === self::REMOVE_MARKER) {

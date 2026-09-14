@@ -10,7 +10,7 @@ use Kirschbaum\Redactor\Testing\RedactorFake;
 /**
  * @method static \Kirschbaum\Redactor\PendingRedaction profile(?string $profile)
  * @method static mixed redact(mixed $content, ?string $profile = null)
- * @method static \Kirschbaum\Redactor\RedactionResult inspect(mixed $content, ?string $profile = null, ?bool $mark = null)
+ * @method static \Kirschbaum\Redactor\RedactionResult inspect(mixed $content, ?string $profile = null, ?bool $mark = null, ?\Kirschbaum\Redactor\Detection\EntityFilter $entities = null)
  * @method static mixed redactSafely(mixed $content, ?string $profile = null)
  * @method static mixed detokenize(mixed $content)
  * @method static bool registerSecret(string $value, string $entity = 'known_secret')

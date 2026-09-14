@@ -7,6 +7,7 @@ namespace Kirschbaum\Redactor;
 use Kirschbaum\Redactor\Detection\Confidence;
 use Kirschbaum\Redactor\Detection\Detection;
 use Kirschbaum\Redactor\Detection\DetectionSet;
+use Kirschbaum\Redactor\Detection\EntityFilter;
 use Kirschbaum\Redactor\Findings\MatchFinding;
 use Kirschbaum\Redactor\Operators\OperatorContext;
 use Kirschbaum\Redactor\Operators\OperatorRegistry;
@@ -61,7 +62,17 @@ class RedactionContext
         /** Secrets registered at runtime, merged with the profile's own. */
         private readonly ?SecretRegistry $runtimeSecrets = null,
         private readonly ?RecognizerRegistry $recognizerRegistry = null,
+        /** Which entities this redaction acts on; null for all of them. */
+        private readonly ?EntityFilter $entityFilter = null,
     ) {}
+
+    /**
+     * Determine if this redaction acts on detections of the given entity.
+     */
+    public function wants(string $entity): bool
+    {
+        return ! $this->entityFilter instanceof EntityFilter || $this->entityFilter->allows($entity);
+    }
 
     private ?RecognizerRegistry $defaultRecognizers = null;
 
@@ -225,7 +236,11 @@ class RedactionContext
      */
     public function resolvePendingDetections(string $subject, string $key): string
     {
-        $kept = DetectionSet::resolve($this->pending, $this->config->minConfidence);
+        $pending = $this->entityFilter instanceof EntityFilter
+            ? array_values(array_filter($this->pending, fn (Detection $d): bool => $d->failClosed || $this->wants($d->entity)))
+            : $this->pending;
+
+        $kept = DetectionSet::resolve($pending, $this->config->minConfidence);
         $this->pending = [];
 
         if ($kept === []) {

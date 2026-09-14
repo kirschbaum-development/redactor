@@ -6,6 +6,7 @@ namespace Kirschbaum\Redactor;
 
 use Illuminate\Support\Traits\Conditionable;
 use Illuminate\Support\Traits\Macroable;
+use Kirschbaum\Redactor\Detection\EntityFilter;
 
 /**
  * A redaction being configured before it runs.
@@ -19,6 +20,8 @@ class PendingRedaction
     use Macroable;
 
     protected ?bool $markers = null;
+
+    protected ?EntityFilter $entities = null;
 
     public function __construct(
         protected Redactor $redactor,
@@ -56,6 +59,30 @@ class PendingRedaction
     }
 
     /**
+     * Act only on the given entities this time.
+     *
+     * @param  array<int, string>  $entities
+     */
+    public function only(array $entities): static
+    {
+        $this->entities = ($this->entities ?? EntityFilter::all())->only($entities);
+
+        return $this;
+    }
+
+    /**
+     * Act on every entity but the given ones this time.
+     *
+     * @param  array<int, string>  $entities
+     */
+    public function except(array $entities): static
+    {
+        $this->entities = ($this->entities ?? EntityFilter::all())->except($entities);
+
+        return $this;
+    }
+
+    /**
      * Redact the content and return it.
      */
     public function redact(mixed $content): mixed
@@ -68,7 +95,7 @@ class PendingRedaction
      */
     public function inspect(mixed $content): RedactionResult
     {
-        return $this->redactor->inspect($content, $this->profile, $this->markers);
+        return $this->redactor->inspect($content, $this->profile, $this->markers, $this->entities);
     }
 
     /**

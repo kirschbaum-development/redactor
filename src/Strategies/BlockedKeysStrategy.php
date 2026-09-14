@@ -34,7 +34,7 @@ class BlockedKeysStrategy implements Strategy
     public function shouldHandle(mixed $value, string $key, RedactionContext $context): bool
     {
         // onError: true, since an unevaluatable blocked-key pattern blocks the key...
-        return $context->config->blockedKeyMatcher->matches($key, onError: true);
+        return $context->wants($key) && $context->config->blockedKeyMatcher->matches($key, onError: true);
     }
 
     /**

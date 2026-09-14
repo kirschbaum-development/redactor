@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Testing;
 
+use Kirschbaum\Redactor\Detection\EntityFilter;
 use Kirschbaum\Redactor\RedactionResult;
 use Kirschbaum\Redactor\Redactor;
 use PHPUnit\Framework\Assert;
@@ -24,9 +25,9 @@ class RedactorFake extends Redactor
      */
     protected array $calls = [];
 
-    public function inspect(mixed $content, ?string $profile = null, ?bool $mark = null): RedactionResult
+    public function inspect(mixed $content, ?string $profile = null, ?bool $mark = null, ?EntityFilter $entities = null): RedactionResult
     {
-        $result = parent::inspect($content, $profile, $mark);
+        $result = parent::inspect($content, $profile, $mark, $entities);
 
         $this->calls[] = ['profile' => $profile, 'input' => $content, 'result' => $result];
 

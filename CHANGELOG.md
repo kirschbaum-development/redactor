@@ -209,6 +209,11 @@ packaging and conventions. Each item is one commit, with tests.
 
 ### Changed - conventions, following Laravel's first-party packages
 
+- **Per-call entity filtering.** `Redactor::profile('x')->only(['email'])` and
+  `->except([...])` act on a subset of what the profile can find, for the
+  export that only needs two things hidden. A key rule's entity is the key
+  name, a path rule's the key it lands on; fail-closed detections are never
+  filtered out.
 - **Fluent entry point.** `Redactor::profile('strict')->withoutMarkers()->redact($data)`
   and `->inspect($data)`; `Redactor::inspect()` returns the result with its
   findings. `inspect()` remains. The redactor and the pending

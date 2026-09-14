@@ -151,6 +151,8 @@ Redactor::profile('observability')->withoutMarkers()->inspect($data);
 Redactor::profile('audit')
     ->when($verbose, fn ($redaction) => $redaction->withMarkers())
     ->redact($data);
+
+Redactor::profile('default')->only(['email', 'credit_card'])->redact($export);
 ```
 
 The builder offers:
@@ -160,9 +162,14 @@ The builder offers:
 | `profile(?string $profile)` | Use the given profile, or `null` for the default. |
 | `withMarkers()` | Write the `_redacted` markers into the payload, whatever the profile says. |
 | `withoutMarkers()` | Never write the markers. |
+| `only(array $entities)` | Act only on these entities this time. A key rule's entity is the key name; a path rule's is the key it lands on. |
+| `except(array $entities)` | Act on every entity but these. Composes with `only()`. |
 | `redact(mixed $content)` | Redact and return the value. |
 | `inspect(mixed $content)` | Redact and return a `RedactionResult`. |
 | `redactSafely(mixed $content)` | Redact without ever throwing. |
+
+`only()` and `except()` never suppress a fail-closed detection: a value a
+pattern could not evaluate is still replaced whatever the filter says.
 
 Both the redactor and the pending redaction are `Conditionable` and `Macroable`, so `when()` and `unless()` work as they do elsewhere in Laravel, and you can add your own methods. See [Extending](extending.md#macros).
 
