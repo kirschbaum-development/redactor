@@ -99,6 +99,7 @@ php artisan redactor:scan --update-baseline           # accept what is already t
 - **Exports, jobs, error reporters and third-party clients** through `Redactor::redact()` and `redactSafely()` with a profile per destination.
 - **Files and git history** through `redactor:scan`, with table, JSON, SARIF and JUnit output, `--staged`, `--diff` and `--history` modes, baselines, inline `redactor:allow` markers, and a publishable pre-commit hook and GitHub workflow.
 - **Your test suite** through `Redactor::fake()`, so a test can assert that a secret never left.
+- **Names, places and organisations in prose** through a Presidio-compatible recogniser, or in-process with no sidecar through the companion package [`kirschbaum-development/redactor-onnx`](https://github.com/kirschbaum-development/redactor-onnx).
 
 ## Documentation
 
@@ -112,7 +113,7 @@ The full documentation lives in [`docs/`](docs/README.md):
 | [Operators and Pseudonymisation](docs/operators-and-pseudonymisation.md) | Every operator with example output, precedence, surrogates, the key and salt, reversible tokens and `detokenize()`. |
 | [Boundaries](docs/boundaries.md) | Log channels, HTTP responses, streams, MCP servers, AI agents, exports and jobs, and the `RedactionPerformed` event. |
 | [Scanning](docs/scanning.md) | `redactor:scan` in full: paths, output formats, git modes, decoding, baselines, suppression, verification, the hook and workflow, exit codes. |
-| [Entity Recognition](docs/entity-recognition.md) | Finding names, places and organisations in prose with a Presidio-compatible recogniser, and when not to. |
+| [Entity Recognition](docs/entity-recognition.md) | Finding names, places and organisations in prose with a Presidio-compatible recogniser or the in-process `redactor-onnx` package, and when not to. |
 | [Testing](docs/testing.md) | `Redactor::fake()` and its assertions, `redactor:validate`, rule samples, the package's own test conventions. |
 | [Extending](docs/extending.md) | Every contract, how to register each, a worked custom strategy and operator, and macros. |
 | [Upgrading](docs/upgrading.md) | Every renamed class and method from 0.1.0, every behaviour change, and what to do about each. |
@@ -139,7 +140,7 @@ Coverage and mutation testing need a coverage driver (pcov or Xdebug) loaded in 
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for what changed in each release and [Upgrading](docs/upgrading.md) for how to move from 0.1.0.
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each release and [Upgrading](docs/upgrading.md) for how to move from 0.1.0 to 1.0.0.
 
 ## License
 

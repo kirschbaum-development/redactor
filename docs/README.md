@@ -22,7 +22,7 @@ Everything else can be read as you need it.
 | [Operators and Pseudonymisation](operators-and-pseudonymisation.md) | Every operator with example output, precedence, surrogates, the key and salt, reversible tokens and `detokenize()`. |
 | [Boundaries](boundaries.md) | Log channels, HTTP responses, streams, MCP servers, AI agents, exports and jobs, and the `RedactionPerformed` event. |
 | [Scanning](scanning.md) | `redactor:scan` in full: paths, output formats, git modes, decoding, baselines, inline suppression, verification, the pre-commit hook and exit codes. |
-| [Entity Recognition](entity-recognition.md) | Finding names, places and organisations in prose with a Presidio-compatible recogniser, and when not to. |
+| [Entity Recognition](entity-recognition.md) | Finding names, places and organisations in prose with a Presidio-compatible recogniser or the in-process `redactor-onnx` package, and when not to. |
 | [Testing](testing.md) | `Redactor::fake()` and its assertions, `redactor:validate`, rule samples, and the package's own test conventions. |
 | [Extending](extending.md) | Every contract, how to register each, a worked custom strategy and operator, and macros. |
 | [Upgrading](upgrading.md) | Every renamed class and method from 0.1.0, every behaviour change, and what to do about each. |

@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v1.0.0 - 2026-09-14
 
 Hardening and completeness passes across correctness, security, performance,
 packaging and conventions. Each item is one commit, with tests.
