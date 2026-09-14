@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Kirschbaum\Redactor\Verification;
 
+use Kirschbaum\Redactor\Verification\Verifiers\AnthropicKeyVerifier;
 use Kirschbaum\Redactor\Verification\Verifiers\GitHubTokenVerifier;
+use Kirschbaum\Redactor\Verification\Verifiers\GoogleApiKeyVerifier;
+use Kirschbaum\Redactor\Verification\Verifiers\OpenAiKeyVerifier;
+use Kirschbaum\Redactor\Verification\Verifiers\SendGridKeyVerifier;
 use Kirschbaum\Redactor\Verification\Verifiers\SlackTokenVerifier;
 use Kirschbaum\Redactor\Verification\Verifiers\StripeKeyVerifier;
 use Throwable;
@@ -35,7 +39,23 @@ class SecretVerifier
             new GitHubTokenVerifier,
             new StripeKeyVerifier,
             new SlackTokenVerifier,
+            new OpenAiKeyVerifier,
+            new AnthropicKeyVerifier,
+            new SendGridKeyVerifier,
+            new GoogleApiKeyVerifier,
+            ...static::$registered,
         ];
+    }
+
+    /** @var array<int, Verifier> */
+    protected static array $registered = [];
+
+    /**
+     * Register a verifier of your own. It still has to be allow-listed to run.
+     */
+    public static function register(Verifier $verifier): void
+    {
+        static::$registered[] = $verifier;
     }
 
     /**

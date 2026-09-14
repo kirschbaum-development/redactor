@@ -321,6 +321,10 @@ return [
                 // 'github_token',
                 // 'stripe_key',
                 // 'slack_token',
+                // 'openai_key',
+                // 'anthropic_key',
+                // 'sendgrid_key',
+                // 'google_api_key',
             ],
         ],
 

@@ -213,10 +213,14 @@ The shipped verifiers:
 | `github_token` | `api.github.com` | `GET /user`; 401 means dead. |
 | `stripe_key` | `api.stripe.com` | `GET /v1/balance`, read-only; 401 means dead. |
 | `slack_token` | `slack.com` | `POST /api/auth.test`; the `ok` field decides, since Slack answers 200 either way. |
+| `openai_key` | `api.openai.com` | `GET /v1/models`; 401 means dead. |
+| `anthropic_key` | `api.anthropic.com` | `GET /v1/models`; 401 means dead. |
+| `sendgrid_key` | `api.sendgrid.com` | `GET /v3/scopes`, which sends nothing; 401 or 403 means dead. |
+| `google_api_key` | `generativelanguage.googleapis.com` | `GET /v1/models?key=`; 400 means invalid, 403 means real but not enabled for that API, so still live. |
 
 Each result is `active`, `inactive` or `unknown`. A confirmed-live credential is ranked `LIVE` (critical) above everything else. A check that could not complete is `unknown` and stays `high`, not `low`: failing to verify is not evidence of safety. A verifier that throws degrades its finding to `unknown` rather than abandoning the scan. The secret never reaches a finding, so it cannot escape through JSON, SARIF or a baseline.
 
-To add a verifier, see [Extending](extending.md#verifiers).
+To add a verifier, implement `Verification\Verifier` and call `SecretVerifier::register($verifier)`; it still has to be allow-listed by name to run. See [Extending](extending.md#verifiers).
 
 ## The Pre-Commit Hook and Workflow
 
