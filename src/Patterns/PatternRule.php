@@ -187,9 +187,19 @@ final readonly class PatternRule
         $keep = ConfigValue::positiveInt($definition['keep'] ?? 4, 4, $path.'.keep');
         $maskCharacter = ConfigValue::string($definition['mask_character'] ?? '*', '*', $path.'.mask_character');
         $validator = $definition['validator'] ?? null;
-        $validator = $validator === null
-            ? null
-            : ConfigValue::enum($validator, Validator::NAMES, Validator::LUHN, $path.'.validator');
+
+        if ($validator !== null) {
+            $validator = ConfigValue::string($validator, Validator::LUHN, $path.'.validator');
+
+            if (! Validator::exists($validator)) {
+                throw new ConfigurationException(sprintf(
+                    'Redactor config [%s.validator] names an unknown validator [%s]. Known: %s.',
+                    $path,
+                    $validator,
+                    implode(', ', Validator::NAMES)
+                ));
+            }
+        }
 
         $entity = $definition['entity'] ?? null;
         $entity = is_string($entity) && $entity !== '' ? $entity : null;
